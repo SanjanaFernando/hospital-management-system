@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { deletePatient } from "@/app/utils/api";
+import { dischargePatientById } from "@/app/actions/patientActions";
 
 interface DischargePatientProps {
   patientId: string;
@@ -26,7 +26,7 @@ export default function DischargePatient({
 
     try {
       // Delete patient from database
-      await deletePatient(patientId);
+      await dischargePatientById(patientId);
 
       // Call success callback
       onSuccess();

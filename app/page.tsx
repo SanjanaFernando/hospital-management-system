@@ -6,6 +6,7 @@ import WardCard from "@/app/components/WardCard";
 import BedGrid from "@/app/components/BedGrid";
 import PatientQueue from "@/app/components/PatientQueue";
 import PatientRegistrationForm from "@/app/components/PatientRegistrationForm";
+import MedicalCrossLoader from "@/app/components/MedicalCrossLoader";
 import { initializeWards } from "@/app/utils/mockData";
 import { getWardsWithPatients } from "@/app/actions/wardActions";
 
@@ -58,6 +59,10 @@ export default function Home() {
     setShowRegistrationForm(false);
   };
 
+  const handlePatientDischarged = () => {
+    loadWards();
+  };
+
   const selectedWard = selectedWardId
     ? wards.find((w) => w.id === selectedWardId)
     : null;
@@ -99,9 +104,7 @@ export default function Home() {
 
         {/* Loading State */}
         {isLoading && (
-          <div className="text-center py-12">
-            <p className="text-gray-600">Loading wards...</p>
-          </div>
+          <MedicalCrossLoader message="Loading Hospital Wards..." />
         )}
 
         {/* Overall Statistics */}
@@ -193,6 +196,7 @@ export default function Home() {
                   <BedGrid
                     beds={selectedWard.beds}
                     wardName={selectedWard.name}
+                    onDischargeSuccess={handlePatientDischarged}
                   />
                 </div>
                 {/* Patient Queue */}

@@ -149,7 +149,43 @@ export default function PatientRegistrationForm({
   };
 
   return (
-    <div className="bg-white rounded-lg shadow-lg p-8 border-2 border-blue-200 max-w-2xl">
+    <div className="bg-white rounded-lg shadow-lg p-8 border-2 border-blue-200 max-w-2xl relative">
+      {/* Loading Overlay */}
+      {isLoading && (
+        <div className="absolute inset-0 bg-white bg-opacity-90 rounded-lg flex items-center justify-center z-50">
+          <div className="flex flex-col items-center gap-4">
+            {/* Smaller Medical Cross */}
+            <div className="relative w-20 h-20">
+              <div className="absolute inset-0 rounded-full border-3 border-transparent border-t-red-600 border-r-red-400 animate-spin" />
+              <svg
+                className="absolute inset-0 w-full h-full animate-pulse"
+                viewBox="0 0 100 100"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <rect
+                  x="40"
+                  y="15"
+                  width="20"
+                  height="70"
+                  fill="#DC2626"
+                  rx="2"
+                />
+                <rect
+                  x="15"
+                  y="40"
+                  width="70"
+                  height="20"
+                  fill="#DC2626"
+                  rx="2"
+                />
+              </svg>
+            </div>
+            <p className="text-gray-700 font-semibold text-sm">
+              Registering Patient...
+            </p>
+          </div>
+        </div>
+      )}
       <h2 className="text-2xl font-bold text-gray-800 mb-6">
         Register New Patient
       </h2>

@@ -7,6 +7,7 @@ import { useState } from "react";
 interface BedGridProps {
   beds: Bed[];
   wardName: string;
+  onDischargeSuccess?: () => void;
 }
 
 const statusColors = {
@@ -21,12 +22,16 @@ const statusLabels = {
   maintenance: "Maintenance",
 };
 
-export default function BedGrid({ beds, wardName }: BedGridProps) {
+export default function BedGrid({
+  beds,
+  wardName,
+  onDischargeSuccess,
+}: BedGridProps) {
   const [selectedBed, setSelectedBed] = useState<Bed | null>(null);
 
   const handleDischargeSuccess = () => {
     setSelectedBed(null);
-    // Parent component will handle data refresh through refetching
+    onDischargeSuccess?.();
   };
 
   if (selectedBed && selectedBed.patient) {

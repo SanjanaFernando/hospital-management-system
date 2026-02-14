@@ -3,6 +3,38 @@
 import { connectToDatabase } from "@/lib/mongodb";
 import { Ward, Patient, Bed } from "@/app/types";
 
+// Helper function to recursively serialize MongoDB documents (convert ObjectIds to strings)
+function serializeDoc(doc: unknown): unknown {
+  if (doc === null || doc === undefined) {
+    return doc;
+  }
+
+  if (doc instanceof Date) {
+    return doc.toISOString();
+  }
+
+  if (Array.isArray(doc)) {
+    return doc.map(serializeDoc);
+  }
+
+  if (typeof doc === "object") {
+    const obj = doc as Record<string, unknown>;
+
+    // Check if it's a MongoDB ObjectId
+    if ("_bsontype" in obj && obj._bsontype === "ObjectId") {
+      return String(obj);
+    }
+
+    const serialized: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(obj)) {
+      serialized[key] = serializeDoc(value);
+    }
+    return serialized;
+  }
+
+  return doc;
+}
+
 export async function getWardsWithPatients(): Promise<Ward[]> {
   try {
     console.log("📡 Server Action: Fetching wards with patients...");
@@ -14,40 +46,47 @@ export async function getWardsWithPatients(): Promise<Ward[]> {
     // For each ward, fetch patients and beds
     const wardsWithData = await Promise.all(
       wards.map(async (ward: Record<string, unknown>) => {
-        const wardId = ward?.wardId as string;
+        const wardSerialized = serializeDoc(ward) as Record<string, unknown>;
+        const wardId = wardSerialized?.wardId as string;
 
         // Fetch patients for this ward
         const allPatients = await db
           .collection("patients")
           .find({ wardId })
           .toArray();
+        const patientsSerialized = allPatients.map(
+          (p) => serializeDoc(p) as Record<string, unknown>,
+        );
 
         // Fetch beds for this ward
         const allBeds = await db.collection("beds").find({ wardId }).toArray();
+        const bedsSerialized = allBeds.map(
+          (b) => serializeDoc(b) as Record<string, unknown>,
+        );
 
         // Separate patients by status
-        const admittedPatients = allPatients.filter(
+        const admittedPatients = patientsSerialized.filter(
           (p: Record<string, unknown>) => p.status === "admitted",
         );
-        const queuedPatients = allPatients.filter(
+        const queuedPatients = patientsSerialized.filter(
           (p: Record<string, unknown>) => p.status === "queued",
         );
 
         // Separate beds by status
-        const availableBeds = allBeds.filter(
+        const availableBeds = bedsSerialized.filter(
           (b: Record<string, unknown>) => b.status === "available",
         ).length;
-        const occupiedBeds = allBeds.filter(
+        const occupiedBeds = bedsSerialized.filter(
           (b: Record<string, unknown>) => b.status === "occupied",
         ).length;
-        const maintenanceBeds = allBeds.filter(
+        const maintenanceBeds = bedsSerialized.filter(
           (b: Record<string, unknown>) => b.status === "maintenance",
         ).length;
 
         // Format beds as Ward expects
-        const formattedBeds: Bed[] = allBeds.map(
+        const formattedBeds: Bed[] = bedsSerialized.map(
           (bed: Record<string, unknown>) => ({
-            id: (bed?.bedId as string) || String(bed?._id),
+            id: (bed?.bedId as string) || (bed?._id as string) || "",
             bedNumber: (bed?.bedNumber as number) || 0,
             status:
               (bed?.status as "available" | "occupied" | "maintenance") ||
@@ -62,12 +101,15 @@ export async function getWardsWithPatients(): Promise<Ward[]> {
         );
 
         return {
-          id: (ward?._id as string) || (ward?.wardId as string),
-          name: (ward?.name as string) || "",
+          id:
+            (wardSerialized?._id as string) ||
+            (wardSerialized?.wardId as string) ||
+            "",
+          name: (wardSerialized?.name as string) || "",
           beds: formattedBeds,
           patients: admittedPatients as unknown as Patient[],
           patientQueue: queuedPatients as unknown as Patient[],
-          totalBeds: allBeds.length,
+          totalBeds: bedsSerialized.length,
           occupiedBeds,
           availableBeds,
           maintenanceBeds,
