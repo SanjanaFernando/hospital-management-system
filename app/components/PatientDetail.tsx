@@ -1,6 +1,6 @@
 "use client";
 
-import { Patient, AgeGroup, Priority } from "@/app/types";
+import { Patient } from "@/app/types";
 
 interface PatientDetailProps {
   patient: Patient;
@@ -26,7 +26,7 @@ export default function PatientDetail({ patient }: PatientDetailProps) {
   );
 
   return (
-    <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg p-6 border border-blue-200">
+    <div className="bg-linear-to-br from-blue-50 to-indigo-50 rounded-lg p-6 border border-blue-200">
       <div className="flex justify-between items-start mb-4">
         <div>
           <h3 className="text-2xl font-bold text-gray-800">{patient.name}</h3>

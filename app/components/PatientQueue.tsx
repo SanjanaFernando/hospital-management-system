@@ -1,6 +1,6 @@
 "use client";
 
-import { Patient, Priority } from "@/app/types";
+import { Patient } from "@/app/types";
 
 interface PatientQueueProps {
   queue: Patient[];
@@ -19,7 +19,7 @@ const ageGroupBadgeColors = {
   Elderly: "bg-pink-100 text-pink-800",
 };
 
-export default function PatientQueue({ queue, wardName }: PatientQueueProps) {
+export default function PatientQueue({ queue }: PatientQueueProps) {
   if (queue.length === 0) {
     return (
       <div className="bg-gray-50 rounded-lg p-6 text-center">
