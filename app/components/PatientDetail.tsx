@@ -1,9 +1,12 @@
 "use client";
 
+import { useState } from "react";
 import { Patient } from "@/app/types";
+import DischargePatient from "./DischargePatient";
 
 interface PatientDetailProps {
   patient: Patient;
+  onDischargeSuccess?: () => void;
 }
 
 const priorityColors = {
@@ -18,12 +21,27 @@ const ageGroupColors = {
   Elderly: "bg-pink-500",
 };
 
-export default function PatientDetail({ patient }: PatientDetailProps) {
+export default function PatientDetail({
+  patient,
+  onDischargeSuccess,
+}: PatientDetailProps) {
+  const [showDischargeForm, setShowDischargeForm] = useState(false);
   const admissionDate = new Date(patient.admissionTime);
   const currentDate = new Date();
   const daysAdmitted = Math.floor(
     (currentDate.getTime() - admissionDate.getTime()) / (1000 * 60 * 60 * 24),
   );
+
+  if (showDischargeForm) {
+    return (
+      <DischargePatient
+        patientId={patient.id}
+        patientName={patient.name}
+        onSuccess={() => onDischargeSuccess?.()}
+        onCancel={() => setShowDischargeForm(false)}
+      />
+    );
+  }
 
   return (
     <div className="bg-linear-to-br from-blue-50 to-indigo-50 rounded-lg p-6 border border-blue-200">
@@ -43,6 +61,12 @@ export default function PatientDetail({ patient }: PatientDetailProps) {
           >
             {patient.ageGroup}
           </span>
+          <button
+            onClick={() => setShowDischargeForm(true)}
+            className="bg-red-500 text-white px-3 py-1 rounded-full text-sm font-semibold hover:bg-red-600 transition-colors"
+          >
+            Discharge
+          </button>
         </div>
       </div>
 

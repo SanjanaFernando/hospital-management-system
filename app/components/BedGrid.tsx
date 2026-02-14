@@ -24,6 +24,11 @@ const statusLabels = {
 export default function BedGrid({ beds, wardName }: BedGridProps) {
   const [selectedBed, setSelectedBed] = useState<Bed | null>(null);
 
+  const handleDischargeSuccess = () => {
+    setSelectedBed(null);
+    // Parent component will handle data refresh through refetching
+  };
+
   if (selectedBed && selectedBed.patient) {
     return (
       <div>
@@ -33,7 +38,10 @@ export default function BedGrid({ beds, wardName }: BedGridProps) {
         >
           ← Back to Beds
         </button>
-        <PatientDetail patient={selectedBed.patient} />
+        <PatientDetail
+          patient={selectedBed.patient}
+          onDischargeSuccess={handleDischargeSuccess}
+        />
       </div>
     );
   }

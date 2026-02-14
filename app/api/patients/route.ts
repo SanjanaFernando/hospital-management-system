@@ -16,9 +16,11 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(patients, { status: 200 });
   } catch (error) {
-    console.error("Error fetching patients:", error);
+    const errorMessage =
+      error instanceof Error ? error.message : "Unknown error";
+    console.error("Error fetching patients:", errorMessage);
     return NextResponse.json(
-      { error: "Failed to fetch patients" },
+      { error: "Failed to fetch patients", details: errorMessage },
       { status: 500 },
     );
   }
@@ -29,17 +31,30 @@ export async function POST(request: NextRequest) {
     const { db } = await connectToDatabase();
     const body = await request.json();
 
+    // Validate required fields
+    if (!body.name || !body.age || !body.disease) {
+      return NextResponse.json(
+        { error: "Missing required fields: name, age, disease" },
+        { status: 400 },
+      );
+    }
+
     const result = await db.collection("patients").insertOne({
       ...body,
       createdAt: new Date(),
       updatedAt: new Date(),
     });
 
-    return NextResponse.json(result, { status: 201 });
-  } catch (error) {
-    console.error("Error creating patient:", error);
     return NextResponse.json(
-      { error: "Failed to create patient" },
+      { success: true, insertedId: result.insertedId },
+      { status: 201 },
+    );
+  } catch (error) {
+    const errorMessage =
+      error instanceof Error ? error.message : "Unknown error";
+    console.error("Error creating patient:", errorMessage);
+    return NextResponse.json(
+      { error: "Failed to create patient", details: errorMessage },
       { status: 500 },
     );
   }

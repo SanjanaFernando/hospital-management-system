@@ -5,11 +5,23 @@ const API_BASE_URL = "/api";
 // WARDS
 export async function fetchWards(): Promise<Ward[]> {
   try {
-    const response = await fetch(`${API_BASE_URL}/wards`);
-    if (!response.ok) throw new Error("Failed to fetch wards");
-    return response.json();
+    const response = await fetch(`${API_BASE_URL}/wards`, {
+      cache: "no-store",
+    });
+
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      const errorMsg = data?.error || "Failed to fetch wards";
+      const details = data?.details || "";
+      throw new Error(`${errorMsg}${details ? " - " + details : ""}`);
+    }
+
+    const wards = await response.json();
+    return wards || [];
   } catch (error) {
-    console.error("Error fetching wards:", error);
+    const errorMsg = error instanceof Error ? error.message : "Unknown error";
+    console.error("❌ Error fetching wards:", errorMsg);
+    // Return empty array so page can fall back to mock data
     return [];
   }
 }
@@ -55,11 +67,20 @@ export async function createPatient(
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(patient),
     });
-    if (!response.ok) throw new Error("Failed to create patient");
-    return response.json();
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      const errorMessage = data?.error || "Failed to create patient";
+      const details = data?.details || "";
+      throw new Error(`${errorMessage}${details ? ": " + details : ""}`);
+    }
+
+    return data;
   } catch (error) {
-    console.error("Error creating patient:", error);
-    throw error;
+    const message = error instanceof Error ? error.message : "Unknown error";
+    console.error("Error creating patient:", message);
+    throw new Error(message);
   }
 }
 
