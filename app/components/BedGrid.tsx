@@ -1,13 +1,13 @@
 "use client";
 
 import { Bed, Patient } from "@/app/types";
-import PatientDetail from "./PatientDetail";
 import { useState } from "react";
 
 interface BedGridProps {
   beds: Bed[];
   wardName: string;
   onDischargeSuccess?: () => void;
+  onAvailableBedClick?: (bed: Bed) => void;
 }
 
 const statusColors = {
@@ -26,30 +26,12 @@ export default function BedGrid({
   beds,
   wardName,
   onDischargeSuccess,
+  onAvailableBedClick,
 }: BedGridProps) {
-  const [selectedBed, setSelectedBed] = useState<Bed | null>(null);
-
-  const handleDischargeSuccess = () => {
-    setSelectedBed(null);
-    onDischargeSuccess?.();
+  const handleBedClick = (bed: Bed) => {
+    // Navigate to bed detail page for all beds
+    onAvailableBedClick?.(bed);
   };
-
-  if (selectedBed && selectedBed.patient) {
-    return (
-      <div>
-        <button
-          onClick={() => setSelectedBed(null)}
-          className="mb-4 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
-        >
-          ← Back to Beds
-        </button>
-        <PatientDetail
-          patient={selectedBed.patient}
-          onDischargeSuccess={handleDischargeSuccess}
-        />
-      </div>
-    );
-  }
 
   return (
     <div className="w-full">
@@ -58,7 +40,7 @@ export default function BedGrid({
         {beds.map((bed) => (
           <div
             key={bed.id}
-            onClick={() => bed.status === "occupied" && setSelectedBed(bed)}
+            onClick={() => handleBedClick(bed)}
             className={`${statusColors[bed.status]} text-white rounded-lg p-4 cursor-pointer transition-all shadow-md hover:shadow-lg`}
             title={`${statusLabels[bed.status]}${bed.patient ? ` - ${bed.patient.name}` : ""}`}
           >

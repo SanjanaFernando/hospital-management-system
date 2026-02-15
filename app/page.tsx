@@ -3,17 +3,12 @@
 import { useState, useEffect } from "react";
 import { Ward } from "@/app/types";
 import WardCard from "@/app/components/WardCard";
-import BedGrid from "@/app/components/BedGrid";
-import PatientQueue from "@/app/components/PatientQueue";
-import PatientRegistrationForm from "@/app/components/PatientRegistrationForm";
 import MedicalCrossLoader from "@/app/components/MedicalCrossLoader";
 import { initializeWards } from "@/app/utils/mockData";
 import { getWardsWithPatients } from "@/app/actions/wardActions";
 
 export default function Home() {
   const [wards, setWards] = useState<Ward[]>([]);
-  const [selectedWardId, setSelectedWardId] = useState<string | null>(null);
-  const [showRegistrationForm, setShowRegistrationForm] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -52,20 +47,6 @@ export default function Home() {
       setIsLoading(false);
     }
   };
-
-  const handlePatientRegistered = () => {
-    // Reload wards to show new queued patient
-    loadWards();
-    setShowRegistrationForm(false);
-  };
-
-  const handlePatientDischarged = () => {
-    loadWards();
-  };
-
-  const selectedWard = selectedWardId
-    ? wards.find((w) => w.id === selectedWardId)
-    : null;
 
   const totalAvailable = wards.reduce(
     (sum, ward) => sum + ward.availableBeds,
@@ -151,65 +132,14 @@ export default function Home() {
         )}
 
         {/* Wards Grid */}
-        {!selectedWard ? (
-          <div>
-            <h2 className="text-2xl font-bold text-gray-800 mb-6">Wards</h2>
-            <div className="grid grid-cols-2 gap-6">
-              {wards.map((ward) => (
-                <WardCard
-                  key={ward.id}
-                  ward={ward}
-                  onClick={setSelectedWardId}
-                />
-              ))}
-            </div>
+        <div>
+          <h2 className="text-2xl font-bold text-gray-800 mb-6">Wards</h2>
+          <div className="grid grid-cols-2 gap-6">
+            {wards.map((ward) => (
+              <WardCard key={ward.id} ward={ward} />
+            ))}
           </div>
-        ) : (
-          <div>
-            <div className="flex justify-between items-center mb-6">
-              <button
-                onClick={() => setSelectedWardId(null)}
-                className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
-              >
-                ← Back to Wards
-              </button>
-              <button
-                onClick={() => setShowRegistrationForm(true)}
-                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-semibold"
-              >
-                + Register New Patient
-              </button>
-            </div>
-
-            {showRegistrationForm ? (
-              <div className="mb-8">
-                <PatientRegistrationForm
-                  wardId={selectedWardId!}
-                  onSuccess={handlePatientRegistered}
-                  onCancel={() => setShowRegistrationForm(false)}
-                />
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* Beds Grid */}
-                <div className="lg:col-span-2 bg-white rounded-lg shadow-md p-8">
-                  <BedGrid
-                    beds={selectedWard.beds}
-                    wardName={selectedWard.name}
-                    onDischargeSuccess={handlePatientDischarged}
-                  />
-                </div>
-                {/* Patient Queue */}
-                <div className="bg-white rounded-lg shadow-md p-8">
-                  <PatientQueue
-                    queue={selectedWard.patientQueue}
-                    wardName={selectedWard.name}
-                  />
-                </div>
-              </div>
-            )}
-          </div>
-        )}
+        </div>
       </div>
     </div>
   );

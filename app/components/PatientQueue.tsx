@@ -3,8 +3,8 @@
 import { Patient } from "@/app/types";
 
 interface PatientQueueProps {
-  queue: Patient[];
-  wardName: string;
+  patients: Patient[];
+  onPatientAssigned?: () => void;
 }
 
 const priorityColors = {
@@ -19,8 +19,8 @@ const ageGroupBadgeColors = {
   Elderly: "bg-pink-100 text-pink-800",
 };
 
-export default function PatientQueue({ queue }: PatientQueueProps) {
-  if (queue.length === 0) {
+export default function PatientQueue({ patients = [] }: PatientQueueProps) {
+  if (!patients || patients.length === 0) {
     return (
       <div className="bg-gray-50 rounded-lg p-6 text-center">
         <p className="text-gray-500">No patients in queue</p>
@@ -31,10 +31,10 @@ export default function PatientQueue({ queue }: PatientQueueProps) {
   return (
     <div className="w-full">
       <h3 className="text-lg font-semibold mb-4 text-gray-800">
-        Patient Queue ({queue.length})
+        Patient Queue ({patients.length})
       </h3>
       <div className="space-y-3 max-h-96 overflow-y-auto">
-        {queue.map((patient, index) => (
+        {patients.map((patient, index) => (
           <div
             key={patient.id}
             className={`border-l-4 rounded-lg p-4 ${priorityColors[patient.priority]}`}

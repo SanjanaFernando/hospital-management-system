@@ -1,21 +1,24 @@
 "use client";
 
+import Link from "next/link";
 import { Ward } from "@/app/types";
 
 interface WardCardProps {
   ward: Ward;
-  onClick: (wardId: string) => void;
+  href?: string;
 }
 
-export default function WardCard({ ward, onClick }: WardCardProps) {
+export default function WardCard({ ward, href }: WardCardProps) {
   const occupancyRate = Math.round(
     ((ward.totalBeds - ward.availableBeds) / ward.totalBeds) * 100,
   );
 
+  const wardHref = href || `/wards/${ward.wardId || ward.id}`;
+
   return (
-    <div
-      onClick={() => onClick(ward.id)}
-      className="bg-white rounded-lg shadow-md p-6 cursor-pointer hover:shadow-lg transition-shadow border-l-4 border-blue-500"
+    <Link
+      href={wardHref}
+      className="block bg-white rounded-lg shadow-md p-6 cursor-pointer hover:shadow-lg transition-shadow border-l-4 border-blue-500"
     >
       <h2 className="text-xl font-bold text-gray-800 mb-4">{ward.name}</h2>
 
@@ -69,6 +72,6 @@ export default function WardCard({ ward, onClick }: WardCardProps) {
           )}
         </div>
       )}
-    </div>
+    </Link>
   );
 }

@@ -24,6 +24,7 @@ export interface Bed {
 
 export interface Ward {
   id: string;
+  wardId?: string;
   name: string;
   beds: Bed[];
   patients: Patient[]; // currently admitted patients

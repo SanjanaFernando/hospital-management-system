@@ -55,3 +55,72 @@ export async function dischargePatientById(patientId: string): Promise<void> {
     );
   }
 }
+
+interface AssignPatientInput {
+  wardId: string;
+  bedId: string;
+  patientId: string;
+}
+
+export async function assignPatientToBed(
+  input: AssignPatientInput,
+): Promise<void> {
+  const { wardId, bedId, patientId } = input;
+
+  if (!wardId || !bedId || !patientId) {
+    throw new Error("Ward ID, bed ID, and patient ID are required");
+  }
+
+  const { db } = await connectToDatabase();
+
+  let bed = await db.collection("beds").findOne({ bedId, wardId });
+  if (!bed) {
+    bed = await db.collection("beds").findOne({ bedId });
+  }
+  if (!bed && ObjectId.isValid(bedId)) {
+    bed = await db.collection("beds").findOne({ _id: new ObjectId(bedId) });
+  }
+  if (!bed) {
+    throw new Error("Bed not found");
+  }
+
+  if (bed.status !== "available") {
+    throw new Error("Selected bed is not available");
+  }
+
+  const effectiveWardId = (bed.wardId as string) || wardId;
+
+  const patient = await db
+    .collection("patients")
+    .findOne({ id: patientId, wardId: effectiveWardId });
+
+  if (!patient) {
+    throw new Error("Patient not found in this ward queue");
+  }
+
+  if (patient.status !== "queued") {
+    throw new Error("Selected patient is not in the queue");
+  }
+
+  await db.collection("beds").updateOne(
+    { bedId: bed.bedId || bedId, wardId: effectiveWardId },
+    {
+      $set: {
+        status: "occupied",
+        patientId,
+        updatedAt: new Date(),
+      },
+    },
+  );
+
+  await db.collection("patients").updateOne(
+    { id: patientId, wardId: effectiveWardId },
+    {
+      $set: {
+        status: "admitted",
+        admissionTime: new Date(),
+        updatedAt: new Date(),
+      },
+    },
+  );
+}

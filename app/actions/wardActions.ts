@@ -2,6 +2,7 @@
 
 import { connectToDatabase } from "@/lib/mongodb";
 import { Ward, Patient, Bed } from "@/app/types";
+import { ObjectId } from "mongodb";
 
 // Helper function to recursively serialize MongoDB documents (convert ObjectIds to strings)
 function serializeDoc(doc: unknown): unknown {
@@ -105,6 +106,7 @@ export async function getWardsWithPatients(): Promise<Ward[]> {
             (wardSerialized?._id as string) ||
             (wardSerialized?.wardId as string) ||
             "",
+          wardId: (wardSerialized?.wardId as string) || "",
           name: (wardSerialized?.name as string) || "",
           beds: formattedBeds,
           patients: admittedPatients as unknown as Patient[],
@@ -126,4 +128,94 @@ export async function getWardsWithPatients(): Promise<Ward[]> {
     console.error("❌ Server Action Error:", errorMsg);
     throw new Error(`Failed to fetch wards: ${errorMsg}`);
   }
+}
+
+export async function getWardWithPatients(
+  wardId: string,
+): Promise<Ward | null> {
+  if (!wardId) {
+    return null;
+  }
+
+  const { db } = await connectToDatabase();
+
+  let ward = await db.collection("wards").findOne({ wardId });
+
+  if (!ward && ObjectId.isValid(wardId)) {
+    ward = await db.collection("wards").findOne({
+      _id: new ObjectId(wardId),
+    });
+  }
+
+  if (!ward) {
+    return null;
+  }
+
+  const wardSerialized = serializeDoc(ward) as Record<string, unknown>;
+  const effectiveWardId = (wardSerialized?.wardId as string) || wardId;
+
+  const allPatients = await db
+    .collection("patients")
+    .find({ wardId: effectiveWardId })
+    .toArray();
+  const patientsSerialized = allPatients.map(
+    (p) => serializeDoc(p) as Record<string, unknown>,
+  );
+
+  const allBeds = await db
+    .collection("beds")
+    .find({ wardId: effectiveWardId })
+    .toArray();
+  const bedsSerialized = allBeds.map(
+    (b) => serializeDoc(b) as Record<string, unknown>,
+  );
+
+  const admittedPatients = patientsSerialized.filter(
+    (p: Record<string, unknown>) => p.status === "admitted",
+  );
+  const queuedPatients = patientsSerialized.filter(
+    (p: Record<string, unknown>) => p.status === "queued",
+  );
+
+  const availableBeds = bedsSerialized.filter(
+    (b: Record<string, unknown>) => b.status === "available",
+  ).length;
+  const occupiedBeds = bedsSerialized.filter(
+    (b: Record<string, unknown>) => b.status === "occupied",
+  ).length;
+  const maintenanceBeds = bedsSerialized.filter(
+    (b: Record<string, unknown>) => b.status === "maintenance",
+  ).length;
+
+  const formattedBeds: Bed[] = bedsSerialized.map(
+    (bed: Record<string, unknown>) => ({
+      id: (bed?.bedId as string) || (bed?._id as string) || "",
+      bedNumber: (bed?.bedNumber as number) || 0,
+      status:
+        (bed?.status as "available" | "occupied" | "maintenance") ||
+        "available",
+      patient:
+        bed?.patientId && admittedPatients.length > 0
+          ? (admittedPatients.find(
+              (p: Record<string, unknown>) => p?.id === bed?.patientId,
+            ) as unknown as Patient)
+          : undefined,
+    }),
+  );
+
+  return {
+    id:
+      (wardSerialized?._id as string) ||
+      (wardSerialized?.wardId as string) ||
+      "",
+    wardId: (wardSerialized?.wardId as string) || "",
+    name: (wardSerialized?.name as string) || "",
+    beds: formattedBeds,
+    patients: admittedPatients as unknown as Patient[],
+    patientQueue: queuedPatients as unknown as Patient[],
+    totalBeds: bedsSerialized.length,
+    occupiedBeds,
+    availableBeds,
+    maintenanceBeds,
+  } as Ward;
 }
