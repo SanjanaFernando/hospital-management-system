@@ -230,7 +230,10 @@ export default function Home() {
 
         {/* Loading State */}
         {isLoading && (
-          <MedicalCrossLoader message="Loading Hospital Wards..." />
+          <MedicalCrossLoader
+            message="Loading Hospital Dashboard..."
+            fullScreen
+          />
         )}
 
         {/* Overall Statistics */}
