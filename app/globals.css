@@ -3,13 +3,25 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+
+  /* Custom Color Palette */
+  --color-primary-dark: #005461;
+  --color-primary: #0c7779;
+  --color-primary-light: #249e94;
+  --color-primary-lighter: #3bc1a8;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-inter);
+  --font-mono: var(--font-poppins);
+
+  /* Custom Color Palette */
+  --color-primary-dark: var(--color-primary-dark);
+  --color-primary: var(--color-primary);
+  --color-primary-light: var(--color-primary-light);
+  --color-primary-lighter: var(--color-primary-lighter);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -22,7 +34,13 @@
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(
+    --font-inter,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif
+  );
 }
 
 /* Loader animation */

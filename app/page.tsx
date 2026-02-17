@@ -358,7 +358,7 @@ export default function Home() {
           </div>
         )}
 
-        <div>
+        <div className="bg-white rounded-lg shadow-md p-8">
           <div className="mb-6 flex items-center justify-between">
             <h2 className="text-2xl font-bold text-gray-800">Wards</h2>
             {wardsByOccupancy.length > 3 && (
