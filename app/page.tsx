@@ -48,7 +48,7 @@ export default function Home() {
 
       if (wardsData && wardsData.length > 0) {
         console.log(
-          `✅ Frontend: Received ${wardsData.length} wards from server`,
+          `✅ Frontend: Received ${wardsData.length} wards from server`
         );
         setWards(wardsData);
       } else {
@@ -63,7 +63,7 @@ export default function Home() {
       const mockWards = initializeWards();
       setWards(mockWards);
       setError(
-        `Using sample data - ${errorMsg}. Please check MongoDB connection.`,
+        `Using sample data - ${errorMsg}. Please check MongoDB connection.`
       );
     } finally {
       setIsLoading(false);
@@ -72,16 +72,16 @@ export default function Home() {
 
   const totalAvailable = wards.reduce(
     (sum, ward) => sum + ward.availableBeds,
-    0,
+    0
   );
   const totalOccupied = wards.reduce((sum, ward) => sum + ward.occupiedBeds, 0);
   const totalMaintenance = wards.reduce(
     (sum, ward) => sum + ward.maintenanceBeds,
-    0,
+    0
   );
   const totalQueue = wards.reduce(
     (sum, ward) => sum + ward.patientQueue.length,
-    0,
+    0
   );
   const totalBeds = wards.reduce((sum, ward) => sum + ward.totalBeds, 0);
 
@@ -296,7 +296,7 @@ export default function Home() {
                   value={chartMetric}
                   onChange={(e) =>
                     setChartMetric(
-                      e.target.value as "occupancy" | "queue" | "maintenance",
+                      e.target.value as "occupancy" | "queue" | "maintenance"
                     )
                   }
                   className="px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -370,7 +370,7 @@ export default function Home() {
               <button
                 type="button"
                 onClick={() => setShowAllWards((prev) => !prev)}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-blue-600 text-white font-medium hover:bg-blue-700 transition-colors"
+                className="inline-flex items-center cursor-pointer gap-2 px-4 py-2 rounded-md bg-blue-600 text-white font-medium hover:bg-blue-700 transition-colors"
               >
                 {showAllWards ? "Less" : "More"}
                 <span

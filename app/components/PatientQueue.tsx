@@ -24,6 +24,8 @@ const ageGroupBadgeColors = {
   Elderly: "bg-pink-100 text-pink-800",
 };
 
+const priorityOrder = { Critical: 0, Urgent: 1, "Non-urgent": 2 };
+
 export default function PatientQueue({
   patients = [],
   beds = [],
@@ -60,6 +62,13 @@ export default function PatientQueue({
     );
   }
 
+  // Sort patients by priority level (Critical > Urgent > Non-urgent)
+  const sortedPatients = [...patients].sort(
+    (a, b) =>
+      priorityOrder[a.priority as keyof typeof priorityOrder] -
+      priorityOrder[b.priority as keyof typeof priorityOrder]
+  );
+
   return (
     <div className="w-full">
       <h3 className="text-lg font-semibold mb-4 text-gray-800">
@@ -67,11 +76,11 @@ export default function PatientQueue({
       </h3>
       {wardId && beds.length > 0 && (
         <p className="text-xs text-gray-500 mb-3">
-          💡 Click on a patient to assign them to a bed
+          💡 Sorted by priority. Click on a patient to assign them to a bed
         </p>
       )}
       <div className="space-y-3 max-h-[65vh] overflow-y-auto">
-        {patients.map((patient, index) => (
+        {sortedPatients.map((patient, index) => (
           <div
             key={patient.id}
             onClick={() => handlePatientClick(patient)}
