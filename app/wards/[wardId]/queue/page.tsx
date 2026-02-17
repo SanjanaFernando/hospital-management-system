@@ -40,6 +40,10 @@ export default function WardQueuePage() {
     void loadWard();
   }, [loadWard]);
 
+  const handlePatientAssigned = () => {
+    loadWard();
+  };
+
   if (isLoading) {
     return <MedicalCrossLoader message="Loading Queue..." fullScreen />;
   }
@@ -87,7 +91,13 @@ export default function WardQueuePage() {
         )}
 
         <div className="bg-white rounded-lg shadow-md p-8">
-          <PatientQueue patients={ward?.patientQueue || []} />
+          <PatientQueue
+            patients={ward?.patientQueue || []}
+            beds={ward.beds || []}
+            wardId={ward.wardId || ward.id}
+            wardName={ward.name}
+            onPatientAssigned={handlePatientAssigned}
+          />
         </div>
       </div>
     </div>

@@ -219,3 +219,45 @@ export async function getWardWithPatients(
     maintenanceBeds,
   } as Ward;
 }
+
+export async function updateBedStatus(
+  bedId: string,
+  newStatus: "available" | "occupied" | "maintenance",
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    console.log(`📡 Server Action: Updating bed ${bedId} to ${newStatus}...`);
+    const { db } = await connectToDatabase();
+
+    // Build query - try multiple ways to find the bed
+    const query: Record<string, unknown> = {
+      $or: [
+        { bedId }, // Search by bedId field
+        { id: bedId }, // Search by id field
+      ],
+    };
+
+    // Try to add ObjectId search if it's a valid format
+    if (ObjectId.isValid(bedId)) {
+      (query.$or as Record<string, unknown>[]).push({
+        _id: new ObjectId(bedId),
+      });
+    }
+
+    const result = await db
+      .collection("beds")
+      .updateOne(query, { $set: { status: newStatus, updatedAt: new Date() } });
+
+    if (result.matchedCount === 0) {
+      return { success: false, error: "Bed not found" };
+    }
+
+    console.log("✅ Bed status updated successfully");
+    return { success: true };
+  } catch (error) {
+    console.error("❌ Error updating bed status:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+    };
+  }
+}

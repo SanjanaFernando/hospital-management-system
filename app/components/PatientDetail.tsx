@@ -3,10 +3,12 @@
 import { useState } from "react";
 import { Patient } from "@/app/types";
 import DischargePatient from "./DischargePatient";
+import { movePatientToQueue } from "@/app/actions/patientActions";
 
 interface PatientDetailProps {
   patient: Patient;
   onDischargeSuccess?: () => void;
+  onMoveToQueueSuccess?: () => void;
 }
 
 const priorityColors = {
@@ -24,13 +26,35 @@ const ageGroupColors = {
 export default function PatientDetail({
   patient,
   onDischargeSuccess,
+  onMoveToQueueSuccess,
 }: PatientDetailProps) {
   const [showDischargeForm, setShowDischargeForm] = useState(false);
+  const [isMovingToQueue, setIsMovingToQueue] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
+
   const admissionDate = new Date(patient.admissionTime);
   const currentDate = new Date();
   const daysAdmitted = Math.floor(
     (currentDate.getTime() - admissionDate.getTime()) / (1000 * 60 * 60 * 24),
   );
+
+  const handleMoveToQueue = async () => {
+    setErrorMessage("");
+    setIsMovingToQueue(true);
+
+    try {
+      await movePatientToQueue(patient.id);
+      onMoveToQueueSuccess?.();
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : "Failed to move patient to queue",
+      );
+    } finally {
+      setIsMovingToQueue(false);
+    }
+  };
 
   if (showDischargeForm) {
     return (
@@ -62,6 +86,13 @@ export default function PatientDetail({
             {patient.ageGroup}
           </span>
           <button
+            onClick={handleMoveToQueue}
+            disabled={isMovingToQueue}
+            className="bg-orange-500 text-white px-3 py-1 rounded-full text-sm font-semibold hover:bg-orange-600 transition-colors disabled:bg-orange-300 disabled:cursor-not-allowed"
+          >
+            {isMovingToQueue ? "Moving..." : "Move to Queue"}
+          </button>
+          <button
             onClick={() => setShowDischargeForm(true)}
             className="bg-red-500 text-white px-3 py-1 rounded-full text-sm font-semibold hover:bg-red-600 transition-colors"
           >
@@ -69,6 +100,12 @@ export default function PatientDetail({
           </button>
         </div>
       </div>
+
+      {errorMessage && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+          <p className="text-red-800 text-sm">{errorMessage}</p>
+        </div>
+      )}
 
       <div className="grid grid-cols-2 gap-4 mb-4">
         <div className="bg-white rounded p-3 border border-gray-200">

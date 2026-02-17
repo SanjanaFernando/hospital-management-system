@@ -3,11 +3,15 @@
 import Link from "next/link";
 import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
-import { ChevronLeft } from "lucide-react";
+import { ChevronLeft, Plus, Wrench } from "lucide-react";
 import { Bed, Ward } from "@/app/types";
 import PatientDetail from "@/app/components/PatientDetail";
+import AssignPatientModal from "@/app/components/AssignPatientModal";
 import MedicalCrossLoader from "@/app/components/MedicalCrossLoader";
-import { getWardWithPatients } from "@/app/actions/wardActions";
+import {
+  getWardWithPatients,
+  updateBedStatus,
+} from "@/app/actions/wardActions";
 
 export default function BedDetailPage() {
   const params = useParams<{ wardId: string; bedId: string }>();
@@ -18,6 +22,7 @@ export default function BedDetailPage() {
   const [bed, setBed] = useState<Bed | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
+  const [showAssignModal, setShowAssignModal] = useState(false);
 
   const loadWard = useCallback(async () => {
     if (!wardId) return;
@@ -50,6 +55,37 @@ export default function BedDetailPage() {
   }, [loadWard]);
 
   const handleDischargeSuccess = () => {
+    loadWard();
+  };
+
+  const handleMoveToQueueSuccess = () => {
+    loadWard();
+  };
+
+  const handleChangeBedStatus = async (
+    newStatus: "available" | "maintenance",
+  ) => {
+    try {
+      setError("");
+      const result = await updateBedStatus(bed?.id || "", newStatus);
+
+      if (result.success) {
+        await loadWard();
+      } else {
+        setError(result.error || "Failed to update bed status");
+      }
+    } catch (err) {
+      console.error("Error updating bed status:", err);
+      setError("An unexpected error occurred while updating bed status");
+    }
+  };
+
+  const handleAssignPatient = () => {
+    setShowAssignModal(true);
+  };
+
+  const handleAssignedSuccess = () => {
+    setShowAssignModal(false);
     loadWard();
   };
 
@@ -119,6 +155,12 @@ export default function BedDetailPage() {
             </div>
           </div>
 
+          {error && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+              <p className="text-red-800 text-sm">{error}</p>
+            </div>
+          )}
+
           <div className="border-t pt-6">
             {bed.patient ? (
               <div>
@@ -128,6 +170,7 @@ export default function BedDetailPage() {
                 <PatientDetail
                   patient={bed.patient}
                   onDischargeSuccess={handleDischargeSuccess}
+                  onMoveToQueueSuccess={handleMoveToQueueSuccess}
                 />
               </div>
             ) : bed.status === "available" ? (
@@ -191,9 +234,47 @@ export default function BedDetailPage() {
               <ChevronLeft size={20} />
               Back to Ward
             </Link>
+
+            {bed.status === "available" && (
+              <>
+                <button
+                  onClick={handleAssignPatient}
+                  className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium"
+                >
+                  <Plus size={20} />
+                  Assign Patient
+                </button>
+                <button
+                  onClick={() => handleChangeBedStatus("maintenance")}
+                  className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-colors font-medium"
+                >
+                  <Wrench size={20} />
+                  Mark Maintenance
+                </button>
+              </>
+            )}
+
+            {bed.status === "maintenance" && (
+              <button
+                onClick={() => handleChangeBedStatus("available")}
+                className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+              >
+                Mark Available
+              </button>
+            )}
           </div>
         </div>
       </div>
+
+      {showAssignModal && bed && ward && (
+        <AssignPatientModal
+          wardId={ward.wardId || ward.id}
+          bed={bed}
+          queue={ward.patientQueue}
+          onAssigned={handleAssignedSuccess}
+          onCancel={() => setShowAssignModal(false)}
+        />
+      )}
     </div>
   );
 }

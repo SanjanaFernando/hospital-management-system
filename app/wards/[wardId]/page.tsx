@@ -153,6 +153,9 @@ export default function WardPage() {
             {ward?.patientQueue && ward.patientQueue.length > 0 ? (
               <PatientQueue
                 patients={ward.patientQueue}
+                beds={ward.beds || []}
+                wardId={ward.wardId || ward.id}
+                wardName={ward.name}
                 onPatientAssigned={handleDischarged}
               />
             ) : (
