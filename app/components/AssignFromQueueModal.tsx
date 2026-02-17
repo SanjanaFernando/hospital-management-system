@@ -12,6 +12,7 @@ interface AssignFromQueueModalProps {
   patient: Patient;
   beds: Bed[];
   onAssigned: () => void;
+  onClose: () => void;
 }
 
 export default function AssignFromQueueModal({
@@ -20,6 +21,7 @@ export default function AssignFromQueueModal({
   patient,
   beds,
   onAssigned,
+  onClose,
 }: AssignFromQueueModalProps) {
   const router = useRouter();
   const [selectedBedId, setSelectedBedId] = useState<string>("");
@@ -53,10 +55,11 @@ export default function AssignFromQueueModal({
         });
       }
       onAssigned();
-      // Navigate back after successful assignment
+      // Close modal and navigate back after successful assignment
       setTimeout(() => {
+        onClose();
         router.push(`/wards/${wardId}`);
-      }, 500);
+      }, 300);
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Failed to assign patient";
@@ -67,18 +70,15 @@ export default function AssignFromQueueModal({
   };
 
   const selectedBed = beds.find((bed) => bed.id === selectedBedId);
-  const handleClose = () => {
-    router.push(`/wards/${wardId}`);
-  };
 
   const handleCloseClick = (e: React.MouseEvent<HTMLButtonElement>) => {
     e.preventDefault();
     e.stopPropagation();
-    handleClose();
+    onClose();
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-white/10 p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-white/70 p-4">
       <div className="w-full max-w-2xl rounded-lg bg-white p-6 shadow-xl max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-xl font-bold text-gray-800">

@@ -47,6 +47,11 @@ export default function PatientQueue({
     onPatientAssigned?.();
   };
 
+  const handleModalClose = () => {
+    setShowAssignModal(false);
+    setSelectedPatient(null);
+  };
+
   if (!patients || patients.length === 0) {
     return (
       <div className="bg-gray-50 rounded-lg p-6 text-center">
@@ -94,9 +99,11 @@ export default function PatientQueue({
               </div>
               <span className="text-xs font-bold">{patient.priority}</span>
             </div>
-            <p className="text-xs mt-2">
-              Arrival: {new Date(patient.admissionTime).toLocaleString()}
-            </p>
+            {patient.admissionTime && (
+              <p className="text-xs mt-2">
+                Arrival: {new Date(patient.admissionTime).toLocaleString()}
+              </p>
+            )}
             {patient.queueWaitTime && (
               <p className="text-xs mt-1 font-semibold">
                 Waiting: {patient.queueWaitTime} mins
@@ -120,6 +127,7 @@ export default function PatientQueue({
           patient={selectedPatient}
           beds={beds}
           onAssigned={handleAssignSuccess}
+          onClose={handleModalClose}
         />
       )}
     </div>

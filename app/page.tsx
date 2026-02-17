@@ -170,12 +170,14 @@ export default function Home() {
     ]);
 
     allPatients.forEach((patient) => {
-      const admissionDate = new Date(patient.admissionTime);
-      admissionDate.setHours(0, 0, 0, 0);
-      const key = dayKeyFormatter.format(admissionDate);
-      const current = dateMap.get(key);
-      if (current) {
-        current.patients += 1;
+      if (patient.admissionTime) {
+        const admissionDate = new Date(patient.admissionTime);
+        admissionDate.setHours(0, 0, 0, 0);
+        const key = dayKeyFormatter.format(admissionDate);
+        const current = dateMap.get(key);
+        if (current) {
+          current.patients += 1;
+        }
       }
     });
 

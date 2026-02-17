@@ -32,11 +32,16 @@ export default function PatientDetail({
   const [isMovingToQueue, setIsMovingToQueue] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
 
-  const admissionDate = new Date(patient.admissionTime);
+  const admissionDate = patient.admissionTime
+    ? new Date(patient.admissionTime)
+    : null;
   const currentDate = new Date();
-  const daysAdmitted = Math.floor(
-    (currentDate.getTime() - admissionDate.getTime()) / (1000 * 60 * 60 * 24),
-  );
+  const daysAdmitted = admissionDate
+    ? Math.floor(
+        (currentDate.getTime() - admissionDate.getTime()) /
+          (1000 * 60 * 60 * 24),
+      )
+    : 0;
 
   const handleMoveToQueue = async () => {
     setErrorMessage("");
@@ -120,18 +125,22 @@ export default function PatientDetail({
             {patient.disease}
           </p>
         </div>
-        <div className="bg-white rounded p-3 border border-gray-200">
-          <p className="text-xs text-gray-600 mb-1">Admission Date & Time</p>
-          <p className="text-sm font-semibold text-gray-800">
-            {admissionDate.toLocaleString()}
-          </p>
-        </div>
-        <div className="bg-white rounded p-3 border border-gray-200">
-          <p className="text-xs text-gray-600 mb-1">Days in Hospital</p>
-          <p className="text-lg font-semibold text-gray-800">
-            {daysAdmitted} day(s)
-          </p>
-        </div>
+        {admissionDate && (
+          <div className="bg-white rounded p-3 border border-gray-200">
+            <p className="text-xs text-gray-600 mb-1">Admission Date & Time</p>
+            <p className="text-sm font-semibold text-gray-800">
+              {admissionDate.toLocaleString()}
+            </p>
+          </div>
+        )}
+        {admissionDate && (
+          <div className="bg-white rounded p-3 border border-gray-200">
+            <p className="text-xs text-gray-600 mb-1">Days in Hospital</p>
+            <p className="text-lg font-semibold text-gray-800">
+              {daysAdmitted} day(s)
+            </p>
+          </div>
+        )}
         {patient.queueWaitTime && (
           <div className="bg-white rounded p-3 border border-gray-200">
             <p className="text-xs text-gray-600 mb-1">Queue Wait Time</p>
@@ -144,7 +153,9 @@ export default function PatientDetail({
           <div className="bg-white rounded p-3 border border-gray-200">
             <p className="text-xs text-gray-600 mb-1">Discharge Date & Time</p>
             <p className="text-sm font-semibold text-gray-800">
-              {new Date(patient.dischargeTime).toLocaleString()}
+              {new Date(patient.dischargeTime).toString() !== "Invalid Date"
+                ? new Date(patient.dischargeTime).toLocaleString()
+                : "Invalid Date"}
             </p>
           </div>
         )}

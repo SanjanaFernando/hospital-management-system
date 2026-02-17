@@ -143,12 +143,20 @@ export default function WardPage() {
           <div className="bg-white rounded-lg shadow-md p-6">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-2xl font-bold text-gray-800">Queue</h2>
-              <Link
-                href={`/wards/${ward?.wardId || ward?.id}/patients`}
-                className="px-3 py-1 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors"
-              >
-                View all patients
-              </Link>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => router.push(`/wards/${wardId}/register`)}
+                  className="px-3 py-1 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 transition-colors"
+                >
+                  + Register Patient
+                </button>
+                <Link
+                  href={`/wards/${ward?.wardId || ward?.id}/patients`}
+                  className="px-3 py-1 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  View all patients
+                </Link>
+              </div>
             </div>
             {ward?.patientQueue && ward.patientQueue.length > 0 ? (
               <PatientQueue
