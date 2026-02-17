@@ -78,7 +78,7 @@ export default function AssignPatientModal({
             <select
               value={selectedPatientId}
               onChange={(e) => setSelectedPatientId(e.target.value)}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-black focus:outline-none focus:ring-2 focus:ring-green-500"
             >
               {queue.map((patient) => (
                 <option key={patient.id} value={patient.id}>

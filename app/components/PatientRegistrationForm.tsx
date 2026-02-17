@@ -202,7 +202,7 @@ export default function PatientRegistrationForm({
             value={formData.name}
             onChange={handleInputChange}
             placeholder="Enter patient full name"
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg text-black focus:outline-none focus:ring-2 focus:ring-blue-500"
             required
           />
         </div>
@@ -220,7 +220,7 @@ export default function PatientRegistrationForm({
             placeholder="Enter age"
             min="1"
             max="150"
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg text-black focus:outline-none focus:ring-2 focus:ring-blue-500"
             required
           />
         </div>
@@ -234,7 +234,7 @@ export default function PatientRegistrationForm({
             name="disease"
             value={formData.disease}
             onChange={handleInputChange}
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg text-black focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
             {diseases.map((disease) => (
               <option key={disease} value={disease}>
@@ -255,7 +255,7 @@ export default function PatientRegistrationForm({
             onChange={
               handleInputChange as React.ChangeEventHandler<HTMLSelectElement>
             }
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg text-black focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
             <option value="Non-urgent">Non-urgent</option>
             <option value="Urgent">Urgent</option>

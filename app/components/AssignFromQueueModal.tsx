@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Bed, Patient } from "@/app/types";
 import { assignPatientToBed } from "@/app/actions/patientActions";
 import { forceAssignPatientToBed } from "@/app/actions/patientActions";
+import { dischargePatientById } from "@/app/actions/patientActions";
 
 interface AssignFromQueueModalProps {
   wardId: string;
@@ -75,6 +76,27 @@ export default function AssignFromQueueModal({
     e.preventDefault();
     e.stopPropagation();
     onClose();
+  };
+
+  const handleDischarge = async () => {
+    setErrorMessage("");
+    setIsLoading(true);
+
+    try {
+      await dischargePatientById(patient.id);
+      onAssigned(); // Trigger parent refresh
+      // Close modal and navigate back after successful discharge
+      setTimeout(() => {
+        onClose();
+        router.push(`/wards/${wardId}`);
+      }, 300);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to discharge patient";
+      setErrorMessage(message);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -199,41 +221,50 @@ export default function AssignFromQueueModal({
         )}
 
         {/* Action Buttons */}
-        <div className="flex gap-3">
-          {selectedBed && selectedBed.status === "available" ? (
+        <div className="space-y-3">
+          <div className="flex gap-3">
+            {selectedBed && selectedBed.status === "available" ? (
+              <button
+                onClick={() => handleAssign(false)}
+                disabled={isLoading || !selectedBedId}
+                className="flex-1 rounded-lg bg-green-600 px-4 py-3 text-white font-semibold hover:bg-green-700 disabled:bg-green-300 disabled:cursor-not-allowed"
+              >
+                {isLoading
+                  ? "Assigning..."
+                  : `Assign to Bed ${selectedBed.bedNumber}`}
+              </button>
+            ) : selectedBed && selectedBed.status === "occupied" ? (
+              <button
+                onClick={() => handleAssign(true)}
+                disabled={isLoading || !selectedBedId}
+                className="flex-1 rounded-lg bg-orange-600 px-4 py-3 text-white font-semibold hover:bg-orange-700 disabled:bg-orange-300 disabled:cursor-not-allowed"
+              >
+                {isLoading
+                  ? "Force Assigning..."
+                  : `Force Assign to Bed ${selectedBed.bedNumber}`}
+              </button>
+            ) : (
+              <button
+                disabled
+                className="flex-1 rounded-lg bg-gray-300 px-4 py-3 text-gray-500 font-semibold cursor-not-allowed"
+              >
+                Select a bed first
+              </button>
+            )}
             <button
-              onClick={() => handleAssign(false)}
-              disabled={isLoading || !selectedBedId}
-              className="flex-1 rounded-lg bg-green-600 px-4 py-3 text-white font-semibold hover:bg-green-700 disabled:bg-green-300 disabled:cursor-not-allowed"
+              onClick={handleCloseClick}
+              disabled={isLoading}
+              className="flex-1 rounded-lg bg-gray-300 px-4 py-3 text-gray-800 font-semibold hover:bg-gray-400 disabled:bg-gray-200 disabled:cursor-not-allowed"
             >
-              {isLoading
-                ? "Assigning..."
-                : `Assign to Bed ${selectedBed.bedNumber}`}
+              Cancel
             </button>
-          ) : selectedBed && selectedBed.status === "occupied" ? (
-            <button
-              onClick={() => handleAssign(true)}
-              disabled={isLoading || !selectedBedId}
-              className="flex-1 rounded-lg bg-orange-600 px-4 py-3 text-white font-semibold hover:bg-orange-700 disabled:bg-orange-300 disabled:cursor-not-allowed"
-            >
-              {isLoading
-                ? "Force Assigning..."
-                : `Force Assign to Bed ${selectedBed.bedNumber}`}
-            </button>
-          ) : (
-            <button
-              disabled
-              className="flex-1 rounded-lg bg-gray-300 px-4 py-3 text-gray-500 font-semibold cursor-not-allowed"
-            >
-              Select a bed first
-            </button>
-          )}
+          </div>
           <button
-            onClick={handleCloseClick}
+            onClick={handleDischarge}
             disabled={isLoading}
-            className="flex-1 rounded-lg bg-gray-300 px-4 py-3 text-gray-800 font-semibold hover:bg-gray-400 disabled:bg-gray-200 disabled:cursor-not-allowed"
+            className="w-full rounded-lg bg-red-600 px-4 py-3 text-white font-semibold hover:bg-red-700 disabled:bg-red-300 disabled:cursor-not-allowed"
           >
-            Cancel
+            {isLoading ? "Discharging..." : "Discharge Patient"}
           </button>
         </div>
       </div>

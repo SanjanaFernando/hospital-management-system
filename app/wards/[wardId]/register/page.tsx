@@ -29,12 +29,7 @@ export default function RegisterPatientPage() {
           Back to Ward
         </Link>
 
-        <div className="bg-white rounded-lg shadow-md p-8">
-          <h1 className="text-3xl font-bold text-gray-800 mb-2">
-            Register Patient
-          </h1>
-          <p className="text-gray-600 mb-6">Add a new patient to the queue</p>
-
+        <div className=" flex justify-center">
           <PatientRegistrationForm
             wardId={wardId}
             onSuccess={handleRegistrationSuccess}
