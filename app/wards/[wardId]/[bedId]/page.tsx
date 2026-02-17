@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
+import { ChevronLeft } from "lucide-react";
 import { Bed, Ward } from "@/app/types";
 import PatientDetail from "@/app/components/PatientDetail";
 import MedicalCrossLoader from "@/app/components/MedicalCrossLoader";
@@ -62,9 +63,10 @@ export default function BedDetailPage() {
         <div className="max-w-4xl mx-auto">
           <Link
             href={`/wards/${wardId}`}
-            className="mb-6 inline-block px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+            className="mb-6 inline-flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
           >
-            ← Back to Ward
+            <ChevronLeft size={20} />
+            Back to Ward
           </Link>
           <div className="bg-white rounded-lg shadow-md p-8">
             <h1 className="text-2xl font-bold text-gray-800 mb-2">
@@ -96,9 +98,10 @@ export default function BedDetailPage() {
       <div className="max-w-4xl mx-auto">
         <Link
           href={`/wards/${wardId}`}
-          className="mb-6 inline-block px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+          className="mb-6 inline-flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
         >
-          ← Back to Ward
+          <ChevronLeft size={20} />
+          Back to Ward
         </Link>
 
         <div className="bg-white rounded-lg shadow-md p-8">
@@ -183,8 +186,9 @@ export default function BedDetailPage() {
           <div className="mt-8 flex gap-4">
             <Link
               href={`/wards/${wardId}`}
-              className="flex-1 text-center px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+              className="flex-1 text-center inline-flex items-center justify-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
             >
+              <ChevronLeft size={20} />
               Back to Ward
             </Link>
           </div>

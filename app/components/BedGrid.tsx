@@ -41,7 +41,7 @@ export default function BedGrid({
           <div
             key={bed.id}
             onClick={() => handleBedClick(bed)}
-            className={`${statusColors[bed.status]} text-white rounded-lg p-4 cursor-pointer transition-all shadow-md hover:shadow-lg`}
+            className={`${statusColors[bed.status]} text-white rounded-lg p-4 cursor-pointer transition-all shadow-md hover:shadow-lg flex flex-col items-center justify-center min-h-[120px] h-full`}
             title={`${statusLabels[bed.status]}${bed.patient ? ` - ${bed.patient.name}` : ""}`}
           >
             <div className="text-center">

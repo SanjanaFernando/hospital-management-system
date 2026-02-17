@@ -6,11 +6,33 @@ import WardCard from "@/app/components/WardCard";
 import MedicalCrossLoader from "@/app/components/MedicalCrossLoader";
 import { initializeWards } from "@/app/utils/mockData";
 import { getWardsWithPatients } from "@/app/actions/wardActions";
+import {
+  ChartContainer,
+  ChartLegendContent,
+  ChartTooltip,
+} from "@/components/ui/chart";
+import {
+  CartesianGrid,
+  Cell,
+  Legend,
+  Pie,
+  PieChart,
+  Bar,
+  BarChart,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+import { ChevronDown } from "lucide-react";
 
 export default function Home() {
   const [wards, setWards] = useState<Ward[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
+  const [showAllWards, setShowAllWards] = useState(false);
+  const [chartMetric, setChartMetric] = useState<
+    "occupancy" | "queue" | "maintenance"
+  >("occupancy");
 
   // Load wards from server action on mount
   useEffect(() => {
@@ -63,6 +85,127 @@ export default function Home() {
   );
   const totalBeds = wards.reduce((sum, ward) => sum + ward.totalBeds, 0);
 
+  const wardPieData = wards.map((ward) => ({
+    name: ward.name.replace(/^Ward\s+[A-Z]\s+-\s+/, ""),
+    occupiedBeds: ward.occupiedBeds,
+  }));
+
+  const wardQueueData = wards.map((ward) => ({
+    name: ward.name.replace(/^Ward\s+[A-Z]\s+-\s+/, ""),
+    queueCount: ward.patientQueue.length,
+  }));
+
+  const wardMaintenanceData = wards.map((ward) => ({
+    name: ward.name.replace(/^Ward\s+[A-Z]\s+-\s+/, ""),
+    maintenanceBeds: ward.maintenanceBeds,
+  }));
+
+  const getChartData = () => {
+    switch (chartMetric) {
+      case "queue":
+        return wardQueueData;
+      case "maintenance":
+        return wardMaintenanceData;
+      default:
+        return wardPieData;
+    }
+  };
+
+  const getChartDataKey = () => {
+    switch (chartMetric) {
+      case "queue":
+        return "queueCount";
+      case "maintenance":
+        return "maintenanceBeds";
+      default:
+        return "occupiedBeds";
+    }
+  };
+
+  const getChartTitle = () => {
+    switch (chartMetric) {
+      case "queue":
+        return "Overall Queue";
+      case "maintenance":
+        return "Overall Maintenance Beds";
+      default:
+        return "Overall Wards Occupancy";
+    }
+  };
+
+  const getChartDescription = () => {
+    switch (chartMetric) {
+      case "queue":
+        return "Waiting patients by ward";
+      case "maintenance":
+        return "Maintenance beds by ward";
+      default:
+        return "Occupied bed share by ward";
+    }
+  };
+
+  const pieColors = ["#3b82f6", "#06b6d4", "#8b5cf6", "#14b8a6", "#6366f1"];
+
+  const dailyPatientData = (() => {
+    const dayFormatter = new Intl.DateTimeFormat("en-US", { weekday: "short" });
+    const dayKeyFormatter = new Intl.DateTimeFormat("en-CA");
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+    start.setDate(start.getDate() - 6);
+
+    const dateMap = new Map<string, { day: string; patients: number }>();
+
+    for (let i = 0; i < 7; i++) {
+      const date = new Date(start);
+      date.setDate(start.getDate() + i);
+      dateMap.set(dayKeyFormatter.format(date), {
+        day: dayFormatter.format(date),
+        patients: 0,
+      });
+    }
+
+    const allPatients = wards.flatMap((ward) => [
+      ...ward.patients,
+      ...ward.patientQueue,
+    ]);
+
+    allPatients.forEach((patient) => {
+      const admissionDate = new Date(patient.admissionTime);
+      admissionDate.setHours(0, 0, 0, 0);
+      const key = dayKeyFormatter.format(admissionDate);
+      const current = dateMap.get(key);
+      if (current) {
+        current.patients += 1;
+      }
+    });
+
+    return Array.from(dateMap.values());
+  })();
+
+  const wardPieChartConfig = {
+    occupiedBeds: {
+      label: "Occupied Beds",
+      color: "#3b82f6",
+    },
+  };
+
+  const dailyPatientsChartConfig = {
+    patients: {
+      label: "Patients",
+      color: "#8b5cf6",
+    },
+  };
+
+  const wardsByOccupancy = [...wards].sort((a, b) => {
+    const occupancyA = a.totalBeds === 0 ? 0 : a.occupiedBeds / a.totalBeds;
+    const occupancyB = b.totalBeds === 0 ? 0 : b.occupiedBeds / b.totalBeds;
+    return occupancyB - occupancyA;
+  });
+
+  const displayedWards = showAllWards
+    ? wardsByOccupancy
+    : wardsByOccupancy.slice(0, 3);
+
   return (
     <div className="min-h-screen bg-linear-to-br from-blue-50 to-indigo-100 p-8">
       <div className="max-w-7xl mx-auto">
@@ -91,7 +234,7 @@ export default function Home() {
         {/* Overall Statistics */}
         {!isLoading && (
           <div className="grid grid-cols-5 gap-4 mb-8">
-            <div className="bg-white rounded-lg shadow-md p-6 border-l-4 border-green-500">
+            <div className="bg-white rounded-lg shadow-md px-6 py-2 border-l-4 border-green-500">
               <p className="text-sm text-gray-600 mb-2">Available Beds</p>
               <p className="text-3xl font-bold text-green-600">
                 {totalAvailable}
@@ -100,7 +243,7 @@ export default function Home() {
                 {Math.round((totalAvailable / totalBeds) * 100)}% of total
               </p>
             </div>
-            <div className="bg-white rounded-lg shadow-md p-6 border-l-4 border-blue-500">
+            <div className="bg-white rounded-lg shadow-md px-6 py-2 border-l-4 border-blue-500">
               <p className="text-sm text-gray-600 mb-2">Occupied Beds</p>
               <p className="text-3xl font-bold text-blue-600">
                 {totalOccupied}
@@ -109,7 +252,7 @@ export default function Home() {
                 {Math.round((totalOccupied / totalBeds) * 100)}% of total
               </p>
             </div>
-            <div className="bg-white rounded-lg shadow-md p-6 border-l-4 border-yellow-500">
+            <div className="bg-white rounded-lg shadow-md px-6 py-2 border-l-4 border-yellow-500">
               <p className="text-sm text-gray-600 mb-2">Maintenance</p>
               <p className="text-3xl font-bold text-yellow-600">
                 {totalMaintenance}
@@ -118,12 +261,12 @@ export default function Home() {
                 {Math.round((totalMaintenance / totalBeds) * 100)}% of total
               </p>
             </div>
-            <div className="bg-white rounded-lg shadow-md p-6 border-l-4 border-purple-500">
+            <div className="bg-white rounded-lg shadow-md px-6 py-2 border-l-4 border-purple-500">
               <p className="text-sm text-gray-600 mb-2">Waiting</p>
               <p className="text-3xl font-bold text-purple-600">{totalQueue}</p>
               <p className="text-xs text-gray-500 mt-2">In queue</p>
             </div>
-            <div className="bg-white rounded-lg shadow-md p-6 border-l-4 border-gray-500">
+            <div className="bg-white rounded-lg shadow-md px-6 py-2 border-l-4 border-gray-500">
               <p className="text-sm text-gray-600 mb-2">Total Beds</p>
               <p className="text-3xl font-bold text-gray-600">{totalBeds}</p>
               <p className="text-xs text-gray-500 mt-2">Across all wards</p>
@@ -132,10 +275,111 @@ export default function Home() {
         )}
 
         {/* Wards Grid */}
+        {!isLoading && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+            <div className="bg-white rounded-lg shadow-md p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-800">
+                    {getChartTitle()}
+                  </h3>
+                  <p className="text-sm text-gray-500">
+                    {getChartDescription()}
+                  </p>
+                </div>
+                <select
+                  value={chartMetric}
+                  onChange={(e) =>
+                    setChartMetric(
+                      e.target.value as "occupancy" | "queue" | "maintenance",
+                    )
+                  }
+                  className="px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="occupancy">Overall Occupancy</option>
+                  <option value="queue">Overall Queue</option>
+                  <option value="maintenance">Maintenance Beds</option>
+                </select>
+              </div>
+              <ChartContainer
+                config={wardPieChartConfig}
+                className="h-[300px] w-full"
+              >
+                <PieChart>
+                  <Pie
+                    data={getChartData()}
+                    dataKey={getChartDataKey()}
+                    nameKey="name"
+                    innerRadius={60}
+                    outerRadius={100}
+                    label
+                  >
+                    {getChartData().map((entry, index) => (
+                      <Cell
+                        key={`${entry.name}-${index}`}
+                        fill={pieColors[index % pieColors.length]}
+                      />
+                    ))}
+                  </Pie>
+                  <Tooltip content={<ChartTooltip />} />
+                  <Legend content={<ChartLegendContent />} />
+                </PieChart>
+              </ChartContainer>
+            </div>
+
+            <div className="bg-white rounded-lg shadow-md p-6">
+              <h3 className="text-lg font-semibold text-gray-800 mb-1">
+                Daily Overall Patients
+              </h3>
+              <p className="text-sm text-gray-500 mb-4">
+                Last 7 days admissions (ward + queue)
+              </p>
+              <ChartContainer
+                config={dailyPatientsChartConfig}
+                className="h-[300px] w-full"
+              >
+                <BarChart data={dailyPatientData}>
+                  <CartesianGrid vertical={false} strokeDasharray="3 3" />
+                  <XAxis dataKey="day" tickLine={false} axisLine={false} />
+                  <YAxis
+                    allowDecimals={false}
+                    tickLine={false}
+                    axisLine={false}
+                  />
+                  <Tooltip content={<ChartTooltip />} />
+                  <Bar
+                    dataKey="patients"
+                    fill="var(--color-patients)"
+                    radius={[6, 6, 0, 0]}
+                  />
+                </BarChart>
+              </ChartContainer>
+            </div>
+          </div>
+        )}
+
         <div>
-          <h2 className="text-2xl font-bold text-gray-800 mb-6">Wards</h2>
-          <div className="grid grid-cols-2 gap-6">
-            {wards.map((ward) => (
+          <div className="mb-6 flex items-center justify-between">
+            <h2 className="text-2xl font-bold text-gray-800">Wards</h2>
+            {wardsByOccupancy.length > 3 && (
+              <button
+                type="button"
+                onClick={() => setShowAllWards((prev) => !prev)}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-blue-600 text-white font-medium hover:bg-blue-700 transition-colors"
+              >
+                {showAllWards ? "Less" : "More"}
+                <span
+                  className={`transition-transform duration-300 ${
+                    showAllWards ? "rotate-180" : "rotate-0"
+                  }`}
+                >
+                  <ChevronDown size={16} />
+                </span>
+              </button>
+            )}
+          </div>
+          <div className="flex flex-col gap-6">
+            {displayedWards.map((ward) => (
               <WardCard key={ward.id} ward={ward} />
             ))}
           </div>

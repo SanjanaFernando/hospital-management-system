@@ -20,7 +20,7 @@ export default function MedicalCrossLoader({
         <div className="text-center">
           <p className="text-lg font-semibold text-gray-800 mb-1">{message}</p>
           <p className="text-sm text-gray-500">
-            Connecting to MongoDB Hospital Database...
+            Connecting Hospital Database...
           </p>
         </div>
       </div>

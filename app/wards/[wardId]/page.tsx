@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { ChevronLeft } from "lucide-react";
 import { Bed, Ward } from "@/app/types";
 import BedGrid from "@/app/components/BedGrid";
 import PatientQueue from "@/app/components/PatientQueue";
@@ -59,9 +60,10 @@ export default function WardPage() {
         <div className="max-w-4xl mx-auto">
           <Link
             href="/"
-            className="mb-6 inline-block px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+            className="mb-6 inline-flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
           >
-            ← Back to Wards
+            <ChevronLeft size={20} />
+            Back to Wards
           </Link>
           <div className="bg-white rounded-lg shadow-md p-8">
             <h1 className="text-2xl font-bold text-gray-800 mb-2">
@@ -83,9 +85,10 @@ export default function WardPage() {
         <div className="flex items-center justify-between mb-6">
           <Link
             href="/"
-            className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
           >
-            ← Back to Wards
+            <ChevronLeft size={20} />
+            Back to Dashboard
           </Link>
           <div className="text-right">
             <p className="text-sm text-gray-500">Ward</p>
@@ -122,18 +125,6 @@ export default function WardPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-          <Link
-            href={`/wards/${ward?.wardId || ward?.id}/patients`}
-            className="bg-white rounded-lg shadow-md p-6 border-l-4 border-green-500 hover:shadow-lg transition-shadow"
-          >
-            <h2 className="text-xl font-bold text-gray-800 mb-2">Patients</h2>
-            <p className="text-gray-600 text-sm">
-              Manage admitted patients and registrations.
-            </p>
-          </Link>
-        </div>
-
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="bg-white rounded-lg shadow-md p-6">
             <h2 className="text-2xl font-bold text-gray-800 mb-4">Beds</h2>
@@ -150,7 +141,15 @@ export default function WardPage() {
           </div>
 
           <div className="bg-white rounded-lg shadow-md p-6">
-            <h2 className="text-2xl font-bold text-gray-800 mb-4">Queue</h2>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-2xl font-bold text-gray-800">Queue</h2>
+              <Link
+                href={`/wards/${ward?.wardId || ward?.id}/patients`}
+                className="px-3 py-1 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                View all patients
+              </Link>
+            </div>
             {ward?.patientQueue && ward.patientQueue.length > 0 ? (
               <PatientQueue
                 patients={ward.patientQueue}

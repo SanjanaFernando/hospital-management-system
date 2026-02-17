@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
+import { ChevronLeft } from "lucide-react";
 import { Bed, Ward } from "@/app/types";
 import BedGrid from "@/app/components/BedGrid";
 import AssignPatientModal from "@/app/components/AssignPatientModal";
@@ -64,9 +65,10 @@ export default function WardBedsPage() {
         <div className="max-w-5xl mx-auto">
           <Link
             href="/"
-            className="mb-6 inline-block px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+            className="mb-6 inline-flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
           >
-            ← Back to Wards
+            <ChevronLeft size={20} />
+            Back to Wards
           </Link>
           <div className="bg-white rounded-lg shadow-md p-8">
             <h1 className="text-2xl font-bold text-gray-800">Ward not found</h1>
@@ -83,9 +85,10 @@ export default function WardBedsPage() {
         <div className="flex items-center justify-between mb-6">
           <Link
             href={`/wards/${ward.wardId || ward.id}`}
-            className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
           >
-            ← Back to Ward
+            <ChevronLeft size={20} />
+            Back to Ward
           </Link>
           <h1 className="text-2xl font-bold text-gray-800">
             {ward.name} - Beds

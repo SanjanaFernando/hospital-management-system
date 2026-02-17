@@ -33,7 +33,7 @@ export default function PatientQueue({ patients = [] }: PatientQueueProps) {
       <h3 className="text-lg font-semibold mb-4 text-gray-800">
         Patient Queue ({patients.length})
       </h3>
-      <div className="space-y-3 max-h-96 overflow-y-auto">
+      <div className="space-y-3 max-h-[65vh] overflow-y-auto">
         {patients.map((patient, index) => (
           <div
             key={patient.id}

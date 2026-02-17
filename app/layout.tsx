@@ -15,6 +15,9 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Hospital Bed Management System",
   description: "Real-time hospital bed availability and ward management system",
+  icons: {
+    icon: "/hospital.svg",
+  },
 };
 
 export default function RootLayout({

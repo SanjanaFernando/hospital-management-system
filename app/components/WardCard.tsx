@@ -22,27 +22,27 @@ export default function WardCard({ ward, href }: WardCardProps) {
     >
       <h2 className="text-xl font-bold text-gray-800 mb-4">{ward.name}</h2>
 
-      <div className="grid grid-cols-2 gap-4 mb-4">
-        <div className="bg-green-50 p-3 rounded">
-          <p className="text-sm text-gray-600">Available</p>
+      <div className="flex w-full gap-4 mb-4">
+        <div className="bg-green-50 flex items-center justify-center gap-3 w-full p-3 rounded">
+          <p className="text-lg text-gray-600">Available</p>
           <p className="text-2xl font-bold text-green-600">
             {ward.availableBeds}
           </p>
         </div>
-        <div className="bg-blue-50 p-3 rounded">
-          <p className="text-sm text-gray-600">Occupied</p>
+        <div className="bg-blue-50 items-center justify-center gap-3 flex w-full p-3 rounded">
+          <p className="text-lg text-gray-600">Occupied</p>
           <p className="text-2xl font-bold text-blue-600">
             {ward.occupiedBeds}
           </p>
         </div>
-        <div className="bg-yellow-50 p-3 rounded">
-          <p className="text-sm text-gray-600">Maintenance</p>
+        <div className="bg-yellow-50 items-center gap-3 justify-center flex w-full p-3 rounded">
+          <p className="text-lg text-gray-600">Maintenance</p>
           <p className="text-2xl font-bold text-yellow-600">
             {ward.maintenanceBeds}
           </p>
         </div>
-        <div className="bg-purple-50 p-3 rounded">
-          <p className="text-sm text-gray-600">In Queue</p>
+        <div className="bg-purple-50 items-center gap-3 justify-center flex w-full p-3 rounded">
+          <p className="text-lg text-gray-600">In Queue</p>
           <p className="text-2xl font-bold text-purple-600">
             {ward.patientQueue.length}
           </p>
@@ -56,22 +56,6 @@ export default function WardCard({ ward, href }: WardCardProps) {
         ></div>
       </div>
       <p className="text-sm text-gray-600 mb-4">Occupancy: {occupancyRate}%</p>
-
-      {ward.patientQueue.length > 0 && (
-        <div className="bg-purple-50 border border-purple-200 rounded p-3 text-sm">
-          <p className="font-semibold text-purple-900 mb-2">Next in Queue:</p>
-          {ward.patientQueue.slice(0, 2).map((patient) => (
-            <p key={patient.id} className="text-xs text-purple-700 mb-1">
-              • {patient.name} ({patient.priority})
-            </p>
-          ))}
-          {ward.patientQueue.length > 2 && (
-            <p className="text-xs text-purple-600 mt-1">
-              +{ward.patientQueue.length - 2} more...
-            </p>
-          )}
-        </div>
-      )}
     </Link>
   );
 }
