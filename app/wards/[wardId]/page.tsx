@@ -8,7 +8,7 @@ import { Bed, Ward } from "@/app/types";
 import BedGrid from "@/app/components/BedGrid";
 import PatientQueue from "@/app/components/PatientQueue";
 import MedicalCrossLoader from "@/app/components/MedicalCrossLoader";
-import { getWardWithPatients } from "@/app/actions/wardActions";
+import { addBedToWard, getWardWithPatients } from "@/app/actions/wardActions";
 
 export default function WardPage() {
   const params = useParams<{ wardId: string }>();
@@ -17,6 +17,7 @@ export default function WardPage() {
 
   const [ward, setWard] = useState<Ward | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isAddingBed, setIsAddingBed] = useState(false);
   const [error, setError] = useState("");
 
   const loadWard = useCallback(async () => {
@@ -48,6 +49,28 @@ export default function WardPage() {
 
   const handleDischarged = () => {
     loadWard();
+  };
+
+  const handleAddBed = async () => {
+    if (!ward) return;
+
+    setError("");
+    setIsAddingBed(true);
+
+    try {
+      const result = await addBedToWard(ward.wardId || ward.id);
+      if (!result.success) {
+        setError(result.error || "Failed to add bed");
+        return;
+      }
+
+      await loadWard();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      setError(message);
+    } finally {
+      setIsAddingBed(false);
+    }
   };
 
   if (isLoading) {
@@ -127,7 +150,16 @@ export default function WardPage() {
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="bg-white rounded-lg shadow-md p-6">
-            <h2 className="text-2xl font-bold text-gray-800 mb-4">Beds</h2>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-2xl font-bold text-gray-800">Beds</h2>
+              <button
+                onClick={handleAddBed}
+                disabled={isAddingBed}
+                className="px-3 py-1 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors disabled:bg-blue-300 disabled:cursor-not-allowed"
+              >
+                {isAddingBed ? "Adding..." : "+ Add Bed"}
+              </button>
+            </div>
             {ward?.beds && ward.beds.length > 0 ? (
               <BedGrid
                 beds={ward.beds}

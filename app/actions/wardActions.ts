@@ -56,32 +56,35 @@ export async function getWardsWithPatients(): Promise<Ward[]> {
           .find({ wardId })
           .toArray();
         const patientsSerialized = allPatients.map(
-          (p) => serializeDoc(p) as Record<string, unknown>,
+          (p) => serializeDoc(p) as Record<string, unknown>
         );
 
         // Fetch beds for this ward
         const allBeds = await db.collection("beds").find({ wardId }).toArray();
         const bedsSerialized = allBeds.map(
-          (b) => serializeDoc(b) as Record<string, unknown>,
+          (b) => serializeDoc(b) as Record<string, unknown>
         );
 
         // Separate patients by status
         const admittedPatients = patientsSerialized.filter(
-          (p: Record<string, unknown>) => p.status === "admitted",
+          (p: Record<string, unknown>) => p.status === "admitted"
         );
         const queuedPatients = patientsSerialized.filter(
-          (p: Record<string, unknown>) => p.status === "queued",
+          (p: Record<string, unknown>) => p.status === "queued"
+        );
+        const dischargedPatients = patientsSerialized.filter(
+          (p: Record<string, unknown>) => p.status === "discharged"
         );
 
         // Separate beds by status
         const availableBeds = bedsSerialized.filter(
-          (b: Record<string, unknown>) => b.status === "available",
+          (b: Record<string, unknown>) => b.status === "available"
         ).length;
         const occupiedBeds = bedsSerialized.filter(
-          (b: Record<string, unknown>) => b.status === "occupied",
+          (b: Record<string, unknown>) => b.status === "occupied"
         ).length;
         const maintenanceBeds = bedsSerialized.filter(
-          (b: Record<string, unknown>) => b.status === "maintenance",
+          (b: Record<string, unknown>) => b.status === "maintenance"
         ).length;
 
         // Format beds as Ward expects
@@ -95,10 +98,10 @@ export async function getWardsWithPatients(): Promise<Ward[]> {
             patient:
               bed?.patientId && admittedPatients.length > 0
                 ? (admittedPatients.find(
-                    (p: Record<string, unknown>) => p?.id === bed?.patientId,
+                    (p: Record<string, unknown>) => p?.id === bed?.patientId
                   ) as unknown as Patient)
                 : undefined,
-          }),
+          })
         );
 
         return {
@@ -111,16 +114,17 @@ export async function getWardsWithPatients(): Promise<Ward[]> {
           beds: formattedBeds,
           patients: admittedPatients as unknown as Patient[],
           patientQueue: queuedPatients as unknown as Patient[],
+          dischargedPatients: dischargedPatients as unknown as Patient[],
           totalBeds: bedsSerialized.length,
           occupiedBeds,
           availableBeds,
           maintenanceBeds,
         } as Ward;
-      }),
+      })
     );
 
     console.log(
-      `✅ Server Action: Fetched ${wardsWithData.length} wards successfully`,
+      `✅ Server Action: Fetched ${wardsWithData.length} wards successfully`
     );
     return wardsWithData;
   } catch (error) {
@@ -131,7 +135,7 @@ export async function getWardsWithPatients(): Promise<Ward[]> {
 }
 
 export async function getWardWithPatients(
-  wardId: string,
+  wardId: string
 ): Promise<Ward | null> {
   if (!wardId) {
     return null;
@@ -159,7 +163,7 @@ export async function getWardWithPatients(
     .find({ wardId: effectiveWardId })
     .toArray();
   const patientsSerialized = allPatients.map(
-    (p) => serializeDoc(p) as Record<string, unknown>,
+    (p) => serializeDoc(p) as Record<string, unknown>
   );
 
   const allBeds = await db
@@ -167,24 +171,27 @@ export async function getWardWithPatients(
     .find({ wardId: effectiveWardId })
     .toArray();
   const bedsSerialized = allBeds.map(
-    (b) => serializeDoc(b) as Record<string, unknown>,
+    (b) => serializeDoc(b) as Record<string, unknown>
   );
 
   const admittedPatients = patientsSerialized.filter(
-    (p: Record<string, unknown>) => p.status === "admitted",
+    (p: Record<string, unknown>) => p.status === "admitted"
   );
   const queuedPatients = patientsSerialized.filter(
-    (p: Record<string, unknown>) => p.status === "queued",
+    (p: Record<string, unknown>) => p.status === "queued"
+  );
+  const dischargedPatients = patientsSerialized.filter(
+    (p: Record<string, unknown>) => p.status === "discharged"
   );
 
   const availableBeds = bedsSerialized.filter(
-    (b: Record<string, unknown>) => b.status === "available",
+    (b: Record<string, unknown>) => b.status === "available"
   ).length;
   const occupiedBeds = bedsSerialized.filter(
-    (b: Record<string, unknown>) => b.status === "occupied",
+    (b: Record<string, unknown>) => b.status === "occupied"
   ).length;
   const maintenanceBeds = bedsSerialized.filter(
-    (b: Record<string, unknown>) => b.status === "maintenance",
+    (b: Record<string, unknown>) => b.status === "maintenance"
   ).length;
 
   const formattedBeds: Bed[] = bedsSerialized.map(
@@ -197,10 +204,10 @@ export async function getWardWithPatients(
       patient:
         bed?.patientId && admittedPatients.length > 0
           ? (admittedPatients.find(
-              (p: Record<string, unknown>) => p?.id === bed?.patientId,
+              (p: Record<string, unknown>) => p?.id === bed?.patientId
             ) as unknown as Patient)
           : undefined,
-    }),
+    })
   );
 
   return {
@@ -213,6 +220,7 @@ export async function getWardWithPatients(
     beds: formattedBeds,
     patients: admittedPatients as unknown as Patient[],
     patientQueue: queuedPatients as unknown as Patient[],
+    dischargedPatients: dischargedPatients as unknown as Patient[],
     totalBeds: bedsSerialized.length,
     occupiedBeds,
     availableBeds,
@@ -222,7 +230,7 @@ export async function getWardWithPatients(
 
 export async function updateBedStatus(
   bedId: string,
-  newStatus: "available" | "occupied" | "maintenance",
+  newStatus: "available" | "occupied" | "maintenance"
 ): Promise<{ success: boolean; error?: string }> {
   try {
     console.log(`📡 Server Action: Updating bed ${bedId} to ${newStatus}...`);
@@ -255,6 +263,65 @@ export async function updateBedStatus(
     return { success: true };
   } catch (error) {
     console.error("❌ Error updating bed status:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+    };
+  }
+}
+
+export async function addBedToWard(
+  wardId: string
+): Promise<{ success: boolean; bedId?: string; error?: string }> {
+  try {
+    if (!wardId) {
+      return { success: false, error: "Ward ID is required" };
+    }
+
+    const { db } = await connectToDatabase();
+
+    let ward = await db.collection("wards").findOne({ wardId });
+
+    if (!ward && ObjectId.isValid(wardId)) {
+      ward = await db.collection("wards").findOne({ _id: new ObjectId(wardId) });
+    }
+
+    if (!ward) {
+      return { success: false, error: "Ward not found" };
+    }
+
+    const wardDoc = serializeDoc(ward) as Record<string, unknown>;
+    const effectiveWardId = (wardDoc?.wardId as string) || wardId;
+
+    const lastBed = await db
+      .collection("beds")
+      .find({ wardId: effectiveWardId })
+      .sort({ bedNumber: -1 })
+      .limit(1)
+      .next();
+
+    const lastBedDoc = (lastBed ? (serializeDoc(lastBed) as Record<string, unknown>) : null);
+    const nextBedNumber = ((lastBedDoc?.bedNumber as number) || 0) + 1;
+    const nextBedId = `${effectiveWardId}-bed-${nextBedNumber}`;
+
+    await db.collection("beds").insertOne({
+      bedId: nextBedId,
+      wardId: effectiveWardId,
+      bedNumber: nextBedNumber,
+      status: "available",
+      patientId: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    await db.collection("wards").updateOne(
+      { wardId: effectiveWardId },
+      { $set: { updatedAt: new Date() } }
+    );
+
+    return { success: true, bedId: nextBedId };
+  } catch (error) {
+    console.error("❌ Error adding bed to ward:", error);
     return {
       success: false,
       error: error instanceof Error ? error.message : "Unknown error",

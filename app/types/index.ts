@@ -29,6 +29,7 @@ export interface Ward {
   beds: Bed[];
   patients: Patient[]; // currently admitted patients
   patientQueue: Patient[]; // waiting patients
+  dischargedPatients?: Patient[]; // discharged patients history
   totalBeds: number;
   occupiedBeds: number;
   availableBeds: number;

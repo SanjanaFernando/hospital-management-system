@@ -32,7 +32,7 @@ export default function DischargePatient({
       onSuccess();
     } catch (error) {
       setErrorMessage(
-        error instanceof Error ? error.message : "Failed to discharge patient",
+        error instanceof Error ? error.message : "Failed to discharge patient"
       );
     } finally {
       setIsLoading(false);
@@ -85,8 +85,8 @@ export default function DischargePatient({
       </div>
 
       <p className="text-xs text-gray-500 mt-3">
-        ⚠️ This action will remove the patient from the system and free up their
-        bed.
+        ⚠️ This action will mark the patient as discharged, save discharge time,
+        and free up their bed.
       </p>
     </div>
   );
