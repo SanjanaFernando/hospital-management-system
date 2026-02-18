@@ -39,7 +39,7 @@ export default function PatientDetail({
   const daysAdmitted = admissionDate
     ? Math.floor(
         (currentDate.getTime() - admissionDate.getTime()) /
-          (1000 * 60 * 60 * 24),
+          (1000 * 60 * 60 * 24)
       )
     : 0;
 
@@ -54,7 +54,7 @@ export default function PatientDetail({
       setErrorMessage(
         error instanceof Error
           ? error.message
-          : "Failed to move patient to queue",
+          : "Failed to move patient to queue"
       );
     } finally {
       setIsMovingToQueue(false);
@@ -146,16 +146,6 @@ export default function PatientDetail({
             <p className="text-xs text-gray-600 mb-1">Queue Wait Time</p>
             <p className="text-lg font-semibold text-gray-800">
               {patient.queueWaitTime} min(s)
-            </p>
-          </div>
-        )}
-        {patient.dischargeTime && (
-          <div className="bg-white rounded p-3 border border-gray-200">
-            <p className="text-xs text-gray-600 mb-1">Discharge Date & Time</p>
-            <p className="text-sm font-semibold text-gray-800">
-              {new Date(patient.dischargeTime).toString() !== "Invalid Date"
-                ? new Date(patient.dischargeTime).toLocaleString()
-                : "Invalid Date"}
             </p>
           </div>
         )}

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
 import { Ward } from "@/app/types";
@@ -19,7 +19,7 @@ export default function WardPatientsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const loadWard = async () => {
+  const loadWard = useCallback(async () => {
     if (!wardId) return;
     setIsLoading(true);
     setError("");
@@ -36,11 +36,11 @@ export default function WardPatientsPage() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [wardId]);
 
   useEffect(() => {
     loadWard();
-  }, [wardId]);
+  }, [loadWard]);
 
   const handlePatientRegistered = () => {
     setShowRegistrationForm(false);
@@ -115,9 +115,13 @@ export default function WardPatientsPage() {
           </div>
         )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <PatientList title="Admitted Patients" patients={ward.patients} />
           <PatientList title="Queued Patients" patients={ward.patientQueue} />
+          <PatientList
+            title="Discharged Patients"
+            patients={ward.dischargedPatients || []}
+          />
         </div>
       </div>
     </div>

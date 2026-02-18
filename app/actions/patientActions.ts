@@ -25,19 +25,39 @@ export async function dischargePatientById(patientId: string): Promise<void> {
 
   const resolvedPatientId = patient.id || patientId;
 
-  // Try deleting by custom patient id first
-  let result = await db.collection("patients").deleteOne({
-    id: resolvedPatientId,
-  });
+  // Keep patient history and persist discharge time instead of deleting record
+  let result = await db.collection("patients").updateOne(
+    { id: resolvedPatientId },
+    {
+      $set: {
+        status: "discharged",
+        dischargeTime: new Date(),
+        updatedAt: new Date(),
+      },
+      $unset: {
+        admissionTime: "",
+      },
+    }
+  );
 
-  // If not found and looks like an ObjectId, try deleting by _id
-  if (result.deletedCount === 0 && ObjectId.isValid(patientId)) {
-    result = await db.collection("patients").deleteOne({
-      _id: new ObjectId(patientId),
-    });
+  // If not found and looks like an ObjectId, try updating by _id
+  if (result.matchedCount === 0 && ObjectId.isValid(patientId)) {
+    result = await db.collection("patients").updateOne(
+      { _id: new ObjectId(patientId) },
+      {
+        $set: {
+          status: "discharged",
+          dischargeTime: new Date(),
+          updatedAt: new Date(),
+        },
+        $unset: {
+          admissionTime: "",
+        },
+      }
+    );
   }
 
-  if (result.deletedCount === 0) {
+  if (result.matchedCount === 0) {
     throw new Error("Patient not found");
   }
 
@@ -51,7 +71,7 @@ export async function dischargePatientById(patientId: string): Promise<void> {
           patientId: null,
           updatedAt: new Date(),
         },
-      },
+      }
     );
   }
 }
@@ -63,7 +83,7 @@ interface AssignPatientInput {
 }
 
 export async function assignPatientToBed(
-  input: AssignPatientInput,
+  input: AssignPatientInput
 ): Promise<void> {
   const { wardId, bedId, patientId } = input;
 
@@ -110,7 +130,7 @@ export async function assignPatientToBed(
         patientId,
         updatedAt: new Date(),
       },
-    },
+    }
   );
 
   await db.collection("patients").updateOne(
@@ -121,7 +141,7 @@ export async function assignPatientToBed(
         admissionTime: new Date(),
         updatedAt: new Date(),
       },
-    },
+    }
   );
 }
 
@@ -158,7 +178,7 @@ export async function movePatientToQueue(patientId: string): Promise<void> {
       $unset: {
         admissionTime: "",
       },
-    },
+    }
   );
 
   // If not found and looks like an ObjectId, try updating by _id
@@ -173,7 +193,7 @@ export async function movePatientToQueue(patientId: string): Promise<void> {
         $unset: {
           admissionTime: "",
         },
-      },
+      }
     );
   }
 
@@ -190,12 +210,12 @@ export async function movePatientToQueue(patientId: string): Promise<void> {
         patientId: null,
         updatedAt: new Date(),
       },
-    },
+    }
   );
 }
 
 export async function forceAssignPatientToBed(
-  input: AssignPatientInput,
+  input: AssignPatientInput
 ): Promise<void> {
   const { wardId, bedId, patientId } = input;
 
@@ -253,7 +273,7 @@ export async function forceAssignPatientToBed(
           $unset: {
             admissionTime: "",
           },
-        },
+        }
       );
     }
   }
@@ -267,7 +287,7 @@ export async function forceAssignPatientToBed(
         patientId,
         updatedAt: new Date(),
       },
-    },
+    }
   );
 
   await db.collection("patients").updateOne(
@@ -278,6 +298,6 @@ export async function forceAssignPatientToBed(
         admissionTime: new Date(),
         updatedAt: new Date(),
       },
-    },
+    }
   );
 }

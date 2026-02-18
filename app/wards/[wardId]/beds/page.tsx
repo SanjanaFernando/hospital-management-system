@@ -8,7 +8,7 @@ import { Bed, Ward } from "@/app/types";
 import BedGrid from "@/app/components/BedGrid";
 import AssignPatientModal from "@/app/components/AssignPatientModal";
 import MedicalCrossLoader from "@/app/components/MedicalCrossLoader";
-import { getWardWithPatients } from "@/app/actions/wardActions";
+import { addBedToWard, getWardWithPatients } from "@/app/actions/wardActions";
 
 export default function WardBedsPage() {
   const params = useParams<{ wardId: string }>();
@@ -17,6 +17,7 @@ export default function WardBedsPage() {
   const [ward, setWard] = useState<Ward | null>(null);
   const [assignBed, setAssignBed] = useState<Bed | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isAddingBed, setIsAddingBed] = useState(false);
   const [error, setError] = useState("");
 
   const loadWard = useCallback(async () => {
@@ -53,6 +54,28 @@ export default function WardBedsPage() {
 
   const handleDischarged = () => {
     loadWard();
+  };
+
+  const handleAddBed = async () => {
+    if (!ward) return;
+
+    setError("");
+    setIsAddingBed(true);
+
+    try {
+      const result = await addBedToWard(ward.wardId || ward.id);
+      if (!result.success) {
+        setError(result.error || "Failed to add bed");
+        return;
+      }
+
+      await loadWard();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      setError(message);
+    } finally {
+      setIsAddingBed(false);
+    }
   };
 
   if (isLoading) {
@@ -102,6 +125,15 @@ export default function WardBedsPage() {
         )}
 
         <div className="bg-white rounded-lg shadow-md p-8">
+          <div className="flex justify-end mb-4">
+            <button
+              onClick={handleAddBed}
+              disabled={isAddingBed}
+              className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors disabled:bg-blue-300 disabled:cursor-not-allowed"
+            >
+              {isAddingBed ? "Adding..." : "+ Add Bed"}
+            </button>
+          </div>
           <BedGrid
             beds={ward.beds}
             wardName={ward.name}
