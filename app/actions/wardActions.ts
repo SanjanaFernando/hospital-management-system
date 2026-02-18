@@ -283,7 +283,9 @@ export async function addBedToWard(
     let ward = await db.collection("wards").findOne({ wardId });
 
     if (!ward && ObjectId.isValid(wardId)) {
-      ward = await db.collection("wards").findOne({ _id: new ObjectId(wardId) });
+      ward = await db
+        .collection("wards")
+        .findOne({ _id: new ObjectId(wardId) });
     }
 
     if (!ward) {
@@ -300,7 +302,9 @@ export async function addBedToWard(
       .limit(1)
       .next();
 
-    const lastBedDoc = (lastBed ? (serializeDoc(lastBed) as Record<string, unknown>) : null);
+    const lastBedDoc = lastBed
+      ? (serializeDoc(lastBed) as Record<string, unknown>)
+      : null;
     const nextBedNumber = ((lastBedDoc?.bedNumber as number) || 0) + 1;
     const nextBedId = `${effectiveWardId}-bed-${nextBedNumber}`;
 
@@ -314,10 +318,12 @@ export async function addBedToWard(
       updatedAt: new Date(),
     });
 
-    await db.collection("wards").updateOne(
-      { wardId: effectiveWardId },
-      { $set: { updatedAt: new Date() } }
-    );
+    await db
+      .collection("wards")
+      .updateOne(
+        { wardId: effectiveWardId },
+        { $set: { updatedAt: new Date() } }
+      );
 
     return { success: true, bedId: nextBedId };
   } catch (error) {
