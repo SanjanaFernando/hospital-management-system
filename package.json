@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "db:reset": "node scripts/seedDatabase.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
   },

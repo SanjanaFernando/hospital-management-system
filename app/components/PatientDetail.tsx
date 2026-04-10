@@ -12,9 +12,11 @@ interface PatientDetailProps {
 }
 
 const priorityColors = {
-  Critical: "bg-red-500",
-  Urgent: "bg-orange-500",
-  "Non-urgent": "bg-blue-500",
+  "Triage 1": "bg-red-500",
+  "Triage 2": "bg-orange-500",
+  "Triage 3": "bg-yellow-500",
+  "Triage 4": "bg-lime-500",
+  "Triage 5": "bg-blue-500",
 };
 
 const ageGroupColors = {

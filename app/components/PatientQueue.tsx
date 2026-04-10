@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Patient, Bed } from "@/app/types";
 import AssignFromQueueModal from "./AssignFromQueueModal";
 
@@ -10,12 +10,16 @@ interface PatientQueueProps {
   wardId?: string;
   wardName?: string;
   onPatientAssigned?: () => void;
+  queueOrderStrategy?: "ai" | "priority";
+  queueOrderMessage?: string;
 }
 
 const priorityColors = {
-  Critical: "bg-red-100 border-red-500 text-red-800",
-  Urgent: "bg-orange-100 border-orange-500 text-orange-800",
-  "Non-urgent": "bg-blue-100 border-blue-500 text-blue-800",
+  "Triage 1": "bg-red-100 border-red-500 text-red-800",
+  "Triage 2": "bg-orange-100 border-orange-500 text-orange-800",
+  "Triage 3": "bg-yellow-100 border-yellow-500 text-yellow-800",
+  "Triage 4": "bg-lime-100 border-lime-500 text-lime-800",
+  "Triage 5": "bg-blue-100 border-blue-500 text-blue-800",
 };
 
 const ageGroupBadgeColors = {
@@ -24,7 +28,38 @@ const ageGroupBadgeColors = {
   Elderly: "bg-pink-100 text-pink-800",
 };
 
-const priorityOrder = { Critical: 0, Urgent: 1, "Non-urgent": 2 };
+const priorityOrder = {
+  "Triage 1": 0,
+  "Triage 2": 1,
+  "Triage 3": 2,
+  "Triage 4": 3,
+  "Triage 5": 4,
+};
+
+function resolvePriorityRank(priority: string): number {
+  const normalized = String(priority).trim();
+
+  if (normalized in priorityOrder) {
+    return priorityOrder[normalized as keyof typeof priorityOrder];
+  }
+
+  if (normalized === "Critical") return priorityOrder["Triage 1"];
+  if (normalized === "Urgent") return priorityOrder["Triage 3"];
+  if (normalized === "Non-urgent") return priorityOrder["Triage 5"];
+
+  return 99;
+}
+
+function resolvePriorityClass(priority: string): string {
+  const rank = resolvePriorityRank(priority);
+  if (rank === 0) return priorityColors["Triage 1"];
+  if (rank === 1) return priorityColors["Triage 2"];
+  if (rank === 2) return priorityColors["Triage 3"];
+  if (rank === 3) return priorityColors["Triage 4"];
+  if (rank === 4) return priorityColors["Triage 5"];
+
+  return "bg-gray-100 border-gray-400 text-gray-700";
+}
 
 export default function PatientQueue({
   patients = [],
@@ -32,9 +67,40 @@ export default function PatientQueue({
   wardId = "",
   wardName = "",
   onPatientAssigned,
+  queueOrderStrategy = "priority",
+  queueOrderMessage = "",
 }: PatientQueueProps) {
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
   const [showAssignModal, setShowAssignModal] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setNow(Date.now());
+    }, 60_000);
+
+    return () => window.clearInterval(intervalId);
+  }, []);
+
+  const resolveWaitMinutes = (patient: Patient): number | null => {
+    if (
+      typeof patient.queueWaitTime === "number" &&
+      Number.isFinite(patient.queueWaitTime)
+    ) {
+      return Math.max(0, Math.floor(patient.queueWaitTime));
+    }
+
+    if (!patient.admissionTime) {
+      return null;
+    }
+
+    const arrivalMs = new Date(patient.admissionTime).getTime();
+    if (Number.isNaN(arrivalMs)) {
+      return null;
+    }
+
+    return Math.max(0, Math.floor((now - arrivalMs) / 60_000));
+  };
 
   const handlePatientClick = (patient: Patient) => {
     if (wardId && beds.length > 0) {
@@ -62,12 +128,16 @@ export default function PatientQueue({
     );
   }
 
-  // Sort patients by priority level (Critical > Urgent > Non-urgent)
-  const sortedPatients = [...patients].sort(
-    (a, b) =>
-      priorityOrder[a.priority as keyof typeof priorityOrder] -
-      priorityOrder[b.priority as keyof typeof priorityOrder]
+  const hasUnknownPriority = patients.some(
+    (patient) => resolvePriorityRank(patient.priority) === 99
   );
+
+  const displayPatients = hasUnknownPriority
+    ? [...patients].sort(
+        (a, b) =>
+          resolvePriorityRank(a.priority) - resolvePriorityRank(b.priority)
+      )
+    : patients;
 
   return (
     <div className="w-full">
@@ -76,15 +146,20 @@ export default function PatientQueue({
       </h3>
       {wardId && beds.length > 0 && (
         <p className="text-xs text-gray-500 mb-3">
-          💡 Sorted by priority. Click on a patient to assign them to a bed
+          {queueOrderStrategy === "ai"
+            ? "AI-reordered queue using model and live ward data. Click a patient to assign to a bed."
+            : "Priority-ordered queue. Click a patient to assign to a bed."}
         </p>
       )}
+      {queueOrderMessage && (
+        <p className="text-xs text-blue-700 mb-3">{queueOrderMessage}</p>
+      )}
       <div className="space-y-3 max-h-[65vh] overflow-y-auto">
-        {sortedPatients.map((patient, index) => (
+        {displayPatients.map((patient, index) => (
           <div
             key={patient.id}
             onClick={() => handlePatientClick(patient)}
-            className={`border-l-4 rounded-lg p-4 ${priorityColors[patient.priority]} ${
+            className={`border-l-4 rounded-lg p-4 ${resolvePriorityClass(patient.priority)} ${
               wardId && beds.length > 0
                 ? "cursor-pointer hover:shadow-lg transition-shadow"
                 : ""
@@ -113,11 +188,18 @@ export default function PatientQueue({
                 Arrival: {new Date(patient.admissionTime).toLocaleString()}
               </p>
             )}
-            {patient.queueWaitTime && (
-              <p className="text-xs mt-1 font-semibold">
-                Waiting: {patient.queueWaitTime} mins
-              </p>
-            )}
+            {(() => {
+              const waitMinutes = resolveWaitMinutes(patient);
+              if (waitMinutes === null) {
+                return null;
+              }
+
+              return (
+                <p className="text-xs mt-1 font-semibold">
+                  Waiting: {waitMinutes} mins
+                </p>
+              );
+            })()}
             {patient.specialRequirements &&
               patient.specialRequirements.length > 0 && (
                 <p className="text-xs mt-2">
