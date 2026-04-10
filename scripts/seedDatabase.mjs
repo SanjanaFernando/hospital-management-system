@@ -1,50 +1,69 @@
-/**
- * Database initialization script
- * Run this once to populate MongoDB with initial data
- * Usage: node scripts/seedDatabase.mjs
- */
-
+import fs from "node:fs";
+import path from "node:path";
 import { MongoClient } from "mongodb";
 
-const MONGODB_URI = process.env.MONGODB_URI;
+function loadMongoUri() {
+  if (process.env.MONGODB_URI) {
+    return process.env.MONGODB_URI;
+  }
 
-if (!MONGODB_URI) {
-  throw new Error("Missing MONGODB_URI environment variable");
+  const envPath = path.join(process.cwd(), ".env.local");
+  if (!fs.existsSync(envPath)) {
+    return null;
+  }
+
+  const envRaw = fs.readFileSync(envPath, "utf-8");
+  const line = envRaw
+    .split(/\r?\n/)
+    .find((entry) => entry.trim().startsWith("MONGODB_URI="));
+
+  if (!line) {
+    return null;
+  }
+
+  return line.replace("MONGODB_URI=", "").trim();
 }
 
-// Mock data generation
-const diseases = [
+const TRIAGE_LEVELS = [
+  "Triage 1",
+  "Triage 2",
+  "Triage 3",
+  "Triage 4",
+  "Triage 5",
+];
+
+const DISEASES = [
   "Hypertension",
   "Diabetes",
   "Pneumonia",
-  "Fracture",
-  "Appendicitis",
-  "Stroke",
-  "Heart Attack",
-  "Infection",
+  "Heart Disease",
   "Asthma",
-  "COPD",
-  "Cancer Treatment",
-  "Post-Surgery Recovery",
-  "Respiratory Distress",
-  "Gastritis",
-  "Kidney Stones",
+  "Cancer",
+  "Stroke",
+  "Kidney Disease",
+  "Liver Disease",
+  "Arthritis",
+  "Thyroid Disorder",
+  "Tuberculosis",
+  "Fever",
+  "Fracture",
+  "Infection",
 ];
 
-const specialRequirements = [
+const SPECIAL_REQUIREMENTS = [
   "Oxygen Support",
   "Dialysis",
+  "Ventilator",
+  "IV Drip",
+  "Catheter",
+  "Feeding Tube",
   "Physical Therapy",
-  "ICU Monitoring",
+  "Mental Health Support",
   "Pain Management",
-  "Antibiotic IV",
-  "Cardiac Monitoring",
   "Isolation Required",
-  "Wheelchair Access",
-  "Sign Language Interpreter",
 ];
 
-const firstNames = [
+const FIRST_NAMES = [
   "John",
   "Emma",
   "Michael",
@@ -60,9 +79,14 @@ const firstNames = [
   "Richard",
   "Nicole",
   "Joseph",
+  "Amanda",
+  "Thomas",
+  "Jennifer",
+  "Charles",
+  "Lisa",
 ];
 
-const lastNames = [
+const LAST_NAMES = [
   "Smith",
   "Johnson",
   "Williams",
@@ -78,209 +102,173 @@ const lastNames = [
   "Gonzalez",
   "Wilson",
   "Anderson",
+  "Thomas",
+  "Taylor",
+  "Moore",
+  "Jackson",
+  "Martin",
 ];
 
-function generateMockPatient(patientId) {
-  const firstName = firstNames[Math.floor(Math.random() * firstNames.length)];
-  const lastName = lastNames[Math.floor(Math.random() * lastNames.length)];
-  const age = Math.floor(Math.random() * 85) + 5;
+function randomInt(min, max) {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
 
-  let ageGroup;
-  if (age < 13) ageGroup = "Child";
-  else if (age < 65) ageGroup = "Adult";
-  else ageGroup = "Elderly";
+function randomItem(items) {
+  return items[Math.floor(Math.random() * items.length)];
+}
 
-  const priorityRand = Math.random();
-  let priority;
-  if (priorityRand < 0.1) priority = "Critical";
-  else if (priorityRand < 0.3) priority = "Urgent";
-  else priority = "Non-urgent";
+function generatePriority() {
+  const roll = Math.random();
+  if (roll < 0.08) return TRIAGE_LEVELS[0];
+  if (roll < 0.2) return TRIAGE_LEVELS[1];
+  if (roll < 0.4) return TRIAGE_LEVELS[2];
+  if (roll < 0.7) return TRIAGE_LEVELS[3];
+  return TRIAGE_LEVELS[4];
+}
 
-  const admissionTime = new Date(
-    Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000,
-  );
-  const queueWaitTime = Math.floor(Math.random() * 480) + 15;
+function ageGroupFromAge(age) {
+  if (age < 13) return "Child";
+  if (age < 60) return "Adult";
+  return "Elderly";
+}
 
-  const hasSpecialRequirements = Math.random() < 0.4;
-  const patientSpecialRequirements = hasSpecialRequirements
-    ? [
-        specialRequirements[
-          Math.floor(Math.random() * specialRequirements.length)
-        ],
-      ]
-    : [];
+function generatePatient(patientId, wardId, status) {
+  const firstName = randomItem(FIRST_NAMES);
+  const lastName = randomItem(LAST_NAMES);
+  const age = randomInt(5, 90);
+  const admissionTime = new Date(Date.now() - randomInt(5, 72) * 60 * 60 * 1000);
 
-  const isDischarged = Math.random() < 0.3;
-  const dischargeTime = isDischarged
-    ? new Date(
-        admissionTime.getTime() + Math.random() * 25 * 24 * 60 * 60 * 1000,
-      )
-    : null;
+  const includeRequirements = Math.random() < 0.35;
+  const requirements = includeRequirements
+    ? [randomItem(SPECIAL_REQUIREMENTS)]
+    : undefined;
 
   return {
     id: patientId,
+    wardId,
+    status,
     name: `${firstName} ${lastName}`,
     age,
-    ageGroup,
-    disease: diseases[Math.floor(Math.random() * diseases.length)],
-    priority,
+    ageGroup: ageGroupFromAge(age),
+    gender: Math.random() < 0.5 ? "Male" : "Female",
+    disease: randomItem(DISEASES),
+    priority: generatePriority(),
     admissionTime,
-    dischargeTime,
-    queueWaitTime,
-    specialRequirements: patientSpecialRequirements,
+    queueWaitTime: randomInt(10, 480),
+    specialRequirements: requirements,
+    createdAt: new Date(),
+    updatedAt: new Date(),
   };
 }
 
-function initializeWards() {
-  const wardNames = [
-    "Ward A - General Medicine",
-    "Ward B - Surgical",
-    "Ward C - Cardiac",
-    "Ward D - ICU",
-  ];
+async function resetDatabase() {
+  const mongoUri = loadMongoUri();
+  if (!mongoUri) {
+    throw new Error("MONGODB_URI is missing in environment or .env.local");
+  }
 
-  return wardNames.map((name, wardIndex) => {
-    const admittedPatients = [];
-    const patientQueue = [];
-
-    const occupiedCount = Math.floor(Math.random() * 3) + 15;
-    for (let i = 0; i < occupiedCount; i++) {
-      const patient = generateMockPatient(`ward${wardIndex}-patient-${i}`);
-      admittedPatients.push(patient);
-    }
-
-    const queueCount = Math.floor(Math.random() * 5) + 2;
-    for (let i = 0; i < queueCount; i++) {
-      const patient = generateMockPatient(`ward${wardIndex}-queue-${i}`);
-      patientQueue.push(patient);
-    }
-
-    const beds = Array.from({ length: 25 }, (_, bedIndex) => {
-      const bedNumber = bedIndex + 1;
-      const patient = admittedPatients[bedIndex];
-
-      if (patient) {
-        return {
-          id: `${wardIndex}-${bedIndex}`,
-          bedNumber,
-          status: "occupied",
-          patient,
-        };
-      }
-
-      const isMaintenance = Math.random() < 0.08;
-      return {
-        id: `${wardIndex}-${bedIndex}`,
-        bedNumber,
-        status: isMaintenance ? "maintenance" : "available",
-      };
-    });
-
-    const occupiedBeds = beds.filter((b) => b.status === "occupied").length;
-    const maintenanceBeds = beds.filter(
-      (b) => b.status === "maintenance",
-    ).length;
-    const availableBeds = beds.filter((b) => b.status === "available").length;
-
-    return {
-      id: `ward-${wardIndex}`,
-      name,
-      beds,
-      patients: admittedPatients,
-      patientQueue,
-      totalBeds: 25,
-      occupiedBeds,
-      availableBeds,
-      maintenanceBeds,
-    };
-  });
-}
-
-async function seedDatabase() {
-  const client = new MongoClient(MONGODB_URI);
+  const client = new MongoClient(mongoUri);
 
   try {
-    console.log("🔗 Connecting to MongoDB...");
     await client.connect();
     const db = client.db("hospital-management");
 
-    console.log("🗑️  Clearing existing collections...");
-    await db.collection("wards").deleteMany({});
-    await db.collection("patients").deleteMany({});
-    await db.collection("beds").deleteMany({});
+    console.log("Resetting collections: wards, beds, patients...");
+    await Promise.all([
+      db.collection("wards").deleteMany({}),
+      db.collection("beds").deleteMany({}),
+      db.collection("patients").deleteMany({}),
+    ]);
 
-    const wards = initializeWards();
+    const wardNames = [
+      "Ward A - General Medicine",
+      "Ward B - Surgical",
+      "Ward C - Cardiac",
+      "Ward D - ICU",
+    ];
 
-    console.log("📝 Seeding database with hospital data...\n");
+    let totalPatients = 0;
+    let totalBeds = 0;
 
-    for (const ward of wards) {
-      // Insert ward
+    for (let wardIndex = 0; wardIndex < wardNames.length; wardIndex += 1) {
+      const wardId = `ward-${wardIndex}`;
+      const wardName = wardNames[wardIndex];
+      const bedCount = 25;
+      const occupiedBeds = randomInt(15, 18);
+      const queuePatients = randomInt(4, 10);
+
+      const admitted = [];
+      const queued = [];
+      const beds = [];
+
+      for (let i = 0; i < occupiedBeds; i += 1) {
+        const patientId = `${wardId}-admitted-${i + 1}`;
+        admitted.push(generatePatient(patientId, wardId, "admitted"));
+      }
+
+      for (let i = 0; i < queuePatients; i += 1) {
+        const patientId = `${wardId}-queue-${i + 1}`;
+        queued.push(generatePatient(patientId, wardId, "queued"));
+      }
+
+      for (let bedNumber = 1; bedNumber <= bedCount; bedNumber += 1) {
+        const admittedPatient = admitted[bedNumber - 1];
+        if (admittedPatient) {
+          beds.push({
+            bedId: `${wardId}-bed-${bedNumber}`,
+            wardId,
+            bedNumber,
+            status: "occupied",
+            patientId: admittedPatient.id,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          });
+          continue;
+        }
+
+        const maintenance = Math.random() < 0.08;
+        beds.push({
+          bedId: `${wardId}-bed-${bedNumber}`,
+          wardId,
+          bedNumber,
+          status: maintenance ? "maintenance" : "available",
+          patientId: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        });
+      }
+
       await db.collection("wards").insertOne({
-        name: ward.name,
-        wardId: ward.id,
-        totalBeds: ward.totalBeds,
+        wardId,
+        name: wardName,
+        totalBeds: bedCount,
         createdAt: new Date(),
         updatedAt: new Date(),
       });
 
-      console.log(`✅ Inserted ward: ${ward.name}`);
-
-      // Insert admitted patients
-      for (const patient of ward.patients) {
-        await db.collection("patients").insertOne({
-          ...patient,
-          wardId: ward.id,
-          status: "admitted",
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        });
+      if (admitted.length + queued.length > 0) {
+        await db.collection("patients").insertMany([...admitted, ...queued]);
       }
 
-      console.log(`   └─ ${ward.patients.length} admitted patients`);
+      await db.collection("beds").insertMany(beds);
 
-      // Insert queue patients
-      for (const patient of ward.patientQueue) {
-        await db.collection("patients").insertOne({
-          ...patient,
-          wardId: ward.id,
-          status: "queued",
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        });
-      }
+      totalPatients += admitted.length + queued.length;
+      totalBeds += beds.length;
 
-      console.log(`   └─ ${ward.patientQueue.length} queued patients`);
-
-      // Insert beds
-      for (const bed of ward.beds) {
-        await db.collection("beds").insertOne({
-          bedId: bed.id,
-          wardId: ward.id,
-          bedNumber: bed.bedNumber,
-          status: bed.status,
-          patientId: bed.patient?.id || null,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        });
-      }
-
-      console.log(`   └─ ${ward.beds.length} beds\n`);
+      console.log(
+        `Seeded ${wardName}: ${admitted.length} admitted, ${queued.length} queued, ${beds.length} beds`,
+      );
     }
 
-    console.log("✨ Database seeded successfully!");
-    console.log("📊 Summary:");
-    console.log(`   • 4 wards created`);
-    console.log(`   • 100 total beds (25 per ward)`);
-    console.log(`   • Patients and queues populated with realistic data`);
-    console.log(`   • Database: hospital-management`);
-
+    console.log(`Database reset complete. Patients: ${totalPatients}, Beds: ${totalBeds}`);
+    console.log("All patients now use triage levels Triage 1 to Triage 5 only.");
+  } finally {
     await client.close();
-    process.exit(0);
-  } catch (error) {
-    console.error("❌ Error seeding database:", error);
-    await client.close();
-    process.exit(1);
   }
 }
 
-seedDatabase();
+resetDatabase().catch((error) => {
+  const message = error instanceof Error ? error.message : String(error);
+  console.error("DB reset failed:", message);
+  process.exit(1);
+});

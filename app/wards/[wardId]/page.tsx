@@ -197,6 +197,8 @@ export default function WardPage() {
                 wardId={ward.wardId || ward.id}
                 wardName={ward.name}
                 onPatientAssigned={handleDischarged}
+                queueOrderStrategy={ward.queueOrderStrategy}
+                queueOrderMessage={ward.queueOrderMessage}
               />
             ) : (
               <p className="text-gray-600">No patients in queue</p>

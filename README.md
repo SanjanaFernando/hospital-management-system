@@ -1,5 +1,37 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## AI Queue Reordering (DDQN)
+
+This app can reorder ward queues with the trained PyTorch model at:
+
+- `model/fair_ddqn_improved.pth`
+
+At runtime, server actions call:
+
+- `scripts/queue_reorder_infer.py`
+
+The script loads `model/mixed_priority_81actions.pth`, decodes the chosen DDQN action into the mixed-priority weight set, and returns a model-guided queue order based on live ward occupancy and queue data. If Python/Torch is unavailable, the app safely falls back to priority ordering.
+
+### Database reset
+
+To rebuild the MongoDB collections with model-compatible sample data:
+
+```bash
+npm run db:reset
+```
+
+This clears `wards`, `beds`, and `patients`, then seeds them again with ward, bed, and patient records that include priority, age, gender, admission time, and queue wait time.
+
+### Python setup
+
+Install Python packages in your environment:
+
+```bash
+pip install torch numpy
+```
+
+The app tries `python` first, then `py -3` on Windows.
+
 ## Getting Started
 
 First, run the development server:

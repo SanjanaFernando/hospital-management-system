@@ -1,12 +1,19 @@
 export type BedStatus = "available" | "occupied" | "maintenance";
 export type AgeGroup = "Child" | "Adult" | "Elderly";
-export type Priority = "Critical" | "Urgent" | "Non-urgent";
+export type Priority =
+  | "Triage 1"
+  | "Triage 2"
+  | "Triage 3"
+  | "Triage 4"
+  | "Triage 5";
+export type Gender = "Male" | "Female";
 
 export interface Patient {
   id: string;
   name: string;
   age: number;
   ageGroup: AgeGroup;
+  gender?: Gender;
   disease: string;
   priority: Priority;
   admissionTime: Date;
@@ -34,4 +41,6 @@ export interface Ward {
   occupiedBeds: number;
   availableBeds: number;
   maintenanceBeds: number;
+  queueOrderStrategy?: "ai" | "priority";
+  queueOrderMessage?: string;
 }

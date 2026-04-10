@@ -2,6 +2,7 @@
 
 import { connectToDatabase } from "@/lib/mongodb";
 import { Ward, Patient, Bed } from "@/app/types";
+import { reorderQueueWithAi } from "@/lib/queueAi";
 import { ObjectId } from "mongodb";
 
 // Helper function to recursively serialize MongoDB documents (convert ObjectIds to strings)
@@ -210,6 +211,53 @@ export async function getWardWithPatients(
     })
   );
 
+  const allWardDocs = await db.collection("wards").find({}).toArray();
+  const wardSnapshots = await Promise.all(
+    allWardDocs.map(async (wardDoc: Record<string, unknown>) => {
+      const serialized = serializeDoc(wardDoc) as Record<string, unknown>;
+      const wid = (serialized?.wardId as string) || "";
+
+      if (!wid) {
+        return {
+          wardId: "",
+          name: (serialized?.name as string) || "",
+          occupiedBeds: 0,
+          totalBeds: 0,
+          queueLength: 0,
+        };
+      }
+
+      const [bedsForWard, queuedCount] = await Promise.all([
+        db.collection("beds").find({ wardId: wid }).toArray(),
+        db
+          .collection("patients")
+          .countDocuments({ wardId: wid, status: "queued" }),
+      ]);
+
+      const serializedBeds = bedsForWard.map(
+        (b) => serializeDoc(b) as Record<string, unknown>
+      );
+
+      return {
+        wardId: wid,
+        name: (serialized?.name as string) || wid,
+        occupiedBeds: serializedBeds.filter((b) => b.status === "occupied")
+          .length,
+        totalBeds: serializedBeds.length,
+        queueLength: queuedCount,
+      };
+    })
+  );
+
+  const queueResult = reorderQueueWithAi({
+    targetWardId: effectiveWardId,
+    targetWardName: (wardSerialized?.name as string) || effectiveWardId,
+    targetWardQueue: queuedPatients as unknown as Patient[],
+    targetWardOccupiedBeds: occupiedBeds,
+    targetWardTotalBeds: bedsSerialized.length,
+    wards: wardSnapshots.filter((w) => w.wardId),
+  });
+
   return {
     id:
       (wardSerialized?._id as string) ||
@@ -219,12 +267,14 @@ export async function getWardWithPatients(
     name: (wardSerialized?.name as string) || "",
     beds: formattedBeds,
     patients: admittedPatients as unknown as Patient[],
-    patientQueue: queuedPatients as unknown as Patient[],
+    patientQueue: queueResult.orderedPatients,
     dischargedPatients: dischargedPatients as unknown as Patient[],
     totalBeds: bedsSerialized.length,
     occupiedBeds,
     availableBeds,
     maintenanceBeds,
+    queueOrderStrategy: queueResult.strategy,
+    queueOrderMessage: queueResult.message,
   } as Ward;
 }
 

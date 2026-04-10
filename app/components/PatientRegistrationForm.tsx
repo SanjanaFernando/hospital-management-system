@@ -50,7 +50,7 @@ export default function PatientRegistrationForm({
     name: "",
     age: 0,
     disease: "Hypertension",
-    priority: "Non-urgent" as Priority,
+    priority: "Triage 5" as Priority,
     specialRequirements: [] as string[],
   });
 
@@ -59,7 +59,7 @@ export default function PatientRegistrationForm({
   const [successMessage, setSuccessMessage] = useState("");
 
   const handleInputChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
   ) => {
     const { name, value } = e.target;
     setFormData((prev) => ({
@@ -123,7 +123,7 @@ export default function PatientRegistrationForm({
 
       await createPatient(patientData);
       setSuccessMessage(
-        `${formData.name} has been registered successfully and added to the queue!`,
+        `${formData.name} has been registered successfully and added to the queue!`
       );
 
       // Reset form
@@ -131,7 +131,7 @@ export default function PatientRegistrationForm({
         name: "",
         age: 0,
         disease: "Hypertension",
-        priority: "Non-urgent",
+        priority: "Triage 5",
         specialRequirements: [],
       });
 
@@ -141,7 +141,7 @@ export default function PatientRegistrationForm({
       }, 1500);
     } catch (error) {
       setErrorMessage(
-        error instanceof Error ? error.message : "Failed to register patient",
+        error instanceof Error ? error.message : "Failed to register patient"
       );
     } finally {
       setIsLoading(false);
@@ -257,9 +257,11 @@ export default function PatientRegistrationForm({
             }
             className="w-full px-4 py-2 border border-gray-300 rounded-lg text-black focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
-            <option value="Non-urgent">Non-urgent</option>
-            <option value="Urgent">Urgent</option>
-            <option value="Critical">Critical</option>
+            <option value="Triage 1">Triage 1 (Resuscitation)</option>
+            <option value="Triage 2">Triage 2 (Emergency)</option>
+            <option value="Triage 3">Triage 3 (Urgent)</option>
+            <option value="Triage 4">Triage 4 (Less Urgent)</option>
+            <option value="Triage 5">Triage 5 (Non-Urgent)</option>
           </select>
         </div>
 
