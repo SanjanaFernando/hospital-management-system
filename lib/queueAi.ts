@@ -78,7 +78,7 @@ export function reorderQueueWithAi(input: QueueAiInput): QueueAiResult {
   const modelPath = path.join(
     process.cwd(),
     "model",
-    "fair_ddqn_realistic_arrivals.pth"
+    "best_ddqn_hospital_fair.pth"
   );
   const scriptPath = path.join(
     process.cwd(),
