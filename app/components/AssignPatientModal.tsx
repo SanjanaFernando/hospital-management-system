@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Bed, Patient } from "@/app/types";
 import { assignPatientToBed } from "@/app/actions/patientActions";
+import { useAuthSession } from "@/app/context/AuthSessionContext";
 
 interface AssignPatientModalProps {
   wardId: string;
@@ -19,8 +20,9 @@ export default function AssignPatientModal({
   onAssigned,
   onCancel,
 }: AssignPatientModalProps) {
+  const { session } = useAuthSession();
   const [selectedPatientId, setSelectedPatientId] = useState<string>(
-    queue[0]?.id || "",
+    queue[0]?.id || ""
   );
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
@@ -39,6 +41,7 @@ export default function AssignPatientModal({
         wardId,
         bedId: bed.id,
         patientId: selectedPatientId,
+        actor: session,
       });
       onAssigned();
     } catch (error) {

@@ -6,6 +6,7 @@ import { Bed, Patient } from "@/app/types";
 import { assignPatientToBed } from "@/app/actions/patientActions";
 import { forceAssignPatientToBed } from "@/app/actions/patientActions";
 import { dischargePatientById } from "@/app/actions/patientActions";
+import { useAuthSession } from "@/app/context/AuthSessionContext";
 
 interface AssignFromQueueModalProps {
   wardId: string;
@@ -25,6 +26,7 @@ export default function AssignFromQueueModal({
   onClose,
 }: AssignFromQueueModalProps) {
   const router = useRouter();
+  const { session } = useAuthSession();
   const [selectedBedId, setSelectedBedId] = useState<string>("");
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
@@ -47,12 +49,14 @@ export default function AssignFromQueueModal({
           wardId,
           bedId: selectedBedId,
           patientId: patient.id,
+          actor: session,
         });
       } else {
         await assignPatientToBed({
           wardId,
           bedId: selectedBedId,
           patientId: patient.id,
+          actor: session,
         });
       }
       onAssigned();
@@ -83,7 +87,7 @@ export default function AssignFromQueueModal({
     setIsLoading(true);
 
     try {
-      await dischargePatientById(patient.id);
+      await dischargePatientById(patient.id, session);
       onAssigned(); // Trigger parent refresh
       // Close modal and navigate back after successful discharge
       setTimeout(() => {

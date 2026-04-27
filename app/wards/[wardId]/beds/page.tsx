@@ -9,10 +9,17 @@ import BedGrid from "@/app/components/BedGrid";
 import AssignPatientModal from "@/app/components/AssignPatientModal";
 import MedicalCrossLoader from "@/app/components/MedicalCrossLoader";
 import { addBedToWard, getWardWithPatients } from "@/app/actions/wardActions";
+import { useAuthSession } from "@/app/context/AuthSessionContext";
+import {
+  canAccessWard,
+  canAssignOrDischargePatient,
+  canManageWardActions,
+} from "@/lib/rbac";
 
 export default function WardBedsPage() {
   const params = useParams<{ wardId: string }>();
   const wardId = params?.wardId;
+  const { session } = useAuthSession();
 
   const [ward, setWard] = useState<Ward | null>(null);
   const [assignBed, setAssignBed] = useState<Bed | null>(null);
@@ -44,15 +51,20 @@ export default function WardBedsPage() {
   }, [loadWard]);
 
   const handleAssignPatient = (bed: Bed) => {
+    if (!ward) {
+      return;
+    }
+
+    if (!canAssignOrDischargePatient(session, ward.wardId || ward.id)) {
+      setError("Your role cannot assign patients in this ward.");
+      return;
+    }
+
     setAssignBed(bed);
   };
 
   const handleAssigned = () => {
     setAssignBed(null);
-    loadWard();
-  };
-
-  const handleDischarged = () => {
     loadWard();
   };
 
@@ -63,7 +75,7 @@ export default function WardBedsPage() {
     setIsAddingBed(true);
 
     try {
-      const result = await addBedToWard(ward.wardId || ward.id);
+      const result = await addBedToWard(ward.wardId || ward.id, session);
       if (!result.success) {
         setError(result.error || "Failed to add bed");
         return;
@@ -102,6 +114,29 @@ export default function WardBedsPage() {
     );
   }
 
+  const resolvedWardId = ward.wardId || ward.id;
+  const wardAccessAllowed = canAccessWard(session, resolvedWardId);
+  const canManageWard = canManageWardActions(session, resolvedWardId);
+  const canAssignPatients = canAssignOrDischargePatient(
+    session,
+    resolvedWardId
+  );
+
+  if (!wardAccessAllowed) {
+    return (
+      <div className="min-h-screen bg-linear-to-br from-blue-50 to-indigo-100 p-8">
+        <div className="max-w-4xl mx-auto bg-white rounded-lg shadow-md p-8">
+          <h1 className="text-2xl font-bold text-gray-800 mb-2">
+            Access denied
+          </h1>
+          <p className="text-gray-600">
+            Your role is scoped to a different ward.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-linear-to-br from-blue-50 to-indigo-100 p-8">
       <div className="max-w-6xl mx-auto">
@@ -128,17 +163,21 @@ export default function WardBedsPage() {
           <div className="flex justify-end mb-4">
             <button
               onClick={handleAddBed}
-              disabled={isAddingBed}
+              disabled={isAddingBed || !canManageWard}
               className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors disabled:bg-blue-300 disabled:cursor-not-allowed"
             >
-              {isAddingBed ? "Adding..." : "+ Add Bed"}
+              {!canManageWard
+                ? "Not allowed"
+                : isAddingBed
+                  ? "Adding..."
+                  : "+ Add Bed"}
             </button>
           </div>
           <BedGrid
             beds={ward.beds}
             wardName={ward.name}
-            onDischargeSuccess={handleDischarged}
             onAvailableBedClick={handleAssignPatient}
+            canInteract={canAssignPatients}
           />
         </div>
 

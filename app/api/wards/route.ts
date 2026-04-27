@@ -1,12 +1,17 @@
 import { connectToDatabase } from "@/lib/mongodb";
 import { NextResponse, NextRequest } from "next/server";
+import { canManageStaff, getSessionFromHeaders } from "@/lib/rbac";
 
 export async function GET(request: NextRequest) {
   try {
+    const session = getSessionFromHeaders(request.headers);
     const { db } = await connectToDatabase();
 
     // Fetch all wards
-    const wards = await db.collection("wards").find({}).toArray();
+    const wards = await db
+      .collection("wards")
+      .find(session.role === "admin" ? {} : { wardId: session.wardId })
+      .toArray();
 
     // For each ward, fetch patients and organize by status
     const wardsWithPatients = await Promise.all(
@@ -21,10 +26,10 @@ export async function GET(request: NextRequest) {
 
         // Separate into admitted and queued
         const admittedPatients = allPatients.filter(
-          (p: Record<string, unknown>) => p.status === "admitted",
+          (p: Record<string, unknown>) => p.status === "admitted"
         );
         const queuedPatients = allPatients.filter(
-          (p: Record<string, unknown>) => p.status === "queued",
+          (p: Record<string, unknown>) => p.status === "queued"
         );
 
         return {
@@ -33,7 +38,7 @@ export async function GET(request: NextRequest) {
           patientQueue: queuedPatients,
           totalPatients: allPatients.length,
         };
-      }),
+      })
     );
 
     return NextResponse.json(wardsWithPatients, { status: 200 });
@@ -43,13 +48,21 @@ export async function GET(request: NextRequest) {
     console.error("Error fetching wards:", errorMessage);
     return NextResponse.json(
       { error: "Failed to fetch wards", details: errorMessage },
-      { status: 500 },
+      { status: 500 }
     );
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
+    const session = getSessionFromHeaders(request.headers);
+    if (!canManageStaff(session)) {
+      return NextResponse.json(
+        { error: "Only Admin can create wards" },
+        { status: 403 }
+      );
+    }
+
     const { db } = await connectToDatabase();
     const body = await request.json();
 
@@ -61,7 +74,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(
       { success: true, insertedId: result.insertedId },
-      { status: 201 },
+      { status: 201 }
     );
   } catch (error) {
     const errorMessage =
@@ -69,7 +82,7 @@ export async function POST(request: NextRequest) {
     console.error("Error creating ward:", errorMessage);
     return NextResponse.json(
       { error: "Failed to create ward", details: errorMessage },
-      { status: 500 },
+      { status: 500 }
     );
   }
 }
