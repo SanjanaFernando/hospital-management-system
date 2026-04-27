@@ -2,12 +2,22 @@
 
 import { connectToDatabase } from "@/lib/mongodb";
 import { ObjectId } from "mongodb";
+import { UserSession } from "@/app/types";
+import {
+  assertPermission,
+  canAssignOrDischargePatient,
+  normalizeSession,
+} from "@/lib/rbac";
 
-export async function dischargePatientById(patientId: string): Promise<void> {
+export async function dischargePatientById(
+  patientId: string,
+  actor: UserSession
+): Promise<void> {
   if (!patientId) {
     throw new Error("Patient ID is required for discharge");
   }
 
+  const session = normalizeSession(actor);
   const { db } = await connectToDatabase();
 
   // Find patient by custom id first, fallback to _id
@@ -22,6 +32,12 @@ export async function dischargePatientById(patientId: string): Promise<void> {
   if (!patient) {
     throw new Error("Patient not found");
   }
+
+  const patientWardId = (patient.wardId as string) || "";
+  assertPermission(
+    canAssignOrDischargePatient(session, patientWardId),
+    "You do not have permission to discharge this patient."
+  );
 
   const resolvedPatientId = patient.id || patientId;
 
@@ -80,6 +96,7 @@ interface AssignPatientInput {
   wardId: string;
   bedId: string;
   patientId: string;
+  actor: UserSession;
 }
 
 export async function assignPatientToBed(
@@ -92,6 +109,7 @@ export async function assignPatientToBed(
   }
 
   const { db } = await connectToDatabase();
+  const session = normalizeSession(input.actor);
 
   let bed = await db.collection("beds").findOne({ bedId, wardId });
   if (!bed) {
@@ -109,6 +127,11 @@ export async function assignPatientToBed(
   }
 
   const effectiveWardId = (bed.wardId as string) || wardId;
+
+  assertPermission(
+    canAssignOrDischargePatient(session, effectiveWardId),
+    "You do not have permission to assign a patient in this ward."
+  );
 
   const patient = await db
     .collection("patients")
@@ -145,11 +168,15 @@ export async function assignPatientToBed(
   );
 }
 
-export async function movePatientToQueue(patientId: string): Promise<void> {
+export async function movePatientToQueue(
+  patientId: string,
+  actor: UserSession
+): Promise<void> {
   if (!patientId) {
     throw new Error("Patient ID is required");
   }
 
+  const session = normalizeSession(actor);
   const { db } = await connectToDatabase();
 
   // Find patient by custom id first, fallback to _id
@@ -164,6 +191,12 @@ export async function movePatientToQueue(patientId: string): Promise<void> {
   if (!patient) {
     throw new Error("Patient not found");
   }
+
+  const patientWardId = (patient.wardId as string) || "";
+  assertPermission(
+    canAssignOrDischargePatient(session, patientWardId),
+    "You do not have permission to move this patient to queue."
+  );
 
   const resolvedPatientId = patient.id || patientId;
 
@@ -224,6 +257,7 @@ export async function forceAssignPatientToBed(
   }
 
   const { db } = await connectToDatabase();
+  const session = normalizeSession(input.actor);
 
   // Find the bed
   let bed = await db.collection("beds").findOne({ bedId, wardId });
@@ -242,6 +276,11 @@ export async function forceAssignPatientToBed(
   }
 
   const effectiveWardId = (bed.wardId as string) || wardId;
+
+  assertPermission(
+    canAssignOrDischargePatient(session, effectiveWardId),
+    "You do not have permission to force assign in this ward."
+  );
 
   // Find the new patient to assign
   const newPatient = await db

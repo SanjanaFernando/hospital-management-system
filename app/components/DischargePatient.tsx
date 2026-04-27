@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { dischargePatientById } from "@/app/actions/patientActions";
+import { useAuthSession } from "@/app/context/AuthSessionContext";
 
 interface DischargePatientProps {
   patientId: string;
@@ -16,6 +17,7 @@ export default function DischargePatient({
   onSuccess,
   onCancel,
 }: DischargePatientProps) {
+  const { session } = useAuthSession();
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [dischargeNotes, setDischargeNotes] = useState("");
@@ -26,7 +28,7 @@ export default function DischargePatient({
 
     try {
       // Delete patient from database
-      await dischargePatientById(patientId);
+      await dischargePatientById(patientId, session);
 
       // Call success callback
       onSuccess();

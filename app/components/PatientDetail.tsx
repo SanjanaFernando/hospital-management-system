@@ -4,11 +4,13 @@ import { useState } from "react";
 import { Patient } from "@/app/types";
 import DischargePatient from "./DischargePatient";
 import { movePatientToQueue } from "@/app/actions/patientActions";
+import { useAuthSession } from "@/app/context/AuthSessionContext";
 
 interface PatientDetailProps {
   patient: Patient;
   onDischargeSuccess?: () => void;
   onMoveToQueueSuccess?: () => void;
+  canManageActions?: boolean;
 }
 
 const priorityColors = {
@@ -29,7 +31,9 @@ export default function PatientDetail({
   patient,
   onDischargeSuccess,
   onMoveToQueueSuccess,
+  canManageActions = true,
 }: PatientDetailProps) {
+  const { session } = useAuthSession();
   const [showDischargeForm, setShowDischargeForm] = useState(false);
   const [isMovingToQueue, setIsMovingToQueue] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
@@ -50,7 +54,7 @@ export default function PatientDetail({
     setIsMovingToQueue(true);
 
     try {
-      await movePatientToQueue(patient.id);
+      await movePatientToQueue(patient.id, session);
       onMoveToQueueSuccess?.();
     } catch (error) {
       setErrorMessage(
@@ -92,19 +96,23 @@ export default function PatientDetail({
           >
             {patient.ageGroup}
           </span>
-          <button
-            onClick={handleMoveToQueue}
-            disabled={isMovingToQueue}
-            className="bg-orange-500 text-white px-3 py-1 rounded-full text-sm font-semibold hover:bg-orange-600 transition-colors disabled:bg-orange-300 disabled:cursor-not-allowed"
-          >
-            {isMovingToQueue ? "Moving..." : "Move to Queue"}
-          </button>
-          <button
-            onClick={() => setShowDischargeForm(true)}
-            className="bg-red-500 text-white px-3 py-1 rounded-full text-sm font-semibold hover:bg-red-600 transition-colors"
-          >
-            Discharge
-          </button>
+          {canManageActions && (
+            <>
+              <button
+                onClick={handleMoveToQueue}
+                disabled={isMovingToQueue}
+                className="bg-orange-500 text-white px-3 py-1 rounded-full text-sm font-semibold hover:bg-orange-600 transition-colors disabled:bg-orange-300 disabled:cursor-not-allowed"
+              >
+                {isMovingToQueue ? "Moving..." : "Move to Queue"}
+              </button>
+              <button
+                onClick={() => setShowDischargeForm(true)}
+                className="bg-red-500 text-white px-3 py-1 rounded-full text-sm font-semibold hover:bg-red-600 transition-colors"
+              >
+                Discharge
+              </button>
+            </>
+          )}
         </div>
       </div>
 

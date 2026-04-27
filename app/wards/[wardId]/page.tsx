@@ -9,11 +9,19 @@ import BedGrid from "@/app/components/BedGrid";
 import PatientQueue from "@/app/components/PatientQueue";
 import MedicalCrossLoader from "@/app/components/MedicalCrossLoader";
 import { addBedToWard, getWardWithPatients } from "@/app/actions/wardActions";
+import { useAuthSession } from "@/app/context/AuthSessionContext";
+import {
+  canAccessWard,
+  canAssignOrDischargePatient,
+  canManageWardActions,
+  canRegisterPatient,
+} from "@/lib/rbac";
 
 export default function WardPage() {
   const params = useParams<{ wardId: string }>();
   const router = useRouter();
   const wardId = params?.wardId;
+  const { session } = useAuthSession();
 
   const [ward, setWard] = useState<Ward | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -44,11 +52,16 @@ export default function WardPage() {
   }, [loadWard]);
 
   const handleBedClick = (bed: Bed) => {
-    router.push(`/wards/${wardId}/${bed.id}`);
-  };
+    if (!ward) {
+      return;
+    }
 
-  const handleDischarged = () => {
-    loadWard();
+    if (!canAccessWard(session, ward.wardId || ward.id)) {
+      setError("You do not have access to this ward.");
+      return;
+    }
+
+    router.push(`/wards/${wardId}/${bed.id}`);
   };
 
   const handleAddBed = async () => {
@@ -58,7 +71,7 @@ export default function WardPage() {
     setIsAddingBed(true);
 
     try {
-      const result = await addBedToWard(ward.wardId || ward.id);
+      const result = await addBedToWard(ward.wardId || ward.id, session);
       if (!result.success) {
         setError(result.error || "Failed to add bed");
         return;
@@ -97,6 +110,31 @@ export default function WardPage() {
             </p>
             {error && <p className="text-red-600 mt-2">{error}</p>}
           </div>
+        </div>
+      </div>
+    );
+  }
+
+  const resolvedWardId = ward.wardId || ward.id;
+  const wardAccessAllowed = canAccessWard(session, resolvedWardId);
+  const canManageWard = canManageWardActions(session, resolvedWardId);
+  const canAssignPatients = canAssignOrDischargePatient(
+    session,
+    resolvedWardId
+  );
+  const canRegisterInWard = canRegisterPatient(session, resolvedWardId);
+
+  if (!wardAccessAllowed) {
+    return (
+      <div className="min-h-screen bg-linear-to-br from-blue-50 to-indigo-100 p-8">
+        <div className="max-w-4xl mx-auto bg-white rounded-lg shadow-md p-8">
+          <h1 className="text-2xl font-bold text-gray-800 mb-2">
+            Access denied
+          </h1>
+          <p className="text-gray-600">
+            Your role is assigned to a different ward. Switch ward scope from
+            the role panel to continue.
+          </p>
         </div>
       </div>
     );
@@ -154,10 +192,14 @@ export default function WardPage() {
               <h2 className="text-2xl font-bold text-gray-800">Beds</h2>
               <button
                 onClick={handleAddBed}
-                disabled={isAddingBed}
+                disabled={isAddingBed || !canManageWard}
                 className="px-3 py-1 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors disabled:bg-blue-300 disabled:cursor-not-allowed"
               >
-                {isAddingBed ? "Adding..." : "+ Add Bed"}
+                {!canManageWard
+                  ? "Not allowed"
+                  : isAddingBed
+                    ? "Adding..."
+                    : "+ Add Bed"}
               </button>
             </div>
             {ward?.beds && ward.beds.length > 0 ? (
@@ -165,7 +207,7 @@ export default function WardPage() {
                 beds={ward.beds}
                 wardName={ward.name || ""}
                 onAvailableBedClick={handleBedClick}
-                onDischargeSuccess={handleDischarged}
+                canInteract={wardAccessAllowed}
               />
             ) : (
               <p className="text-gray-600">No beds available</p>
@@ -178,9 +220,12 @@ export default function WardPage() {
               <div className="flex gap-2">
                 <button
                   onClick={() => router.push(`/wards/${wardId}/register`)}
-                  className="px-3 py-1 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 transition-colors"
+                  disabled={!canRegisterInWard}
+                  className="px-3 py-1 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 transition-colors disabled:bg-green-300 disabled:cursor-not-allowed"
                 >
-                  + Register Patient
+                  {canRegisterInWard
+                    ? "+ Register Patient"
+                    : "Registration blocked"}
                 </button>
                 <Link
                   href={`/wards/${ward?.wardId || ward?.id}/patients`}
@@ -196,9 +241,10 @@ export default function WardPage() {
                 beds={ward.beds || []}
                 wardId={ward.wardId || ward.id}
                 wardName={ward.name}
-                onPatientAssigned={handleDischarged}
+                onPatientAssigned={loadWard}
                 queueOrderStrategy={ward.queueOrderStrategy}
                 queueOrderMessage={ward.queueOrderMessage}
+                canAssign={canAssignPatients}
               />
             ) : (
               <p className="text-gray-600">No patients in queue</p>

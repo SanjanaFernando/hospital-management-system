@@ -1,6 +1,19 @@
 import { Ward, Patient } from "@/app/types";
+import { UserSession } from "@/app/types";
 
 const API_BASE_URL = "/api";
+
+function buildSessionHeaders(actor?: UserSession): HeadersInit {
+  if (!actor) {
+    return {};
+  }
+
+  return {
+    "x-user-role": actor.role,
+    "x-user-ward-id": actor.wardId || "",
+    "x-user-name": actor.displayName || "",
+  };
+}
 
 // WARDS
 export async function fetchWards(): Promise<Ward[]> {
@@ -27,7 +40,7 @@ export async function fetchWards(): Promise<Ward[]> {
 }
 
 export async function createWard(
-  ward: Record<string, unknown>,
+  ward: Record<string, unknown>
 ): Promise<unknown> {
   try {
     const response = await fetch(`${API_BASE_URL}/wards`, {
@@ -60,11 +73,15 @@ export async function fetchPatients(wardId?: string): Promise<Patient[]> {
 
 export async function createPatient(
   patient: Record<string, unknown>,
+  actor?: UserSession
 ): Promise<unknown> {
   try {
     const response = await fetch(`${API_BASE_URL}/patients`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...buildSessionHeaders(actor),
+      },
       body: JSON.stringify(patient),
     });
 
@@ -87,11 +104,15 @@ export async function createPatient(
 export async function updatePatient(
   patientId: string,
   data: Record<string, unknown>,
+  actor?: UserSession
 ): Promise<unknown> {
   try {
     const response = await fetch(`${API_BASE_URL}/patients/${patientId}`, {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...buildSessionHeaders(actor),
+      },
       body: JSON.stringify(data),
     });
     if (!response.ok) throw new Error("Failed to update patient");
@@ -117,7 +138,7 @@ export async function deletePatient(patientId: string): Promise<unknown> {
 
 // BEDS
 export async function fetchBeds(
-  wardId?: string,
+  wardId?: string
 ): Promise<Record<string, unknown>[]> {
   try {
     const url = wardId
@@ -133,7 +154,7 @@ export async function fetchBeds(
 }
 
 export async function createBed(
-  bed: Record<string, unknown>,
+  bed: Record<string, unknown>
 ): Promise<unknown> {
   try {
     const response = await fetch(`${API_BASE_URL}/beds`, {

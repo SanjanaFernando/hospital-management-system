@@ -1,13 +1,12 @@
 "use client";
 
-import { Bed, Patient } from "@/app/types";
-import { useState } from "react";
+import { Bed } from "@/app/types";
 
 interface BedGridProps {
   beds: Bed[];
   wardName: string;
-  onDischargeSuccess?: () => void;
   onAvailableBedClick?: (bed: Bed) => void;
+  canInteract?: boolean;
 }
 
 const statusColors = {
@@ -25,11 +24,14 @@ const statusLabels = {
 export default function BedGrid({
   beds,
   wardName,
-  onDischargeSuccess,
   onAvailableBedClick,
+  canInteract = true,
 }: BedGridProps) {
   const handleBedClick = (bed: Bed) => {
-    // Navigate to bed detail page for all beds
+    if (!canInteract) {
+      return;
+    }
+
     onAvailableBedClick?.(bed);
   };
 
@@ -41,7 +43,7 @@ export default function BedGrid({
           <div
             key={bed.id}
             onClick={() => handleBedClick(bed)}
-            className={`${statusColors[bed.status]} text-white rounded-lg p-4 cursor-pointer transition-all shadow-md hover:shadow-lg flex flex-col items-center justify-center min-h-[120px] h-full`}
+            className={`${statusColors[bed.status]} text-white rounded-lg p-4 transition-all shadow-md flex flex-col items-center justify-center min-h-[120px] h-full ${canInteract ? "cursor-pointer hover:shadow-lg" : "cursor-not-allowed opacity-70"}`}
             title={`${statusLabels[bed.status]}${bed.patient ? ` - ${bed.patient.name}` : ""}`}
           >
             <div className="text-center">
