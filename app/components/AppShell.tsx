@@ -112,16 +112,7 @@ function AppShellContent({ children }: PropsWithChildren) {
       href: activeWardId ? `/wards/${activeWardId}` : "/",
       icon: Bed,
     },
-    {
-      label: "Queue List",
-      href: activeWardId ? `/wards/${activeWardId}/queue` : "/",
-      icon: Users,
-    },
-    {
-      label: "Admissions",
-      href: activeWardId ? `/wards/${activeWardId}/register` : "/",
-      icon: ClipboardPlus,
-    },
+   
     {
       label: "Discharges",
       href: activeWardId ? `/wards/${activeWardId}/patients` : "/",
@@ -189,14 +180,14 @@ function AppShellContent({ children }: PropsWithChildren) {
               href={activeWardId ? `/wards/${activeWardId}/register` : "/"}
               className="flex w-full items-center justify-between rounded-xl bg-teal-500 px-3 py-2.5 text-sm font-semibold text-teal-950 transition hover:bg-teal-400"
             >
-              <span>➕ Add to Queue</span>
+              <span>➕Register a patients</span>
               <ArrowRight className="h-4 w-4" />
             </Link>
             <Link
               href={activeWardId ? `/wards/${activeWardId}/queue` : "/"}
               className="flex w-full items-center justify-between rounded-xl bg-cyan-400 px-3 py-2.5 text-sm font-semibold text-slate-900 transition hover:bg-cyan-300"
             >
-              <span>⏩ Call Next Patient</span>
+              <span>⏩ The next patient </span>
               <ArrowRight className="h-4 w-4" />
             </Link>
             <Link
