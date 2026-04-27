@@ -9,10 +9,13 @@ import PatientRegistrationForm from "@/app/components/PatientRegistrationForm";
 import PatientList from "@/app/components/PatientList";
 import MedicalCrossLoader from "@/app/components/MedicalCrossLoader";
 import { getWardWithPatients } from "@/app/actions/wardActions";
+import { useAuthSession } from "@/app/context/AuthSessionContext";
+import { canAccessWard, canRegisterPatient } from "@/lib/rbac";
 
 export default function WardPatientsPage() {
   const params = useParams<{ wardId: string }>();
   const wardId = params?.wardId;
+  const { session } = useAuthSession();
 
   const [ward, setWard] = useState<Ward | null>(null);
   const [showRegistrationForm, setShowRegistrationForm] = useState(false);
@@ -71,6 +74,25 @@ export default function WardPatientsPage() {
     );
   }
 
+  const resolvedWardId = ward.wardId || ward.id;
+  const wardAccessAllowed = canAccessWard(session, resolvedWardId);
+  const canRegisterInWard = canRegisterPatient(session, resolvedWardId);
+
+  if (!wardAccessAllowed) {
+    return (
+      <div className="min-h-screen bg-linear-to-br from-blue-50 to-indigo-100 p-8">
+        <div className="max-w-4xl mx-auto bg-white rounded-lg shadow-md p-8">
+          <h1 className="text-2xl font-bold text-gray-800 mb-2">
+            Access denied
+          </h1>
+          <p className="text-gray-600">
+            Your role is scoped to a different ward.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-linear-to-br from-blue-50 to-indigo-100 p-8">
       <div className="max-w-6xl mx-auto">
@@ -99,13 +121,18 @@ export default function WardPatientsPage() {
           </h2>
           <button
             onClick={() => setShowRegistrationForm((prev) => !prev)}
-            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-semibold"
+            disabled={!canRegisterInWard}
+            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-semibold disabled:bg-green-300 disabled:cursor-not-allowed"
           >
-            {showRegistrationForm ? "Close Form" : "+ Register Patient"}
+            {!canRegisterInWard
+              ? "Registration blocked"
+              : showRegistrationForm
+                ? "Close Form"
+                : "+ Register Patient"}
           </button>
         </div>
 
-        {showRegistrationForm && (
+        {showRegistrationForm && canRegisterInWard && (
           <div className="mb-8">
             <PatientRegistrationForm
               wardId={ward.wardId || ward.id}

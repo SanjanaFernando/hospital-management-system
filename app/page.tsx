@@ -24,8 +24,12 @@ import {
   YAxis,
 } from "recharts";
 import { ChevronDown } from "lucide-react";
+import { useAuthSession } from "@/app/context/AuthSessionContext";
+import { canAccessWard } from "@/lib/rbac";
 
 export default function Home() {
+  const { session } = useAuthSession();
+  const isAdmin = session.role === "admin";
   const [wards, setWards] = useState<Ward[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
@@ -70,32 +74,47 @@ export default function Home() {
     }
   };
 
-  const totalAvailable = wards.reduce(
+  const scopedWards = wards.filter((ward) =>
+    canAccessWard(session, ward.wardId || ward.id)
+  );
+
+  const wardsForCards = session.role === "main_attendant" ? scopedWards : wards;
+
+  const totalAvailable = scopedWards.reduce(
     (sum, ward) => sum + ward.availableBeds,
     0
   );
-  const totalOccupied = wards.reduce((sum, ward) => sum + ward.occupiedBeds, 0);
-  const totalMaintenance = wards.reduce(
+  const totalOccupied = scopedWards.reduce(
+    (sum, ward) => sum + ward.occupiedBeds,
+    0
+  );
+  const totalMaintenance = scopedWards.reduce(
     (sum, ward) => sum + ward.maintenanceBeds,
     0
   );
-  const totalQueue = wards.reduce(
+  const totalQueue = scopedWards.reduce(
     (sum, ward) => sum + ward.patientQueue.length,
     0
   );
-  const totalBeds = wards.reduce((sum, ward) => sum + ward.totalBeds, 0);
+  const totalBeds = scopedWards.reduce((sum, ward) => sum + ward.totalBeds, 0);
+  const totalAvailablePercent =
+    totalBeds > 0 ? Math.round((totalAvailable / totalBeds) * 100) : 0;
+  const totalOccupiedPercent =
+    totalBeds > 0 ? Math.round((totalOccupied / totalBeds) * 100) : 0;
+  const totalMaintenancePercent =
+    totalBeds > 0 ? Math.round((totalMaintenance / totalBeds) * 100) : 0;
 
-  const wardPieData = wards.map((ward) => ({
+  const wardPieData = scopedWards.map((ward) => ({
     name: ward.name.replace(/^Ward\s+[A-Z]\s+-\s+/, ""),
     occupiedBeds: ward.occupiedBeds,
   }));
 
-  const wardQueueData = wards.map((ward) => ({
+  const wardQueueData = scopedWards.map((ward) => ({
     name: ward.name.replace(/^Ward\s+[A-Z]\s+-\s+/, ""),
     queueCount: ward.patientQueue.length,
   }));
 
-  const wardMaintenanceData = wards.map((ward) => ({
+  const wardMaintenanceData = scopedWards.map((ward) => ({
     name: ward.name.replace(/^Ward\s+[A-Z]\s+-\s+/, ""),
     maintenanceBeds: ward.maintenanceBeds,
   }));
@@ -164,7 +183,7 @@ export default function Home() {
       });
     }
 
-    const allPatients = wards.flatMap((ward) => [
+    const allPatients = scopedWards.flatMap((ward) => [
       ...ward.patients,
       ...ward.patientQueue,
     ]);
@@ -198,7 +217,7 @@ export default function Home() {
     },
   };
 
-  const wardsByOccupancy = [...wards].sort((a, b) => {
+  const wardsByOccupancy = [...wardsForCards].sort((a, b) => {
     const occupancyA = a.totalBeds === 0 ? 0 : a.occupiedBeds / a.totalBeds;
     const occupancyB = b.totalBeds === 0 ? 0 : b.occupiedBeds / b.totalBeds;
     return occupancyB - occupancyA;
@@ -214,10 +233,12 @@ export default function Home() {
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-4xl font-bold text-gray-800 mb-2">
-            Hospital Bed Management System
+            {isAdmin ? "Hospital Bed Management System" : "Ward Dashboard"}
           </h1>
           <p className="text-gray-600">
-            Real-time bed availability, patient details, and ward management
+            {isAdmin
+              ? "Real-time bed availability, patient details, and ward management"
+              : "Role-based ward view with patient and bed operations for your assigned ward"}
           </p>
         </div>
 
@@ -245,7 +266,7 @@ export default function Home() {
                 {totalAvailable}
               </p>
               <p className="text-xs text-gray-500 mt-2">
-                {Math.round((totalAvailable / totalBeds) * 100)}% of total
+                {totalAvailablePercent}% of total
               </p>
             </div>
             <div className="bg-white rounded-lg shadow-md px-6 py-2 border-l-4 border-blue-500">
@@ -254,7 +275,7 @@ export default function Home() {
                 {totalOccupied}
               </p>
               <p className="text-xs text-gray-500 mt-2">
-                {Math.round((totalOccupied / totalBeds) * 100)}% of total
+                {totalOccupiedPercent}% of total
               </p>
             </div>
             <div className="bg-white rounded-lg shadow-md px-6 py-2 border-l-4 border-yellow-500">
@@ -263,7 +284,7 @@ export default function Home() {
                 {totalMaintenance}
               </p>
               <p className="text-xs text-gray-500 mt-2">
-                {Math.round((totalMaintenance / totalBeds) * 100)}% of total
+                {totalMaintenancePercent}% of total
               </p>
             </div>
             <div className="bg-white rounded-lg shadow-md px-6 py-2 border-l-4 border-purple-500">
@@ -274,70 +295,78 @@ export default function Home() {
             <div className="bg-white rounded-lg shadow-md px-6 py-2 border-l-4 border-gray-500">
               <p className="text-sm text-gray-600 mb-2">Total Beds</p>
               <p className="text-3xl font-bold text-gray-600">{totalBeds}</p>
-              <p className="text-xs text-gray-500 mt-2">Across all wards</p>
+              <p className="text-xs text-gray-500 mt-2">
+                {isAdmin ? "Across all wards" : "In your assigned ward"}
+              </p>
             </div>
           </div>
         )}
 
         {/* Wards Grid */}
         {!isLoading && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-            <div className="bg-white rounded-lg shadow-md p-6">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-800">
-                    {getChartTitle()}
-                  </h3>
-                  <p className="text-sm text-gray-500">
-                    {getChartDescription()}
-                  </p>
-                </div>
-                <select
-                  value={chartMetric}
-                  onChange={(e) =>
-                    setChartMetric(
-                      e.target.value as "occupancy" | "queue" | "maintenance"
-                    )
-                  }
-                  className="px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="occupancy">Overall Occupancy</option>
-                  <option value="queue">Overall Queue</option>
-                  <option value="maintenance">Maintenance Beds</option>
-                </select>
-              </div>
-              <ChartContainer
-                config={wardPieChartConfig}
-                className="h-[300px] w-full"
-              >
-                <PieChart>
-                  <Pie
-                    data={getChartData()}
-                    dataKey={getChartDataKey()}
-                    nameKey="name"
-                    innerRadius={60}
-                    outerRadius={100}
-                    label
+          <div
+            className={`grid grid-cols-1 ${isAdmin ? "lg:grid-cols-2" : ""} gap-6 mb-8`}
+          >
+            {isAdmin && (
+              <div className="bg-white rounded-lg shadow-md p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-800">
+                      {getChartTitle()}
+                    </h3>
+                    <p className="text-sm text-gray-500">
+                      {getChartDescription()}
+                    </p>
+                  </div>
+                  <select
+                    value={chartMetric}
+                    onChange={(e) =>
+                      setChartMetric(
+                        e.target.value as "occupancy" | "queue" | "maintenance"
+                      )
+                    }
+                    className="px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
-                    {getChartData().map((entry, index) => (
-                      <Cell
-                        key={`${entry.name}-${index}`}
-                        fill={pieColors[index % pieColors.length]}
-                      />
-                    ))}
-                  </Pie>
-                  <Tooltip content={<ChartTooltip />} />
-                  <Legend content={<ChartLegendContent />} />
-                </PieChart>
-              </ChartContainer>
-            </div>
+                    <option value="occupancy">Overall Occupancy</option>
+                    <option value="queue">Overall Queue</option>
+                    <option value="maintenance">Maintenance Beds</option>
+                  </select>
+                </div>
+                <ChartContainer
+                  config={wardPieChartConfig}
+                  className="h-[300px] w-full"
+                >
+                  <PieChart>
+                    <Pie
+                      data={getChartData()}
+                      dataKey={getChartDataKey()}
+                      nameKey="name"
+                      innerRadius={60}
+                      outerRadius={100}
+                      label
+                    >
+                      {getChartData().map((entry, index) => (
+                        <Cell
+                          key={`${entry.name}-${index}`}
+                          fill={pieColors[index % pieColors.length]}
+                        />
+                      ))}
+                    </Pie>
+                    <Tooltip content={<ChartTooltip />} />
+                    <Legend content={<ChartLegendContent />} />
+                  </PieChart>
+                </ChartContainer>
+              </div>
+            )}
 
             <div className="bg-white rounded-lg shadow-md p-6">
               <h3 className="text-lg font-semibold text-gray-800 mb-1">
-                Daily Overall Patients
+                {isAdmin ? "Daily Overall Patients" : "Daily Patients"}
               </h3>
               <p className="text-sm text-gray-500 mb-4">
-                Last 7 days admissions (ward + queue)
+                {isAdmin
+                  ? "Last 7 days admissions (ward + queue)"
+                  : "Last 7 days admissions in your ward"}
               </p>
               <ChartContainer
                 config={dailyPatientsChartConfig}

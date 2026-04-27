@@ -1,9 +1,15 @@
 "use server";
 
 import { connectToDatabase } from "@/lib/mongodb";
-import { Ward, Patient, Bed } from "@/app/types";
+import { Ward, Patient, Bed, UserSession } from "@/app/types";
 import { reorderQueueWithAi } from "@/lib/queueAi";
 import { ObjectId } from "mongodb";
+import {
+  assertPermission,
+  canManageWardActions,
+  canUpdateBedStatus,
+  normalizeSession,
+} from "@/lib/rbac";
 
 // Helper function to recursively serialize MongoDB documents (convert ObjectIds to strings)
 function serializeDoc(doc: unknown): unknown {
@@ -258,6 +264,14 @@ export async function getWardWithPatients(
     wards: wardSnapshots.filter((w) => w.wardId),
   });
 
+  const orderedQueue = queueResult.orderedPatients || [];
+  const pendingTriagePatients = orderedQueue.filter(
+    (patient) => Boolean(patient.triageRequested)
+  );
+  const remainingPatients = orderedQueue.filter(
+    (patient) => !patient.triageRequested
+  );
+
   return {
     id:
       (wardSerialized?._id as string) ||
@@ -267,23 +281,28 @@ export async function getWardWithPatients(
     name: (wardSerialized?.name as string) || "",
     beds: formattedBeds,
     patients: admittedPatients as unknown as Patient[],
-    patientQueue: queueResult.orderedPatients,
+    patientQueue: [...pendingTriagePatients, ...remainingPatients],
     dischargedPatients: dischargedPatients as unknown as Patient[],
     totalBeds: bedsSerialized.length,
     occupiedBeds,
     availableBeds,
     maintenanceBeds,
     queueOrderStrategy: queueResult.strategy,
-    queueOrderMessage: queueResult.message,
+    queueOrderMessage:
+      pendingTriagePatients.length > 0
+        ? `${queueResult.message} Pending doctor triage patients are pinned at the top.`
+        : queueResult.message,
   } as Ward;
 }
 
 export async function updateBedStatus(
   bedId: string,
-  newStatus: "available" | "occupied" | "maintenance"
+  newStatus: "available" | "occupied" | "maintenance",
+  actor: UserSession
 ): Promise<{ success: boolean; error?: string }> {
   try {
     console.log(`📡 Server Action: Updating bed ${bedId} to ${newStatus}...`);
+    const session = normalizeSession(actor);
     const { db } = await connectToDatabase();
 
     // Build query - try multiple ways to find the bed
@@ -301,9 +320,35 @@ export async function updateBedStatus(
       });
     }
 
+    const bed = await db.collection("beds").findOne(query);
+
+    if (!bed) {
+      return { success: false, error: "Bed not found" };
+    }
+
+    const wardId = (bed.wardId as string) || "";
+    assertPermission(
+      canUpdateBedStatus(session, wardId),
+      "You do not have permission to update bed status in this ward."
+    );
+
+    if (
+      session.role === "main_attendant" &&
+      newStatus !== "available" &&
+      newStatus !== "maintenance"
+    ) {
+      return {
+        success: false,
+        error: "Main Attendant can only mark beds as available or maintenance.",
+      };
+    }
+
     const result = await db
       .collection("beds")
-      .updateOne(query, { $set: { status: newStatus, updatedAt: new Date() } });
+      .updateOne(
+        { _id: bed._id },
+        { $set: { status: newStatus, updatedAt: new Date() } }
+      );
 
     if (result.matchedCount === 0) {
       return { success: false, error: "Bed not found" };
@@ -321,13 +366,15 @@ export async function updateBedStatus(
 }
 
 export async function addBedToWard(
-  wardId: string
+  wardId: string,
+  actor: UserSession
 ): Promise<{ success: boolean; bedId?: string; error?: string }> {
   try {
     if (!wardId) {
       return { success: false, error: "Ward ID is required" };
     }
 
+    const session = normalizeSession(actor);
     const { db } = await connectToDatabase();
 
     let ward = await db.collection("wards").findOne({ wardId });
@@ -344,6 +391,11 @@ export async function addBedToWard(
 
     const wardDoc = serializeDoc(ward) as Record<string, unknown>;
     const effectiveWardId = (wardDoc?.wardId as string) || wardId;
+
+    assertPermission(
+      canManageWardActions(session, effectiveWardId),
+      "You do not have permission to add beds in this ward."
+    );
 
     const lastBed = await db
       .collection("beds")

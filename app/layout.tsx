@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Poppins, Inter } from "next/font/google";
 import "./globals.css";
+import AppShell from "@/app/components/AppShell";
 
 const poppins = Poppins({
   variable: "--font-poppins",
@@ -29,10 +30,8 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body
-        className={`${poppins.variable} ${inter.variable} antialiased`}
-      >
-        {children}
+      <body className={`${poppins.variable} ${inter.variable} antialiased`}>
+        <AppShell>{children}</AppShell>
       </body>
     </html>
   );

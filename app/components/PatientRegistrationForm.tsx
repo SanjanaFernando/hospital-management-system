@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { createPatient } from "@/app/utils/api";
 import { Priority, AgeGroup } from "@/app/types";
+import { useAuthSession } from "@/app/context/AuthSessionContext";
+import { canRegisterPatient, canSetTriage } from "@/lib/rbac";
 
 interface PatientRegistrationFormProps {
   wardId: string;
@@ -46,6 +48,7 @@ export default function PatientRegistrationForm({
   onSuccess,
   onCancel,
 }: PatientRegistrationFormProps) {
+  const { session } = useAuthSession();
   const [formData, setFormData] = useState({
     name: "",
     age: 0,
@@ -57,6 +60,9 @@ export default function PatientRegistrationForm({
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+
+  const canRegister = canRegisterPatient(session, wardId);
+  const triageEditable = canSetTriage(session, wardId);
 
   const handleInputChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
@@ -102,6 +108,11 @@ export default function PatientRegistrationForm({
 
     if (!validateForm()) return;
 
+    if (!canRegister) {
+      setErrorMessage("Main Attendant cannot register patients.");
+      return;
+    }
+
     setIsLoading(true);
 
     try {
@@ -111,7 +122,8 @@ export default function PatientRegistrationForm({
         age: formData.age,
         ageGroup: determineAgeGroup(formData.age),
         disease: formData.disease,
-        priority: formData.priority,
+        priority: triageEditable ? formData.priority : "Triage 5",
+        triageRequested: !triageEditable,
         admissionTime: new Date(),
         specialRequirements:
           formData.specialRequirements.length > 0
@@ -121,7 +133,7 @@ export default function PatientRegistrationForm({
         status: "queued",
       };
 
-      await createPatient(patientData);
+      await createPatient(patientData, session);
       setSuccessMessage(
         `${formData.name} has been registered successfully and added to the queue!`
       );
@@ -255,7 +267,8 @@ export default function PatientRegistrationForm({
             onChange={
               handleInputChange as React.ChangeEventHandler<HTMLSelectElement>
             }
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg text-black focus:outline-none focus:ring-2 focus:ring-blue-500"
+            disabled={!triageEditable}
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg text-black focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-500"
           >
             <option value="Triage 1">Triage 1 (Resuscitation)</option>
             <option value="Triage 2">Triage 2 (Emergency)</option>
@@ -263,6 +276,12 @@ export default function PatientRegistrationForm({
             <option value="Triage 4">Triage 4 (Less Urgent)</option>
             <option value="Triage 5">Triage 5 (Non-Urgent)</option>
           </select>
+          {!triageEditable && (
+            <p className="mt-2 text-xs text-amber-700">
+              Triage level can only be set by Consultant Doctor. This patient
+              will be marked as pending doctor triage.
+            </p>
+          )}
         </div>
 
         {/* Special Requirements */}
@@ -308,10 +327,14 @@ export default function PatientRegistrationForm({
         <div className="flex gap-4 pt-4">
           <button
             type="submit"
-            disabled={isLoading}
+            disabled={isLoading || !canRegister}
             className="flex-1 bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors font-semibold disabled:bg-blue-300 disabled:cursor-not-allowed"
           >
-            {isLoading ? "Registering..." : "Register Patient"}
+            {!canRegister
+              ? "Registration Not Allowed"
+              : isLoading
+                ? "Registering..."
+                : "Register Patient"}
           </button>
           <button
             type="button"

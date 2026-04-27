@@ -3,6 +3,9 @@
 import { useEffect, useState } from "react";
 import { Patient, Bed } from "@/app/types";
 import AssignFromQueueModal from "./AssignFromQueueModal";
+import { updatePatient } from "@/app/utils/api";
+import { useAuthSession } from "@/app/context/AuthSessionContext";
+import { canSetTriage } from "@/lib/rbac";
 
 interface PatientQueueProps {
   patients: Patient[];
@@ -12,6 +15,7 @@ interface PatientQueueProps {
   onPatientAssigned?: () => void;
   queueOrderStrategy?: "ai" | "priority";
   queueOrderMessage?: string;
+  canAssign?: boolean;
 }
 
 const priorityColors = {
@@ -69,10 +73,19 @@ export default function PatientQueue({
   onPatientAssigned,
   queueOrderStrategy = "priority",
   queueOrderMessage = "",
+  canAssign = true,
 }: PatientQueueProps) {
+  const { session } = useAuthSession();
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [now, setNow] = useState(() => Date.now());
+  const [triageDraftByPatient, setTriageDraftByPatient] = useState<
+    Record<string, Patient["priority"]>
+  >({});
+  const [isUpdatingTriageId, setIsUpdatingTriageId] = useState<string | null>(
+    null
+  );
+  const [triageError, setTriageError] = useState("");
 
   useEffect(() => {
     const intervalId = window.setInterval(() => {
@@ -103,7 +116,7 @@ export default function PatientQueue({
   };
 
   const handlePatientClick = (patient: Patient) => {
-    if (wardId && beds.length > 0) {
+    if (wardId && beds.length > 0 && canAssign) {
       setSelectedPatient(patient);
       setShowAssignModal(true);
     }
@@ -120,6 +133,49 @@ export default function PatientQueue({
     setSelectedPatient(null);
   };
 
+  const triageEditable = Boolean(wardId) && canSetTriage(session, wardId);
+
+  const resolveTriageDraft = (patient: Patient): Patient["priority"] => {
+    return triageDraftByPatient[patient.id] || patient.priority;
+  };
+
+  const handleTriageDraftChange = (
+    patientId: string,
+    priority: Patient["priority"]
+  ) => {
+    setTriageDraftByPatient((prev) => ({
+      ...prev,
+      [patientId]: priority,
+    }));
+  };
+
+  const handleSaveTriage = async (patient: Patient) => {
+    const nextPriority = resolveTriageDraft(patient);
+    const targetPatientId = patient._id || patient.id;
+
+    setTriageError("");
+    setIsUpdatingTriageId(patient.id);
+
+    try {
+      await updatePatient(
+        targetPatientId,
+        {
+          priority: nextPriority,
+          triageRequested: false,
+        },
+        session
+      );
+
+      onPatientAssigned?.();
+    } catch (error) {
+      setTriageError(
+        error instanceof Error ? error.message : "Failed to update triage"
+      );
+    } finally {
+      setIsUpdatingTriageId(null);
+    }
+  };
+
   if (!patients || patients.length === 0) {
     return (
       <div className="bg-gray-50 rounded-lg p-6 text-center">
@@ -132,12 +188,17 @@ export default function PatientQueue({
     (patient) => resolvePriorityRank(patient.priority) === 99
   );
 
-  const displayPatients = hasUnknownPriority
+  const sortedPatients = hasUnknownPriority
     ? [...patients].sort(
         (a, b) =>
           resolvePriorityRank(a.priority) - resolvePriorityRank(b.priority)
       )
     : patients;
+
+  const displayPatients = [
+    ...sortedPatients.filter((patient) => patient.triageRequested),
+    ...sortedPatients.filter((patient) => !patient.triageRequested),
+  ];
 
   return (
     <div className="w-full">
@@ -146,9 +207,11 @@ export default function PatientQueue({
       </h3>
       {wardId && beds.length > 0 && (
         <p className="text-xs text-gray-500 mb-3">
-          {queueOrderStrategy === "ai"
-            ? "AI-reordered queue using model and live ward data. Click a patient to assign to a bed."
-            : "Priority-ordered queue. Click a patient to assign to a bed."}
+          {!canAssign
+            ? "You can view queue order, but your role cannot assign patients to beds."
+            : queueOrderStrategy === "ai"
+              ? "AI-reordered queue using model and live ward data. Click a patient to assign to a bed."
+              : "Priority-ordered queue. Click a patient to assign to a bed."}
         </p>
       )}
       {queueOrderMessage && (
@@ -160,7 +223,7 @@ export default function PatientQueue({
             key={patient.id}
             onClick={() => handlePatientClick(patient)}
             className={`border-l-4 rounded-lg p-4 ${resolvePriorityClass(patient.priority)} ${
-              wardId && beds.length > 0
+              wardId && beds.length > 0 && canAssign
                 ? "cursor-pointer hover:shadow-lg transition-shadow"
                 : ""
             }`}
@@ -179,10 +242,48 @@ export default function PatientQueue({
                   <span className="px-2 py-1 rounded text-xs font-medium bg-gray-200">
                     {patient.disease}
                   </span>
+                  {patient.triageRequested && (
+                    <span className="px-2 py-1 rounded text-xs font-semibold bg-amber-200 text-amber-900">
+                      Pending Triage
+                    </span>
+                  )}
                 </p>
               </div>
               <span className="text-xs font-bold">{patient.priority}</span>
             </div>
+            {triageEditable && patient.triageRequested && (
+              <div className="mt-2 rounded border border-amber-300 bg-amber-50 p-2">
+                <p className="text-xs font-semibold text-amber-900 mb-2">
+                  Consultant Doctor: set triage level for this patient.
+                </p>
+                <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
+                  <select
+                    value={resolveTriageDraft(patient)}
+                    onChange={(e) =>
+                      handleTriageDraftChange(
+                        patient.id,
+                        e.target.value as Patient["priority"]
+                      )
+                    }
+                    className="flex-1 rounded border border-amber-300 bg-white px-2 py-1 text-xs text-gray-900"
+                  >
+                    <option value="Triage 1">Triage 1</option>
+                    <option value="Triage 2">Triage 2</option>
+                    <option value="Triage 3">Triage 3</option>
+                    <option value="Triage 4">Triage 4</option>
+                    <option value="Triage 5">Triage 5</option>
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => handleSaveTriage(patient)}
+                    disabled={isUpdatingTriageId === patient.id}
+                    className="rounded bg-amber-600 px-2 py-1 text-xs font-semibold text-white hover:bg-amber-700 disabled:bg-amber-300"
+                  >
+                    {isUpdatingTriageId === patient.id ? "Saving..." : "Save"}
+                  </button>
+                </div>
+              </div>
+            )}
             {patient.admissionTime && (
               <p className="text-xs mt-2">
                 Arrival: {new Date(patient.admissionTime).toLocaleString()}
@@ -210,8 +311,9 @@ export default function PatientQueue({
           </div>
         ))}
       </div>
+      {triageError && <p className="mt-3 text-xs text-red-700">{triageError}</p>}
 
-      {showAssignModal && selectedPatient && wardId && (
+      {showAssignModal && selectedPatient && wardId && canAssign && (
         <AssignFromQueueModal
           wardId={wardId}
           wardName={wardName || `Ward ${wardId}`}
