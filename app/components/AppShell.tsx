@@ -147,7 +147,7 @@ function AppShellContent({ children }: PropsWithChildren) {
         <aside className="w-full rounded-3xl border border-teal-800/10 bg-[#0b2b33] p-5 text-slate-100 shadow-[0_20px_45px_rgba(3,17,26,0.25)] lg:sticky lg:top-4 lg:h-[calc(100vh-2rem)] lg:w-[340px] lg:overflow-y-auto">
           <div className="border-b border-white/15 pb-4">
             <h1 className="text-xl font-bold tracking-tight text-white">
-              Colombo South Teaching Hospital
+              Karapitiya Teaching Hospital
             </h1>
             <p className="mt-1 text-xs font-medium uppercase tracking-[0.2em] text-teal-100/90">
               Bed &amp; Queue Management
