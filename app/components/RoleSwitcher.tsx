@@ -6,10 +6,10 @@ import { useAuthSession } from "@/app/context/AuthSessionContext";
 import { ROLE_LABELS } from "@/lib/rbac";
 
 const wardOptions = [
-  { id: "ward-0", label: "Ward A" },
-  { id: "ward-1", label: "Ward B" },
-  { id: "ward-2", label: "Ward C" },
-  { id: "ward-3", label: "Ward D" },
+  { id: "ward-0", label: "Ward 3" },
+  { id: "ward-1", label: "Ward 4" },
+  { id: "ward-2", label: "Ward 5" },
+  { id: "ward-3", label: "Ward 6" },
 ];
 
 export default function RoleSwitcher() {

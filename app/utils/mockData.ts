@@ -138,10 +138,10 @@ export function generateMockPatient(patientId: string): Patient {
 
 export function initializeWards(): Ward[] {
   const wardNames = [
-    "Ward A - General Medicine",
-    "Ward B - Surgical",
-    "Ward C - Cardiac",
-    "Ward D - ICU",
+    "Ward 3 - Surgical Type A",
+    "Ward 4 - Surgical Type B",
+    "Ward 5 - Surgical Type C",
+    "Ward 6 - Surgical Type D",
   ];
 
   return wardNames.map((name, wardIndex) => {
