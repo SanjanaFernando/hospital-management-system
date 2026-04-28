@@ -112,7 +112,6 @@ function AppShellContent({ children }: PropsWithChildren) {
       href: activeWardId ? `/wards/${activeWardId}` : "/",
       icon: Bed,
     },
-   
     {
       label: "Discharges",
       href: activeWardId ? `/wards/${activeWardId}/patients` : "/",
