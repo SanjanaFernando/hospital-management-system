@@ -3,10 +3,14 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Bed, Patient } from "@/app/types";
-import { assignPatientToBed } from "@/app/actions/patientActions";
-import { forceAssignPatientToBed } from "@/app/actions/patientActions";
-import { dischargePatientById } from "@/app/actions/patientActions";
+import {
+  assignPatientToBed,
+  forceAssignPatientToBed,
+  dischargePatientById,
+} from "@/app/actions/patientActions";
 import { useAuthSession } from "@/app/context/AuthSessionContext";
+import { canSetTriage } from "@/lib/rbac";
+import { updatePatient } from "@/app/utils/api";
 
 interface AssignFromQueueModalProps {
   wardId: string;
@@ -27,24 +31,45 @@ export default function AssignFromQueueModal({
 }: AssignFromQueueModalProps) {
   const router = useRouter();
   const { session } = useAuthSession();
+
   const [selectedBedId, setSelectedBedId] = useState<string>("");
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
 
-  const availableBeds = beds.filter((bed) => bed.status === "available");
-  const occupiedBeds = beds.filter((bed) => bed.status === "occupied");
+  const [isEditingTriage, setIsEditingTriage] = useState(false);
+  const [triageDraft, setTriageDraft] = useState<Patient["priority"]>(
+    patient.priority
+  );
+  const [isUpdatingTriage, setIsUpdatingTriage] = useState(false);
+  const [triageError, setTriageError] = useState("");
 
-  const handleAssign = async (forceAssign: boolean = false) => {
-    if (!selectedBedId) {
-      setErrorMessage("Please select a bed");
-      return;
+  const availableBeds = beds.filter((b) => b.status === "available");
+  const occupiedBeds = beds.filter((b) => b.status === "occupied");
+
+  const canEditTriage = Boolean(wardId) && canSetTriage(session, wardId);
+
+  const handleSaveTriage = async () => {
+    const targetPatientId = (patient as any)._id || patient.id;
+    setTriageError("");
+    setIsUpdatingTriage(true);
+    try {
+      await updatePatient(targetPatientId, { priority: triageDraft }, session);
+      setIsEditingTriage(false);
+    } catch (err) {
+      setTriageError(
+        err instanceof Error ? err.message : "Failed to update triage"
+      );
+    } finally {
+      setIsUpdatingTriage(false);
     }
+  };
 
+  const handleAssign = async (force = false) => {
+    if (!selectedBedId) return setErrorMessage("Please select a bed");
     setErrorMessage("");
     setIsLoading(true);
-
     try {
-      if (forceAssign) {
+      if (force) {
         await forceAssignPatientToBed({
           wardId,
           bedId: selectedBedId,
@@ -60,94 +85,123 @@ export default function AssignFromQueueModal({
         });
       }
       onAssigned();
-      // Close modal and navigate back after successful assignment
-      setTimeout(() => {
-        onClose();
-        router.push(`/wards/${wardId}`);
-      }, 300);
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Failed to assign patient";
-      setErrorMessage(message);
+      onClose();
+      router.push(`/wards/${wardId}`);
+    } catch (err) {
+      setErrorMessage(
+        err instanceof Error ? err.message : "Failed to assign patient"
+      );
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const selectedBed = beds.find((bed) => bed.id === selectedBedId);
-
-  const handleCloseClick = (e: React.MouseEvent<HTMLButtonElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-    onClose();
   };
 
   const handleDischarge = async () => {
     setErrorMessage("");
     setIsLoading(true);
-
     try {
       await dischargePatientById(patient.id, session);
-      onAssigned(); // Trigger parent refresh
-      // Close modal and navigate back after successful discharge
-      setTimeout(() => {
-        onClose();
-        router.push(`/wards/${wardId}`);
-      }, 300);
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Failed to discharge patient";
-      setErrorMessage(message);
+      onAssigned();
+      onClose();
+      router.push(`/wards/${wardId}`);
+    } catch (err) {
+      setErrorMessage(
+        err instanceof Error ? err.message : "Failed to discharge patient"
+      );
     } finally {
       setIsLoading(false);
     }
   };
 
+  const selectedBed = beds.find((b) => b.id === selectedBedId);
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-white/70 p-4">
-      <div className="w-full max-w-2xl rounded-lg bg-white p-6 shadow-xl max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="w-full max-w-2xl rounded bg-white p-6 shadow max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-xl font-bold text-gray-800">
+          <h3 className="text-lg font-bold text-black">
             Assign Patient to Bed
           </h3>
-          <button
-            onClick={handleCloseClick}
-            className="text-gray-400 cursor-pointer hover:text-gray-600 text-2xl"
-            aria-label="Close"
-          >
+          <button onClick={onClose} className="text-xl text-black">
             ✕
           </button>
         </div>
 
-        {/* Patient Info */}
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-          <p className="text-sm text-gray-600 mb-1">Patient to assign:</p>
-          <p className="font-bold text-lg text-gray-800">{patient.name}</p>
-          <div className="flex gap-2 mt-2">
-            <span className="px-2 py-1 rounded text-xs text-gray-600 font-medium bg-gray-200">
-              {patient.age}y - {patient.ageGroup}
-            </span>
-            <span className="px-2 py-1 rounded text-xs font-medium bg-orange-200 text-orange-800">
-              {patient.priority}
-            </span>
-            <span className="px-2 py-1 rounded text-gray-600 text-xs font-medium bg-gray-200">
-              {patient.disease}
-            </span>
+        <div className="border rounded p-4 mb-6 bg-sky-50">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-black">Patient to assign</p>
+              <p className="font-semibold text-lg text-black">{patient.name}</p>
+              <div className="flex gap-2 mt-2">
+                <span className="px-2 py-1 rounded bg-gray-200 text-xs text-black">
+                  {patient.age}y - {patient.ageGroup}
+                </span>
+                <span className="px-2 py-1 rounded bg-gray-200 text-xs text-black">
+                  {patient.disease}
+                </span>
+              </div>
+            </div>
+            <div>
+              {!isEditingTriage ? (
+                <button
+                  onClick={() => canEditTriage && setIsEditingTriage(true)}
+                  className={`px-3 py-1 rounded text-sm bg-orange-200 text-black ${canEditTriage ? "cursor-pointer" : ""}`}
+                >
+                  {patient.priority}
+                </button>
+              ) : (
+                <div className="flex text-black items-center gap-2">
+                  <select
+                    value={triageDraft}
+                    onChange={(e) =>
+                      setTriageDraft(e.target.value as Patient["priority"])
+                    }
+                    className="border rounded px-2 py-1 text-sm"
+                  >
+                    <option value="Triage 1">Triage 1</option>
+                    <option value="Triage 2">Triage 2</option>
+                    <option value="Triage 3">Triage 3</option>
+                    <option value="Triage 4">Triage 4</option>
+                    <option value="Triage 5">Triage 5</option>
+                  </select>
+                  <button
+                    onClick={handleSaveTriage}
+                    disabled={
+                      isUpdatingTriage || triageDraft === patient.priority
+                    }
+                    className="bg-green-600 text-white px-3 py-1 rounded"
+                  >
+                    {isUpdatingTriage ? "..." : "✓"}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setIsEditingTriage(false);
+                      setTriageDraft(patient.priority);
+                      setTriageError("");
+                    }}
+                    className="bg-gray-300 px-3 py-1 rounded"
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
+              {triageError && (
+                <p className="text-xs text-red-600 mt-2">{triageError}</p>
+              )}
+            </div>
           </div>
           {patient.specialRequirements &&
             patient.specialRequirements.length > 0 && (
-              <p className="text-xs mt-2 text-gray-600">
-                <span className="font-semibold">Special needs:</span>{" "}
+              <p className="text-xs mt-3 text-black">
+                <strong>Special needs:</strong>{" "}
                 {patient.specialRequirements.join(", ")}
               </p>
             )}
         </div>
 
-        {/* Available Beds Section */}
         {availableBeds.length > 0 && (
           <div className="mb-6">
-            <h4 className="text-md font-bold text-gray-800 mb-3 flex items-center gap-2">
-              <span className="w-3 h-3 bg-green-500 rounded-full"></span>
+            <h4 className="font-semibold mb-2 text-black">
               Available Beds ({availableBeds.length})
             </h4>
             <div className="grid grid-cols-3 gap-2">
@@ -155,34 +209,26 @@ export default function AssignFromQueueModal({
                 <button
                   key={bed.id}
                   onClick={() => setSelectedBedId(bed.id)}
-                  className={`p-3 rounded-lg border-2 transition-all ${
-                    selectedBedId === bed.id
-                      ? "border-green-600 bg-green-50"
-                      : "border-gray-300 bg-white hover:border-green-400"
-                  }`}
+                  className={`p-3 border rounded ${selectedBedId === bed.id ? "border-green-600 bg-green-50" : "border-gray-200"}`}
                 >
-                  <p className="font-semibold text-gray-800">
+                  <div className="font-semibold text-black">
                     {bed.type === "ICU"
-                  ? `ICU Bed ${bed.bedNumber}`
-                  : `Bed ${bed.bedNumber}`}
-                  </p>
-                  <p className="text-xs text-green-600 font-medium">
-                    Available
-                  </p>
+                      ? `ICU Bed ${bed.bedNumber}`
+                      : `Bed ${bed.bedNumber}`}
+                  </div>
+                  <div className="text-xs text-green-600">Available</div>
                 </button>
               ))}
             </div>
           </div>
         )}
 
-        {/* Occupied Beds Section */}
         {occupiedBeds.length > 0 && (
           <div className="mb-6">
-            <h4 className="text-md font-bold text-gray-800 mb-3 flex items-center gap-2">
-              <span className="w-3 h-3 bg-red-500 rounded-full"></span>
+            <h4 className="font-semibold mb-2 text-black">
               Occupied Beds ({occupiedBeds.length}) - Force Assign
             </h4>
-            <p className="text-xs text-gray-600 mb-3">
+            <p className="text-xs text-black mb-2">
               ⚠️ Force assigning will move the current patient back to the queue
             </p>
             <div className="grid grid-cols-2 gap-2">
@@ -190,22 +236,18 @@ export default function AssignFromQueueModal({
                 <button
                   key={bed.id}
                   onClick={() => setSelectedBedId(bed.id)}
-                  className={`p-3 rounded-lg border-2 transition-all text-left ${
-                    selectedBedId === bed.id
-                      ? "border-orange-600 bg-orange-50"
-                      : "border-gray-300 bg-white hover:border-orange-400"
-                  }`}
+                  className={`p-3 border rounded text-left ${selectedBedId === bed.id ? "border-orange-600 bg-orange-50" : "border-gray-200"}`}
                 >
-                  <p className="font-semibold text-gray-800">
+                  <div className="font-semibold text-black">
                     {bed.type === "ICU"
                       ? `ICU Bed ${bed.bedNumber}`
                       : `Bed ${bed.bedNumber}`}
-                  </p>
-                  <p className="text-xs text-red-600 font-medium">Occupied</p>
+                  </div>
+                  <div className="text-xs text-red-600">Occupied</div>
                   {bed.patient && (
-                    <p className="text-xs text-gray-600 mt-1 truncate">
+                    <div className="text-xs text-black mt-1 truncate">
                       Current: {bed.patient.name}
-                    </p>
+                    </div>
                   )}
                 </button>
               ))}
@@ -214,67 +256,43 @@ export default function AssignFromQueueModal({
         )}
 
         {availableBeds.length === 0 && occupiedBeds.length === 0 && (
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
-            <p className="text-yellow-800">
-              No beds available in {wardName}. All beds may be under
-              maintenance.
-            </p>
+          <div className="bg-yellow-50 border rounded p-4 mb-6">
+            No beds available in {wardName}.
           </div>
         )}
 
         {errorMessage && (
-          <div className="rounded-lg border border-red-200 bg-red-50 p-3 mb-4">
-            <p className="text-sm font-semibold text-red-700">{errorMessage}</p>
-          </div>
+          <div className="text-sm text-red-700 mb-4">{errorMessage}</div>
         )}
 
-        {/* Action Buttons */}
-        <div className="space-y-3">
-          <div className="flex gap-3">
-            {selectedBed && selectedBed.status === "available" ? (
-              <button
-                onClick={() => handleAssign(false)}
-                disabled={isLoading || !selectedBedId}
-                className="flex-1 rounded-lg bg-green-600 px-4 py-3 text-white font-semibold hover:bg-green-700 disabled:bg-green-300 disabled:cursor-not-allowed"
-              >
-                {isLoading
-                  ? "Assigning..."
-                  : `Assign to Bed ${selectedBed.bedNumber}`}
-              </button>
-            ) : selectedBed && selectedBed.status === "occupied" ? (
-              <button
-                onClick={() => handleAssign(true)}
-                disabled={isLoading || !selectedBedId}
-                className="flex-1 rounded-lg bg-orange-600 px-4 py-3 text-white font-semibold hover:bg-orange-700 disabled:bg-orange-300 disabled:cursor-not-allowed"
-              >
-                {isLoading
-                  ? "Force Assigning..."
-                  : `Force Assign to Bed ${selectedBed.bedNumber}`}
-              </button>
-            ) : (
-              <button
-                disabled
-                className="flex-1 rounded-lg bg-gray-300 px-4 py-3 text-gray-500 font-semibold cursor-not-allowed"
-              >
-                Select a bed first
-              </button>
-            )}
-            <button
-              onClick={handleCloseClick}
-              disabled={isLoading}
-              className="flex-1 rounded-lg bg-gray-300 px-4 py-3 text-gray-800 font-semibold hover:bg-gray-400 disabled:bg-gray-200 disabled:cursor-not-allowed"
-            >
-              Cancel
-            </button>
-          </div>
+        <div className="flex gap-3">
           <button
-            onClick={handleDischarge}
-            disabled={isLoading}
-            className="w-full rounded-lg bg-red-600 px-4 py-3 text-white font-semibold hover:bg-red-700 disabled:bg-red-300 disabled:cursor-not-allowed"
+            onClick={() => handleAssign(false)}
+            disabled={isLoading || !selectedBedId}
+            className="flex-1 bg-green-600 text-white py-2 rounded"
           >
-            {isLoading ? "Discharging..." : "Discharge Patient"}
+            {isLoading
+              ? "Assigning..."
+              : selectedBed
+                ? `Assign to ${selectedBed.bedNumber}`
+                : "Select a bed"}
+          </button>
+          <button
+            onClick={() => handleAssign(true)}
+            disabled={isLoading || !selectedBedId}
+            className="flex-1 bg-orange-600 text-white py-2 rounded"
+          >
+            {isLoading ? "Force..." : "Force Assign"}
           </button>
         </div>
+
+        <button
+          onClick={handleDischarge}
+          disabled={isLoading}
+          className="mt-3 w-full bg-red-600 text-white py-2 rounded"
+        >
+          {isLoading ? "Discharging..." : "Discharge Patient"}
+        </button>
       </div>
     </div>
   );

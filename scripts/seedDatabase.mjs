@@ -136,7 +136,9 @@ function generatePatient(patientId, wardId, status) {
   const firstName = randomItem(FIRST_NAMES);
   const lastName = randomItem(LAST_NAMES);
   const age = randomInt(5, 90);
-  const admissionTime = new Date(Date.now() - randomInt(5, 72) * 60 * 60 * 1000);
+  const admissionTime = new Date(
+    Date.now() - randomInt(5, 72) * 60 * 60 * 1000
+  );
 
   const includeRequirements = Math.random() < 0.35;
   const requirements = includeRequirements
@@ -180,22 +182,62 @@ async function resetDatabase() {
       db.collection("patients").deleteMany({}),
     ]);
 
-    const wardNames = [
-      "Ward A - General Medicine",
-      "Ward B - Surgical",
-      "Ward C - Cardiac",
-      "Ward D - ICU",
+    const wardConfigs = [
+      {
+        wardId: "ward-3",
+        name: "Ward 3 - Surgical",
+        normalBeds: 32,
+        icuBeds: 5,
+        occupiedRate: 0.68,
+        maintenanceBeds: 2,
+        queuePatients: 11,
+      },
+      {
+        wardId: "ward-4",
+        name: "Ward 4 - Surgical",
+        normalBeds: 30,
+        icuBeds: 6,
+        occupiedRate: 0.62,
+        maintenanceBeds: 2,
+        queuePatients: 9,
+      },
+      {
+        wardId: "ward-5",
+        name: "Ward 5 - Surgical",
+        normalBeds: 44,
+        icuBeds: 4,
+        occupiedRate: 0.7,
+        maintenanceBeds: 2,
+        queuePatients: 14,
+      },
+      {
+        wardId: "ward-6",
+        name: "Ward 6 - Surgical",
+        normalBeds: 28,
+        icuBeds: 8,
+        occupiedRate: 0.65,
+        maintenanceBeds: 2,
+        queuePatients: 10,
+      },
     ];
 
     let totalPatients = 0;
     let totalBeds = 0;
 
-    for (let wardIndex = 0; wardIndex < wardNames.length; wardIndex += 1) {
-      const wardId = `ward-${wardIndex}`;
-      const wardName = wardNames[wardIndex];
-      const bedCount = 25;
-      const occupiedBeds = randomInt(15, 18);
-      const queuePatients = randomInt(4, 10);
+    for (const wardConfig of wardConfigs) {
+      const wardId = wardConfig.wardId;
+      const wardName = wardConfig.name;
+      const normalBeds = wardConfig.normalBeds;
+      const icuBeds = wardConfig.icuBeds;
+      const bedCount = normalBeds + icuBeds;
+      const occupiedBeds = Math.max(
+        1,
+        Math.min(
+          bedCount - wardConfig.maintenanceBeds,
+          Math.round(bedCount * wardConfig.occupiedRate)
+        )
+      );
+      const queuePatients = wardConfig.queuePatients;
 
       const admitted = [];
       const queued = [];
@@ -211,13 +253,37 @@ async function resetDatabase() {
         queued.push(generatePatient(patientId, wardId, "queued"));
       }
 
-      for (let bedNumber = 1; bedNumber <= bedCount; bedNumber += 1) {
-        const admittedPatient = admitted[bedNumber - 1];
+      const bedBlueprints = [];
+
+      for (let bedNumber = 1; bedNumber <= normalBeds; bedNumber += 1) {
+        bedBlueprints.push({
+          bedId: `${wardId}-normal-${bedNumber}`,
+          bedNumber,
+          type: "NORMAL",
+        });
+      }
+
+      for (let bedNumber = 1; bedNumber <= icuBeds; bedNumber += 1) {
+        bedBlueprints.push({
+          bedId: `${wardId}-icu-${bedNumber}`,
+          bedNumber,
+          type: "ICU",
+        });
+      }
+
+      const maintenanceStart = occupiedBeds;
+      const maintenanceEnd = occupiedBeds + wardConfig.maintenanceBeds;
+
+      for (let index = 0; index < bedBlueprints.length; index += 1) {
+        const blueprint = bedBlueprints[index];
+        const admittedPatient = admitted[index];
+
         if (admittedPatient) {
           beds.push({
-            bedId: `${wardId}-bed-${bedNumber}`,
+            bedId: blueprint.bedId,
             wardId,
-            bedNumber,
+            bedNumber: blueprint.bedNumber,
+            type: blueprint.type,
             status: "occupied",
             patientId: admittedPatient.id,
             createdAt: new Date(),
@@ -226,12 +292,15 @@ async function resetDatabase() {
           continue;
         }
 
-        const maintenance = Math.random() < 0.08;
+        const isMaintenance =
+          index >= maintenanceStart && index < maintenanceEnd;
+
         beds.push({
-          bedId: `${wardId}-bed-${bedNumber}`,
+          bedId: blueprint.bedId,
           wardId,
-          bedNumber,
-          status: maintenance ? "maintenance" : "available",
+          bedNumber: blueprint.bedNumber,
+          type: blueprint.type,
+          status: isMaintenance ? "maintenance" : "available",
           patientId: null,
           createdAt: new Date(),
           updatedAt: new Date(),
@@ -242,6 +311,8 @@ async function resetDatabase() {
         wardId,
         name: wardName,
         totalBeds: bedCount,
+        normalBeds,
+        icuBeds,
         createdAt: new Date(),
         updatedAt: new Date(),
       });
@@ -256,12 +327,16 @@ async function resetDatabase() {
       totalBeds += beds.length;
 
       console.log(
-        `Seeded ${wardName}: ${admitted.length} admitted, ${queued.length} queued, ${beds.length} beds`,
+        `Seeded ${wardName}: ${admitted.length} admitted, ${queued.length} queued, ${beds.length} beds`
       );
     }
 
-    console.log(`Database reset complete. Patients: ${totalPatients}, Beds: ${totalBeds}`);
-    console.log("All patients now use triage levels Triage 1 to Triage 5 only.");
+    console.log(
+      `Database reset complete. Patients: ${totalPatients}, Beds: ${totalBeds}`
+    );
+    console.log(
+      "All patients now use triage levels Triage 1 to Triage 5 only."
+    );
   } finally {
     await client.close();
   }
