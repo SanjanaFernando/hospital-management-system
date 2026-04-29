@@ -102,6 +102,7 @@ export async function getWardsWithPatients(): Promise<Ward[]> {
             status:
               (bed?.status as "available" | "occupied" | "maintenance") ||
               "available",
+            type: (bed?.type as "ICU" | "NORMAL") || "NORMAL",
             patient:
               bed?.patientId && admittedPatients.length > 0
                 ? (admittedPatients.find(
@@ -208,6 +209,7 @@ export async function getWardWithPatients(
       status:
         (bed?.status as "available" | "occupied" | "maintenance") ||
         "available",
+      type: (bed?.type as "ICU" | "NORMAL") || "NORMAL",
       patient:
         bed?.patientId && admittedPatients.length > 0
           ? (admittedPatients.find(
@@ -367,7 +369,8 @@ export async function updateBedStatus(
 
 export async function addBedToWard(
   wardId: string,
-  actor: UserSession
+  actor: UserSession,
+  type: "normal" | "icu" = "normal"
 ): Promise<{ success: boolean; bedId?: string; error?: string }> {
   try {
     if (!wardId) {
@@ -377,6 +380,7 @@ export async function addBedToWard(
     const session = normalizeSession(actor);
     const { db } = await connectToDatabase();
 
+    // 🔍 Find ward
     let ward = await db.collection("wards").findOne({ wardId });
 
     if (!ward && ObjectId.isValid(wardId)) {
@@ -392,14 +396,19 @@ export async function addBedToWard(
     const wardDoc = serializeDoc(ward) as Record<string, unknown>;
     const effectiveWardId = (wardDoc?.wardId as string) || wardId;
 
+    // 🔐 Permission check
     assertPermission(
       canManageWardActions(session, effectiveWardId),
       "You do not have permission to add beds in this ward."
     );
 
+    // 🛏️ Determine bed type
+    const bedType = type === "icu" ? "ICU" : "NORMAL";
+
+    // 🔢 Get last bed number (separate numbering per type)
     const lastBed = await db
       .collection("beds")
-      .find({ wardId: effectiveWardId })
+      .find({ wardId: effectiveWardId, type: bedType })
       .sort({ bedNumber: -1 })
       .limit(1)
       .next();
@@ -407,25 +416,30 @@ export async function addBedToWard(
     const lastBedDoc = lastBed
       ? (serializeDoc(lastBed) as Record<string, unknown>)
       : null;
-    const nextBedNumber = ((lastBedDoc?.bedNumber as number) || 0) + 1;
-    const nextBedId = `${effectiveWardId}-bed-${nextBedNumber}`;
 
+    const nextBedNumber = ((lastBedDoc?.bedNumber as number) || 0) + 1;
+
+    // 🆔 Create bed ID
+    const prefix = type === "icu" ? "icu" : "bed";
+    const nextBedId = `${effectiveWardId}-${prefix}-${nextBedNumber}`;
+
+    // 💾 Insert new bed
     await db.collection("beds").insertOne({
       bedId: nextBedId,
       wardId: effectiveWardId,
       bedNumber: nextBedNumber,
+      type: bedType, 
       status: "available",
       patientId: null,
       createdAt: new Date(),
       updatedAt: new Date(),
     });
 
-    await db
-      .collection("wards")
-      .updateOne(
-        { wardId: effectiveWardId },
-        { $set: { updatedAt: new Date() } }
-      );
+    // 📝 Update ward timestamp
+    await db.collection("wards").updateOne(
+      { wardId: effectiveWardId },
+      { $set: { updatedAt: new Date() } }
+    );
 
     return { success: true, bedId: nextBedId };
   } catch (error) {

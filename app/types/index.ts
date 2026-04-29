@@ -42,6 +42,7 @@ export interface Bed {
   bedNumber: number;
   status: BedStatus;
   patient?: Patient;
+  type: "ICU" | "NORMAL"; 
 }
 
 export interface Ward {

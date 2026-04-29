@@ -21,6 +21,25 @@ const statusLabels = {
   maintenance: "Maintenance",
 };
 
+const getBedColor = (bed: Bed) => {
+  // 🔴 ICU AVAILABLE
+  if (bed.type === "ICU" && bed.status === "available") {
+    return "bg-red-500 hover:bg-red-600";
+  }
+
+  // 🟣 ICU OCCUPIED
+  if (bed.type === "ICU" && bed.status === "occupied") {
+    return "bg-purple-500 hover:bg-purple-600";
+  }
+
+  // 💗 ICU MAINTENANCE (light pink)
+  if (bed.type === "ICU" && bed.status === "maintenance") {
+    return "bg-pink-200 hover:bg-pink-300 text-gray-800";
+  }
+
+  // 🟢🟦🟡 NORMAL BEDS
+  return statusColors[bed.status];
+};
 export default function BedGrid({
   beds,
   wardName,
@@ -43,11 +62,17 @@ export default function BedGrid({
           <div
             key={bed.id}
             onClick={() => handleBedClick(bed)}
-            className={`${statusColors[bed.status]} text-white rounded-lg p-4 transition-all shadow-md flex flex-col items-center justify-center min-h-[120px] h-full ${canInteract ? "cursor-pointer hover:shadow-lg" : "cursor-not-allowed opacity-70"}`}
+            className={`${getBedColor(bed)} text-white rounded-lg p-4 transition-all shadow-md flex flex-col items-center justify-center min-h-[120px] h-full ${
+              canInteract ? "cursor-pointer hover:shadow-lg" : "cursor-not-allowed opacity-70"
+            }`}
             title={`${statusLabels[bed.status]}${bed.patient ? ` - ${bed.patient.name}` : ""}`}
           >
             <div className="text-center">
-              <p className="text-sm font-bold">Bed {bed.bedNumber}</p>
+              <p className="text-sm font-bold">
+                {bed.type === "ICU"
+                  ? `ICU Bed ${bed.bedNumber}`
+                  : `Bed ${bed.bedNumber}`}
+              </p>
               <p className="text-xs mt-1">{statusLabels[bed.status]}</p>
               {bed.patient && (
                 <>

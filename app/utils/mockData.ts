@@ -168,12 +168,15 @@ export function initializeWards(): Ward[] {
     const beds = Array.from({ length: 25 }, (_, bedIndex) => {
       const bedNumber = bedIndex + 1;
       const patient = admittedPatients[bedIndex];
+      const isICU = Math.random() < 0.2; // 20% ICU beds
+      const bedType: "ICU" | "NORMAL" = isICU ? "ICU" : "NORMAL";
 
       if (patient) {
         return {
           id: `${wardIndex}-${bedIndex}`,
           bedNumber,
           status: "occupied" as const,
+          type: bedType,
           patient,
         };
       }
@@ -186,6 +189,7 @@ export function initializeWards(): Ward[] {
         status: isMaintenance
           ? ("maintenance" as const)
           : ("available" as const),
+        type: bedType,
       };
     });
 

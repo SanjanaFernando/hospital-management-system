@@ -64,28 +64,32 @@ export default function WardPage() {
     router.push(`/wards/${wardId}/${bed.id}`);
   };
 
-  const handleAddBed = async () => {
-    if (!ward) return;
+  const handleAddBed = async (type: "normal" | "icu") => {
+  if (!ward) return;
 
-    setError("");
-    setIsAddingBed(true);
+  setError("");
+  setIsAddingBed(true);
 
-    try {
-      const result = await addBedToWard(ward.wardId || ward.id, session);
-      if (!result.success) {
-        setError(result.error || "Failed to add bed");
-        return;
-      }
+  try {
+    const result = await addBedToWard(
+      ward.wardId || ward.id,
+      session,
+      type 
+    );
 
-      await loadWard();
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Unknown error";
-      setError(message);
-    } finally {
-      setIsAddingBed(false);
+    if (!result.success) {
+      setError(result.error || "Failed to add bed");
+      return;
     }
-  };
 
+    await loadWard();
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    setError(message);
+  } finally {
+    setIsAddingBed(false);
+  }
+};
   if (isLoading) {
     return <MedicalCrossLoader message="Loading Ward..." fullScreen />;
   }
@@ -190,17 +194,31 @@ export default function WardPage() {
           <div className="bg-white rounded-lg shadow-md p-6">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-2xl font-bold text-gray-800">Beds</h2>
-              <button
-                onClick={handleAddBed}
-                disabled={isAddingBed || !canManageWard}
-                className="px-3 py-1 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors disabled:bg-blue-300 disabled:cursor-not-allowed"
-              >
-                {!canManageWard
-                  ? "Not allowed"
-                  : isAddingBed
+              <div className="relative group">
+                <button
+                  disabled={isAddingBed || !canManageWard}
+                  className="px-3 py-1 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors disabled:bg-blue-300 disabled:cursor-not-allowed"
+                >
+                  {!canManageWard
+                    ? "Not allowed"
+                    : isAddingBed
                     ? "Adding..."
                     : "+ Add Bed"}
-              </button>
+                </button>
+
+                {/* Dropdown */}
+                <div className="absolute right-0 mt-2 w-40 bg-white text-gray-700 border rounded-lg shadow-lg opacity-0 group-hover:opacity-100 invisible group-hover:visible transition-all duration-200 z-10">
+                  
+                  <button onClick={() => handleAddBed("normal")}>
+                    Add Normal Bed
+                  </button>
+
+                  <button onClick={() => handleAddBed("icu")}>
+                    Add ICU Bed
+                  </button>
+
+                </div>
+              </div>
             </div>
             {ward?.beds && ward.beds.length > 0 ? (
               <BedGrid
