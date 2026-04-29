@@ -162,7 +162,9 @@ export default function AssignFromQueueModal({
                   }`}
                 >
                   <p className="font-semibold text-gray-800">
-                    Bed {bed.bedNumber}
+                    {bed.type === "ICU"
+                  ? `ICU Bed ${bed.bedNumber}`
+                  : `Bed ${bed.bedNumber}`}
                   </p>
                   <p className="text-xs text-green-600 font-medium">
                     Available
@@ -195,7 +197,9 @@ export default function AssignFromQueueModal({
                   }`}
                 >
                   <p className="font-semibold text-gray-800">
-                    Bed {bed.bedNumber}
+                    {bed.type === "ICU"
+                      ? `ICU Bed ${bed.bedNumber}`
+                      : `Bed ${bed.bedNumber}`}
                   </p>
                   <p className="text-xs text-red-600 font-medium">Occupied</p>
                   {bed.patient && (
