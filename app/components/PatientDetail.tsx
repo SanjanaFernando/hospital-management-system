@@ -5,11 +5,14 @@ import { Patient } from "@/app/types";
 import DischargePatient from "./DischargePatient";
 import { movePatientToQueue } from "@/app/actions/patientActions";
 import { useAuthSession } from "@/app/context/AuthSessionContext";
+import { canSetTriage } from "@/lib/rbac";
+import { updatePatient } from "@/app/utils/api";
 
 interface PatientDetailProps {
   patient: Patient;
   onDischargeSuccess?: () => void;
   onMoveToQueueSuccess?: () => void;
+  onPatientUpdated?: () => void;
   canManageActions?: boolean;
 }
 
@@ -31,12 +34,19 @@ export default function PatientDetail({
   patient,
   onDischargeSuccess,
   onMoveToQueueSuccess,
+  onPatientUpdated,
   canManageActions = true,
 }: PatientDetailProps) {
   const { session } = useAuthSession();
   const [showDischargeForm, setShowDischargeForm] = useState(false);
   const [isMovingToQueue, setIsMovingToQueue] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [isEditingTriage, setIsEditingTriage] = useState(false);
+  const [triageDraft, setTriageDraft] = useState<Patient["priority"]>(
+    patient.priority
+  );
+  const [isUpdatingTriage, setIsUpdatingTriage] = useState(false);
+  const [triageError, setTriageError] = useState("");
 
   const admissionDate = patient.admissionTime
     ? new Date(patient.admissionTime)
@@ -67,6 +77,32 @@ export default function PatientDetail({
     }
   };
 
+  const handleSaveTriage = async () => {
+    const targetPatientId = patient._id || patient.id;
+
+    setTriageError("");
+    setIsUpdatingTriage(true);
+
+    try {
+      await updatePatient(
+        targetPatientId,
+        {
+          priority: triageDraft,
+        },
+        session
+      );
+
+      setIsEditingTriage(false);
+      onPatientUpdated?.();
+    } catch (error) {
+      setTriageError(
+        error instanceof Error ? error.message : "Failed to update triage"
+      );
+    } finally {
+      setIsUpdatingTriage(false);
+    }
+  };
+
   if (showDischargeForm) {
     return (
       <DischargePatient
@@ -78,6 +114,9 @@ export default function PatientDetail({
     );
   }
 
+  const canEditTriage =
+    Boolean(patient.wardId) && canSetTriage(session, patient.wardId || "");
+
   return (
     <div className="bg-linear-to-br from-blue-50 to-indigo-50 rounded-lg p-6 border border-blue-200">
       <div className="flex justify-between items-start mb-4">
@@ -86,11 +125,54 @@ export default function PatientDetail({
           <p className="text-gray-600 text-sm">Patient ID: {patient.id}</p>
         </div>
         <div className="flex gap-2">
-          <span
-            className={`${priorityColors[patient.priority]} text-white px-3 py-1 rounded-full text-sm font-semibold`}
-          >
-            {patient.priority}
-          </span>
+          {!isEditingTriage ? (
+            <span
+              onClick={() => canEditTriage && setIsEditingTriage(true)}
+              className={`${priorityColors[patient.priority]} text-white px-3 py-1 rounded-full text-sm font-semibold ${
+                canEditTriage
+                  ? "cursor-pointer hover:opacity-80 transition-opacity"
+                  : ""
+              }`}
+            >
+              {patient.priority}
+            </span>
+          ) : (
+            <div className="flex gap-2">
+              <select
+                value={triageDraft}
+                onChange={(e) =>
+                  setTriageDraft(e.target.value as Patient["priority"])
+                }
+                className="rounded border border-gray-300 bg-white px-3 py-1 text-sm text-gray-900"
+              >
+                <option value="Triage 1">Triage 1</option>
+                <option value="Triage 2">Triage 2</option>
+                <option value="Triage 3">Triage 3</option>
+                <option value="Triage 4">Triage 4</option>
+                <option value="Triage 5">Triage 5</option>
+              </select>
+              <button
+                type="button"
+                onClick={handleSaveTriage}
+                disabled={isUpdatingTriage || triageDraft === patient.priority}
+                className="rounded bg-green-600 px-3 py-1 text-sm font-semibold text-white hover:bg-green-700 disabled:bg-green-300 disabled:cursor-not-allowed transition-colors"
+              >
+                {isUpdatingTriage ? "..." : "✓"}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsEditingTriage(false);
+                  setTriageDraft(patient.priority);
+                  setTriageError("");
+                }}
+                disabled={isUpdatingTriage}
+                className="rounded bg-gray-400 px-3 py-1 text-sm font-semibold text-white hover:bg-gray-500 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+          )}
           <span
             className={`${ageGroupColors[patient.ageGroup]} text-white px-3 py-1 rounded-full text-sm font-semibold`}
           >
@@ -119,6 +201,12 @@ export default function PatientDetail({
       {errorMessage && (
         <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
           <p className="text-red-800 text-sm">{errorMessage}</p>
+        </div>
+      )}
+
+      {triageError && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+          <p className="text-red-800 text-sm">{triageError}</p>
         </div>
       )}
 
