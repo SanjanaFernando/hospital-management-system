@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
 import { Ward } from "@/app/types";
@@ -9,17 +9,20 @@ import PatientRegistrationForm from "@/app/components/PatientRegistrationForm";
 import PatientList from "@/app/components/PatientList";
 import MedicalCrossLoader from "@/app/components/MedicalCrossLoader";
 import { getWardWithPatients } from "@/app/actions/wardActions";
+import { useAuthSession } from "@/app/context/AuthSessionContext";
+import { canAccessWard, canRegisterPatient } from "@/lib/rbac";
 
 export default function WardPatientsPage() {
   const params = useParams<{ wardId: string }>();
   const wardId = params?.wardId;
+  const { session } = useAuthSession();
 
   const [ward, setWard] = useState<Ward | null>(null);
   const [showRegistrationForm, setShowRegistrationForm] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const loadWard = async () => {
+  const loadWard = useCallback(async () => {
     if (!wardId) return;
     setIsLoading(true);
     setError("");
@@ -36,11 +39,11 @@ export default function WardPatientsPage() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [wardId]);
 
   useEffect(() => {
     loadWard();
-  }, [wardId]);
+  }, [loadWard]);
 
   const handlePatientRegistered = () => {
     setShowRegistrationForm(false);
@@ -66,6 +69,25 @@ export default function WardPatientsPage() {
             <h1 className="text-2xl font-bold text-gray-800">Ward not found</h1>
             {error && <p className="text-gray-600 mt-2">{error}</p>}
           </div>
+        </div>
+      </div>
+    );
+  }
+
+  const resolvedWardId = ward.wardId || ward.id;
+  const wardAccessAllowed = canAccessWard(session, resolvedWardId);
+  const canRegisterInWard = canRegisterPatient(session, resolvedWardId);
+
+  if (!wardAccessAllowed) {
+    return (
+      <div className="min-h-screen bg-linear-to-br from-blue-50 to-indigo-100 p-8">
+        <div className="max-w-4xl mx-auto bg-white rounded-lg shadow-md p-8">
+          <h1 className="text-2xl font-bold text-gray-800 mb-2">
+            Access denied
+          </h1>
+          <p className="text-gray-600">
+            Your role is scoped to a different ward.
+          </p>
         </div>
       </div>
     );
@@ -99,13 +121,18 @@ export default function WardPatientsPage() {
           </h2>
           <button
             onClick={() => setShowRegistrationForm((prev) => !prev)}
-            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-semibold"
+            disabled={!canRegisterInWard}
+            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-semibold disabled:bg-green-300 disabled:cursor-not-allowed"
           >
-            {showRegistrationForm ? "Close Form" : "+ Register Patient"}
+            {!canRegisterInWard
+              ? "Registration blocked"
+              : showRegistrationForm
+                ? "Close Form"
+                : "+ Register Patient"}
           </button>
         </div>
 
-        {showRegistrationForm && (
+        {showRegistrationForm && canRegisterInWard && (
           <div className="mb-8">
             <PatientRegistrationForm
               wardId={ward.wardId || ward.id}
@@ -115,9 +142,13 @@ export default function WardPatientsPage() {
           </div>
         )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <PatientList title="Admitted Patients" patients={ward.patients} />
           <PatientList title="Queued Patients" patients={ward.patientQueue} />
+          <PatientList
+            title="Discharged Patients"
+            patients={ward.dischargedPatients || []}
+          />
         </div>
       </div>
     </div>

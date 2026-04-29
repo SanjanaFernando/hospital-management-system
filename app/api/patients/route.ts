@@ -1,14 +1,23 @@
 import { connectToDatabase } from "@/lib/mongodb";
 import { NextResponse, NextRequest } from "next/server";
+import {
+  canAccessWard,
+  canRegisterPatient,
+  canSetTriage,
+  getSessionFromHeaders,
+} from "@/lib/rbac";
 
 export async function GET(request: NextRequest) {
   try {
+    const session = getSessionFromHeaders(request.headers);
     const { db } = await connectToDatabase();
     const { searchParams } = new URL(request.url);
     const wardId = searchParams.get("wardId");
 
     const query: Record<string, string> = {};
-    if (wardId) {
+    if (session.role !== "admin") {
+      query.wardId = session.wardId || "";
+    } else if (wardId) {
       query.wardId = wardId;
     }
 
@@ -21,13 +30,14 @@ export async function GET(request: NextRequest) {
     console.error("Error fetching patients:", errorMessage);
     return NextResponse.json(
       { error: "Failed to fetch patients", details: errorMessage },
-      { status: 500 },
+      { status: 500 }
     );
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
+    const session = getSessionFromHeaders(request.headers);
     const { db } = await connectToDatabase();
     const body = await request.json();
 
@@ -35,8 +45,34 @@ export async function POST(request: NextRequest) {
     if (!body.name || !body.age || !body.disease) {
       return NextResponse.json(
         { error: "Missing required fields: name, age, disease" },
-        { status: 400 },
+        { status: 400 }
       );
+    }
+
+    if (!body.wardId) {
+      return NextResponse.json(
+        { error: "Ward ID is required" },
+        { status: 400 }
+      );
+    }
+
+    if (!canAccessWard(session, body.wardId)) {
+      return NextResponse.json(
+        { error: "You cannot register patients for this ward" },
+        { status: 403 }
+      );
+    }
+
+    if (!canRegisterPatient(session, body.wardId)) {
+      return NextResponse.json(
+        { error: "Your role cannot register patients" },
+        { status: 403 }
+      );
+    }
+
+    if (!canSetTriage(session, body.wardId)) {
+      body.priority = "Triage 5";
+      body.triageRequested = true;
     }
 
     const result = await db.collection("patients").insertOne({
@@ -47,7 +83,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(
       { success: true, insertedId: result.insertedId },
-      { status: 201 },
+      { status: 201 }
     );
   } catch (error) {
     const errorMessage =
@@ -55,7 +91,7 @@ export async function POST(request: NextRequest) {
     console.error("Error creating patient:", errorMessage);
     return NextResponse.json(
       { error: "Failed to create patient", details: errorMessage },
-      { status: 500 },
+      { status: 500 }
     );
   }
 }

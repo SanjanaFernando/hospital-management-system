@@ -1,13 +1,12 @@
 "use client";
 
-import { Bed, Patient } from "@/app/types";
-import { useState } from "react";
+import { Bed } from "@/app/types";
 
 interface BedGridProps {
   beds: Bed[];
   wardName: string;
-  onDischargeSuccess?: () => void;
   onAvailableBedClick?: (bed: Bed) => void;
+  canInteract?: boolean;
 }
 
 const statusColors = {
@@ -22,30 +21,60 @@ const statusLabels = {
   maintenance: "Maintenance",
 };
 
+const getBedColor = (bed: Bed) => {
+  // 🔴 ICU AVAILABLE
+  if (bed.type === "ICU" && bed.status === "available") {
+    return "bg-red-500 hover:bg-red-600";
+  }
+
+  // 🟣 ICU OCCUPIED
+  if (bed.type === "ICU" && bed.status === "occupied") {
+    return "bg-purple-500 hover:bg-purple-600";
+  }
+
+  // 💗 ICU MAINTENANCE (light pink)
+  if (bed.type === "ICU" && bed.status === "maintenance") {
+    return "bg-pink-500 hover:bg-pink-300 text-gray-800";
+  }
+
+  // 🟢🟦🟡 NORMAL BEDS
+  return statusColors[bed.status];
+};
 export default function BedGrid({
   beds,
   wardName,
-  onDischargeSuccess,
   onAvailableBedClick,
+  canInteract = true,
 }: BedGridProps) {
   const handleBedClick = (bed: Bed) => {
-    // Navigate to bed detail page for all beds
+    if (!canInteract) {
+      return;
+    }
+
     onAvailableBedClick?.(bed);
   };
 
   return (
-    <div className="w-full">
+    <div className="w-full ">
       <h3 className="text-lg font-semibold mb-4 text-gray-800">{wardName}</h3>
       <div className="grid grid-cols-5 gap-3">
         {beds.map((bed) => (
           <div
             key={bed.id}
             onClick={() => handleBedClick(bed)}
-            className={`${statusColors[bed.status]} text-white rounded-lg p-4 cursor-pointer transition-all shadow-md hover:shadow-lg flex flex-col items-center justify-center min-h-[120px] h-full`}
+            className={`${getBedColor(bed)} text-white rounded-lg p-4 transition-all shadow-md flex flex-col items-center justify-center min-h-[120px] h-full ${
+              canInteract
+                ? "cursor-pointer hover:shadow-lg"
+                : "cursor-not-allowed opacity-70"
+            }`}
             title={`${statusLabels[bed.status]}${bed.patient ? ` - ${bed.patient.name}` : ""}`}
           >
             <div className="text-center">
-              <p className="text-sm font-bold">Bed {bed.bedNumber}</p>
+              <p className="text-sm font-bold">
+                {bed.type === "ICU"
+                  ? `ICU Bed ${bed.bedNumber}`
+                  : `Bed ${bed.bedNumber}`}
+              </p>
               <p className="text-xs mt-1">{statusLabels[bed.status]}</p>
               {bed.patient && (
                 <>

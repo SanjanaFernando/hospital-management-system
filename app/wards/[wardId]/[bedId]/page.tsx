@@ -12,11 +12,23 @@ import {
   getWardWithPatients,
   updateBedStatus,
 } from "@/app/actions/wardActions";
+import { useAuthSession } from "@/app/context/AuthSessionContext";
+import {
+  canAccessWard,
+  canAssignOrDischargePatient,
+  canUpdateBedStatus,
+} from "@/lib/rbac";
+import {
+  CLIENT_CACHE_TTL,
+  getClientCache,
+  setClientCache,
+} from "@/app/utils/clientCache";
 
 export default function BedDetailPage() {
   const params = useParams<{ wardId: string; bedId: string }>();
   const wardId = params?.wardId;
   const bedId = params?.bedId;
+  const { session } = useAuthSession();
 
   const [ward, setWard] = useState<Ward | null>(null);
   const [bed, setBed] = useState<Bed | null>(null);
@@ -26,7 +38,20 @@ export default function BedDetailPage() {
 
   const loadWard = useCallback(async () => {
     if (!wardId) return;
-    setIsLoading(true);
+    const cacheKey = `ward:${wardId}`;
+    const cachedWard = getClientCache<Ward>(cacheKey, CLIENT_CACHE_TTL.ward);
+
+    if (cachedWard) {
+      setWard(cachedWard);
+      const cachedBed = cachedWard.beds?.find((item) => item.id === bedId);
+      if (cachedBed) {
+        setBed(cachedBed);
+      }
+      setIsLoading(false);
+    } else {
+      setIsLoading(true);
+    }
+
     setError("");
 
     try {
@@ -35,6 +60,7 @@ export default function BedDetailPage() {
         throw new Error("Ward not found");
       }
       setWard(wardData);
+      setClientCache(cacheKey, wardData);
 
       // Find the specific bed
       const foundBed = wardData.beds?.find((b) => b.id === bedId);
@@ -44,6 +70,12 @@ export default function BedDetailPage() {
       setBed(foundBed);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unknown error";
+
+      if (cachedWard) {
+        setError(`Showing cached ward data - ${message}`);
+        return;
+      }
+
       setError(message);
     } finally {
       setIsLoading(false);
@@ -63,11 +95,11 @@ export default function BedDetailPage() {
   };
 
   const handleChangeBedStatus = async (
-    newStatus: "available" | "maintenance",
+    newStatus: "available" | "maintenance"
   ) => {
     try {
       setError("");
-      const result = await updateBedStatus(bed?.id || "", newStatus);
+      const result = await updateBedStatus(bed?.id || "", newStatus, session);
 
       if (result.success) {
         await loadWard();
@@ -112,6 +144,29 @@ export default function BedDetailPage() {
               The bed you requested does not exist.
             </p>
           </div>
+        </div>
+      </div>
+    );
+  }
+
+  const resolvedWardId = ward.wardId || ward.id;
+  const wardAccessAllowed = canAccessWard(session, resolvedWardId);
+  const canManagePatients = canAssignOrDischargePatient(
+    session,
+    resolvedWardId
+  );
+  const canUpdateBed = canUpdateBedStatus(session, resolvedWardId);
+
+  if (!wardAccessAllowed) {
+    return (
+      <div className="min-h-screen bg-linear-to-br from-blue-50 to-indigo-100 p-8">
+        <div className="max-w-4xl mx-auto bg-white rounded-lg shadow-md p-8">
+          <h1 className="text-2xl font-bold text-gray-800 mb-2">
+            Access denied
+          </h1>
+          <p className="text-gray-600">
+            Your role is scoped to a different ward.
+          </p>
         </div>
       </div>
     );
@@ -171,6 +226,7 @@ export default function BedDetailPage() {
                   patient={bed.patient}
                   onDischargeSuccess={handleDischargeSuccess}
                   onMoveToQueueSuccess={handleMoveToQueueSuccess}
+                  canManageActions={canManagePatients}
                 />
               </div>
             ) : bed.status === "available" ? (
@@ -237,24 +293,28 @@ export default function BedDetailPage() {
 
             {bed.status === "available" && (
               <>
-                <button
-                  onClick={handleAssignPatient}
-                  className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium"
-                >
-                  <Plus size={20} />
-                  Assign Patient
-                </button>
-                <button
-                  onClick={() => handleChangeBedStatus("maintenance")}
-                  className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-colors font-medium"
-                >
-                  <Wrench size={20} />
-                  Mark Maintenance
-                </button>
+                {canManagePatients && (
+                  <button
+                    onClick={handleAssignPatient}
+                    className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium"
+                  >
+                    <Plus size={20} />
+                    Assign Patient
+                  </button>
+                )}
+                {canUpdateBed && (
+                  <button
+                    onClick={() => handleChangeBedStatus("maintenance")}
+                    className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-colors font-medium"
+                  >
+                    <Wrench size={20} />
+                    Mark Maintenance
+                  </button>
+                )}
               </>
             )}
 
-            {bed.status === "maintenance" && (
+            {bed.status === "maintenance" && canUpdateBed && (
               <button
                 onClick={() => handleChangeBedStatus("available")}
                 className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
@@ -266,7 +326,7 @@ export default function BedDetailPage() {
         </div>
       </div>
 
-      {showAssignModal && bed && ward && (
+      {showAssignModal && bed && ward && canManagePatients && (
         <AssignPatientModal
           wardId={ward.wardId || ward.id}
           bed={bed}

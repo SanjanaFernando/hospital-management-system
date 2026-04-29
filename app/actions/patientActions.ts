@@ -2,12 +2,22 @@
 
 import { connectToDatabase } from "@/lib/mongodb";
 import { ObjectId } from "mongodb";
+import { UserSession } from "@/app/types";
+import {
+  assertPermission,
+  canAssignOrDischargePatient,
+  normalizeSession,
+} from "@/lib/rbac";
 
-export async function dischargePatientById(patientId: string): Promise<void> {
+export async function dischargePatientById(
+  patientId: string,
+  actor: UserSession
+): Promise<void> {
   if (!patientId) {
     throw new Error("Patient ID is required for discharge");
   }
 
+  const session = normalizeSession(actor);
   const { db } = await connectToDatabase();
 
   // Find patient by custom id first, fallback to _id
@@ -23,21 +33,47 @@ export async function dischargePatientById(patientId: string): Promise<void> {
     throw new Error("Patient not found");
   }
 
+  const patientWardId = (patient.wardId as string) || "";
+  assertPermission(
+    canAssignOrDischargePatient(session, patientWardId),
+    "You do not have permission to discharge this patient."
+  );
+
   const resolvedPatientId = patient.id || patientId;
 
-  // Try deleting by custom patient id first
-  let result = await db.collection("patients").deleteOne({
-    id: resolvedPatientId,
-  });
+  // Keep patient history and persist discharge time instead of deleting record
+  let result = await db.collection("patients").updateOne(
+    { id: resolvedPatientId },
+    {
+      $set: {
+        status: "discharged",
+        dischargeTime: new Date(),
+        updatedAt: new Date(),
+      },
+      $unset: {
+        admissionTime: "",
+      },
+    }
+  );
 
-  // If not found and looks like an ObjectId, try deleting by _id
-  if (result.deletedCount === 0 && ObjectId.isValid(patientId)) {
-    result = await db.collection("patients").deleteOne({
-      _id: new ObjectId(patientId),
-    });
+  // If not found and looks like an ObjectId, try updating by _id
+  if (result.matchedCount === 0 && ObjectId.isValid(patientId)) {
+    result = await db.collection("patients").updateOne(
+      { _id: new ObjectId(patientId) },
+      {
+        $set: {
+          status: "discharged",
+          dischargeTime: new Date(),
+          updatedAt: new Date(),
+        },
+        $unset: {
+          admissionTime: "",
+        },
+      }
+    );
   }
 
-  if (result.deletedCount === 0) {
+  if (result.matchedCount === 0) {
     throw new Error("Patient not found");
   }
 
@@ -51,7 +87,7 @@ export async function dischargePatientById(patientId: string): Promise<void> {
           patientId: null,
           updatedAt: new Date(),
         },
-      },
+      }
     );
   }
 }
@@ -60,10 +96,11 @@ interface AssignPatientInput {
   wardId: string;
   bedId: string;
   patientId: string;
+  actor: UserSession;
 }
 
 export async function assignPatientToBed(
-  input: AssignPatientInput,
+  input: AssignPatientInput
 ): Promise<void> {
   const { wardId, bedId, patientId } = input;
 
@@ -72,6 +109,7 @@ export async function assignPatientToBed(
   }
 
   const { db } = await connectToDatabase();
+  const session = normalizeSession(input.actor);
 
   let bed = await db.collection("beds").findOne({ bedId, wardId });
   if (!bed) {
@@ -89,6 +127,11 @@ export async function assignPatientToBed(
   }
 
   const effectiveWardId = (bed.wardId as string) || wardId;
+
+  assertPermission(
+    canAssignOrDischargePatient(session, effectiveWardId),
+    "You do not have permission to assign a patient in this ward."
+  );
 
   const patient = await db
     .collection("patients")
@@ -110,7 +153,7 @@ export async function assignPatientToBed(
         patientId,
         updatedAt: new Date(),
       },
-    },
+    }
   );
 
   await db.collection("patients").updateOne(
@@ -121,15 +164,19 @@ export async function assignPatientToBed(
         admissionTime: new Date(),
         updatedAt: new Date(),
       },
-    },
+    }
   );
 }
 
-export async function movePatientToQueue(patientId: string): Promise<void> {
+export async function movePatientToQueue(
+  patientId: string,
+  actor: UserSession
+): Promise<void> {
   if (!patientId) {
     throw new Error("Patient ID is required");
   }
 
+  const session = normalizeSession(actor);
   const { db } = await connectToDatabase();
 
   // Find patient by custom id first, fallback to _id
@@ -145,6 +192,12 @@ export async function movePatientToQueue(patientId: string): Promise<void> {
     throw new Error("Patient not found");
   }
 
+  const patientWardId = (patient.wardId as string) || "";
+  assertPermission(
+    canAssignOrDischargePatient(session, patientWardId),
+    "You do not have permission to move this patient to queue."
+  );
+
   const resolvedPatientId = patient.id || patientId;
 
   // Update patient status to queued
@@ -158,7 +211,7 @@ export async function movePatientToQueue(patientId: string): Promise<void> {
       $unset: {
         admissionTime: "",
       },
-    },
+    }
   );
 
   // If not found and looks like an ObjectId, try updating by _id
@@ -173,7 +226,7 @@ export async function movePatientToQueue(patientId: string): Promise<void> {
         $unset: {
           admissionTime: "",
         },
-      },
+      }
     );
   }
 
@@ -190,12 +243,12 @@ export async function movePatientToQueue(patientId: string): Promise<void> {
         patientId: null,
         updatedAt: new Date(),
       },
-    },
+    }
   );
 }
 
 export async function forceAssignPatientToBed(
-  input: AssignPatientInput,
+  input: AssignPatientInput
 ): Promise<void> {
   const { wardId, bedId, patientId } = input;
 
@@ -204,6 +257,7 @@ export async function forceAssignPatientToBed(
   }
 
   const { db } = await connectToDatabase();
+  const session = normalizeSession(input.actor);
 
   // Find the bed
   let bed = await db.collection("beds").findOne({ bedId, wardId });
@@ -222,6 +276,11 @@ export async function forceAssignPatientToBed(
   }
 
   const effectiveWardId = (bed.wardId as string) || wardId;
+
+  assertPermission(
+    canAssignOrDischargePatient(session, effectiveWardId),
+    "You do not have permission to force assign in this ward."
+  );
 
   // Find the new patient to assign
   const newPatient = await db
@@ -253,7 +312,7 @@ export async function forceAssignPatientToBed(
           $unset: {
             admissionTime: "",
           },
-        },
+        }
       );
     }
   }
@@ -267,7 +326,7 @@ export async function forceAssignPatientToBed(
         patientId,
         updatedAt: new Date(),
       },
-    },
+    }
   );
 
   await db.collection("patients").updateOne(
@@ -278,6 +337,6 @@ export async function forceAssignPatientToBed(
         admissionTime: new Date(),
         updatedAt: new Date(),
       },
-    },
+    }
   );
 }

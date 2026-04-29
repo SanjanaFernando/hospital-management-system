@@ -4,11 +4,16 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
 import PatientRegistrationForm from "@/app/components/PatientRegistrationForm";
+import { useAuthSession } from "@/app/context/AuthSessionContext";
+import { canRegisterPatient } from "@/lib/rbac";
 
 export default function RegisterPatientPage() {
   const params = useParams<{ wardId: string }>();
   const router = useRouter();
   const wardId = params?.wardId;
+  const { session } = useAuthSession();
+
+  const canRegister = canRegisterPatient(session, wardId);
 
   const handleRegistrationSuccess = () => {
     router.push(`/wards/${wardId}`);
@@ -30,11 +35,22 @@ export default function RegisterPatientPage() {
         </Link>
 
         <div className=" flex justify-center">
-          <PatientRegistrationForm
-            wardId={wardId}
-            onSuccess={handleRegistrationSuccess}
-            onCancel={handleCancel}
-          />
+          {canRegister ? (
+            <PatientRegistrationForm
+              wardId={wardId}
+              onSuccess={handleRegistrationSuccess}
+              onCancel={handleCancel}
+            />
+          ) : (
+            <div className="bg-white rounded-lg shadow-lg p-8 border-2 border-red-200 max-w-2xl w-full">
+              <h2 className="text-xl font-bold text-gray-800 mb-2">
+                Access denied
+              </h2>
+              <p className="text-gray-600">
+                Main Attendant cannot register patients.
+              </p>
+            </div>
+          )}
         </div>
       </div>
     </div>

@@ -8,10 +8,18 @@ import { Ward } from "@/app/types";
 import PatientQueue from "@/app/components/PatientQueue";
 import MedicalCrossLoader from "@/app/components/MedicalCrossLoader";
 import { getWardWithPatients } from "@/app/actions/wardActions";
+import { useAuthSession } from "@/app/context/AuthSessionContext";
+import { canAccessWard, canAssignOrDischargePatient } from "@/lib/rbac";
+import {
+  CLIENT_CACHE_TTL,
+  getClientCache,
+  setClientCache,
+} from "@/app/utils/clientCache";
 
 export default function WardQueuePage() {
   const params = useParams<{ wardId: string }>();
   const wardId = params?.wardId;
+  const { session } = useAuthSession();
 
   const [ward, setWard] = useState<Ward | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -19,7 +27,16 @@ export default function WardQueuePage() {
 
   const loadWard = useCallback(async () => {
     if (!wardId) return;
-    setIsLoading(true);
+    const cacheKey = `ward:${wardId}`;
+    const cachedWard = getClientCache<Ward>(cacheKey, CLIENT_CACHE_TTL.ward);
+
+    if (cachedWard) {
+      setWard(cachedWard);
+      setIsLoading(false);
+    } else {
+      setIsLoading(true);
+    }
+
     setError("");
 
     try {
@@ -28,8 +45,15 @@ export default function WardQueuePage() {
         throw new Error("Ward not found");
       }
       setWard(wardData);
+      setClientCache(cacheKey, wardData);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unknown error";
+
+      if (cachedWard) {
+        setError(`Showing cached ward data - ${message}`);
+        return;
+      }
+
       setError(message);
     } finally {
       setIsLoading(false);
@@ -68,6 +92,28 @@ export default function WardQueuePage() {
     );
   }
 
+  const resolvedWardId = ward.wardId || ward.id;
+  const wardAccessAllowed = canAccessWard(session, resolvedWardId);
+  const canAssignPatients = canAssignOrDischargePatient(
+    session,
+    resolvedWardId
+  );
+
+  if (!wardAccessAllowed) {
+    return (
+      <div className="min-h-screen bg-linear-to-br from-blue-50 to-indigo-100 p-8">
+        <div className="max-w-4xl mx-auto bg-white rounded-lg shadow-md p-8">
+          <h1 className="text-2xl font-bold text-gray-800 mb-2">
+            Access denied
+          </h1>
+          <p className="text-gray-600">
+            Your role is scoped to a different ward.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-linear-to-br from-blue-50 to-indigo-100 p-8">
       <div className="max-w-4xl mx-auto">
@@ -97,6 +143,9 @@ export default function WardQueuePage() {
             wardId={ward.wardId || ward.id}
             wardName={ward.name}
             onPatientAssigned={handlePatientAssigned}
+            queueOrderStrategy={ward.queueOrderStrategy}
+            queueOrderMessage={ward.queueOrderMessage}
+            canAssign={canAssignPatients}
           />
         </div>
       </div>

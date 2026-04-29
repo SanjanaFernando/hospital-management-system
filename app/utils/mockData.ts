@@ -1,4 +1,4 @@
-import { Ward, Patient, AgeGroup, Priority } from "@/app/types";
+import { Ward, Patient, AgeGroup, Priority, Gender } from "@/app/types";
 
 const diseases = [
   "Hypertension",
@@ -77,6 +77,8 @@ const lastNames = [
   "Martin",
 ];
 
+const genders: Gender[] = ["Male", "Female"];
+
 export function generateMockPatient(patientId: string): Patient {
   const firstName = firstNames[Math.floor(Math.random() * firstNames.length)];
   const lastName = lastNames[Math.floor(Math.random() * lastNames.length)];
@@ -89,15 +91,18 @@ export function generateMockPatient(patientId: string): Patient {
 
   const priorityRand = Math.random();
   let priority: Priority;
-  if (priorityRand < 0.1) priority = "Critical";
-  else if (priorityRand < 0.3) priority = "Urgent";
-  else priority = "Non-urgent";
+  if (priorityRand < 0.08) priority = "Triage 1";
+  else if (priorityRand < 0.2) priority = "Triage 2";
+  else if (priorityRand < 0.4) priority = "Triage 3";
+  else if (priorityRand < 0.7) priority = "Triage 4";
+  else priority = "Triage 5";
 
   const admissionTime = new Date(
-    Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000,
+    Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000
   );
 
   const queueWaitTime = Math.floor(Math.random() * 480) + 15; // 15 mins to 8 hours
+  const gender = genders[Math.floor(Math.random() * genders.length)];
 
   const hasSpecialRequirements = Math.random() < 0.4;
   const patientSpecialRequirements = hasSpecialRequirements
@@ -112,7 +117,7 @@ export function generateMockPatient(patientId: string): Patient {
   const isDischarged = Math.random() < 0.3;
   const dischargeTime = isDischarged
     ? new Date(
-        admissionTime.getTime() + Math.random() * 25 * 24 * 60 * 60 * 1000,
+        admissionTime.getTime() + Math.random() * 25 * 24 * 60 * 60 * 1000
       )
     : undefined;
 
@@ -121,6 +126,7 @@ export function generateMockPatient(patientId: string): Patient {
     name: `${firstName} ${lastName}`,
     age,
     ageGroup,
+    gender,
     disease: diseases[Math.floor(Math.random() * diseases.length)],
     priority,
     admissionTime,
@@ -132,10 +138,10 @@ export function generateMockPatient(patientId: string): Patient {
 
 export function initializeWards(): Ward[] {
   const wardNames = [
-    "Ward A - General Medicine",
-    "Ward B - Surgical",
-    "Ward C - Cardiac",
-    "Ward D - ICU",
+    "Ward 3 - Surgical Type A",
+    "Ward 4 - Surgical Type B",
+    "Ward 5 - Surgical Type C",
+    "Ward 6 - Surgical Type D",
   ];
 
   return wardNames.map((name, wardIndex) => {
@@ -162,12 +168,15 @@ export function initializeWards(): Ward[] {
     const beds = Array.from({ length: 25 }, (_, bedIndex) => {
       const bedNumber = bedIndex + 1;
       const patient = admittedPatients[bedIndex];
+      const isICU = Math.random() < 0.2; // 20% ICU beds
+      const bedType: "ICU" | "NORMAL" = isICU ? "ICU" : "NORMAL";
 
       if (patient) {
         return {
           id: `${wardIndex}-${bedIndex}`,
           bedNumber,
           status: "occupied" as const,
+          type: bedType,
           patient,
         };
       }
@@ -180,12 +189,13 @@ export function initializeWards(): Ward[] {
         status: isMaintenance
           ? ("maintenance" as const)
           : ("available" as const),
+        type: bedType,
       };
     });
 
     const occupiedBeds = beds.filter((b) => b.status === "occupied").length;
     const maintenanceBeds = beds.filter(
-      (b) => b.status === "maintenance",
+      (b) => b.status === "maintenance"
     ).length;
     const availableBeds = beds.filter((b) => b.status === "available").length;
 
