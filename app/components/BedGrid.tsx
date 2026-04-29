@@ -34,7 +34,7 @@ const getBedColor = (bed: Bed) => {
 
   // 💗 ICU MAINTENANCE (light pink)
   if (bed.type === "ICU" && bed.status === "maintenance") {
-    return "bg-pink-200 hover:bg-pink-300 text-gray-800";
+    return "bg-pink-500 hover:bg-pink-300 text-gray-800";
   }
 
   // 🟢🟦🟡 NORMAL BEDS
