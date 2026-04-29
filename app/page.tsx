@@ -50,7 +50,10 @@ export default function Home() {
 
   const loadWards = async () => {
     const cacheKey = "wards:all";
-    const cachedWards = getClientCache<Ward[]>(cacheKey, CLIENT_CACHE_TTL.wards);
+    const cachedWards = getClientCache<Ward[]>(
+      cacheKey,
+      CLIENT_CACHE_TTL.wards
+    );
 
     if (cachedWards && cachedWards.length > 0) {
       setWards(cachedWards);
