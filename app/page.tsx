@@ -26,6 +26,11 @@ import {
 import { ChevronDown } from "lucide-react";
 import { useAuthSession } from "@/app/context/AuthSessionContext";
 import { canAccessWard } from "@/lib/rbac";
+import {
+  CLIENT_CACHE_TTL,
+  getClientCache,
+  setClientCache,
+} from "@/app/utils/clientCache";
 
 export default function Home() {
   const { session } = useAuthSession();
@@ -44,7 +49,16 @@ export default function Home() {
   }, []);
 
   const loadWards = async () => {
-    setIsLoading(true);
+    const cacheKey = "wards:all";
+    const cachedWards = getClientCache<Ward[]>(cacheKey, CLIENT_CACHE_TTL.wards);
+
+    if (cachedWards && cachedWards.length > 0) {
+      setWards(cachedWards);
+      setIsLoading(false);
+    } else {
+      setIsLoading(true);
+    }
+
     setError("");
     try {
       console.log("📱 Frontend: Calling server action to fetch wards...");
@@ -55,12 +69,18 @@ export default function Home() {
           `✅ Frontend: Received ${wardsData.length} wards from server`
         );
         setWards(wardsData);
+        setClientCache(cacheKey, wardsData);
       } else {
         throw new Error("No wards returned from server");
       }
     } catch (err) {
       console.error("❌ Frontend: Error loading wards:", err);
       const errorMsg = err instanceof Error ? err.message : "Unknown error";
+
+      if (cachedWards && cachedWards.length > 0) {
+        setError(`Showing cached data - ${errorMsg}`);
+        return;
+      }
 
       // Fallback to mock data on error
       console.log("📋 Frontend: Falling back to mock data");

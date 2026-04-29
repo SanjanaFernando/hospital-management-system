@@ -18,6 +18,11 @@ import {
   canAssignOrDischargePatient,
   canUpdateBedStatus,
 } from "@/lib/rbac";
+import {
+  CLIENT_CACHE_TTL,
+  getClientCache,
+  setClientCache,
+} from "@/app/utils/clientCache";
 
 export default function BedDetailPage() {
   const params = useParams<{ wardId: string; bedId: string }>();
@@ -33,7 +38,20 @@ export default function BedDetailPage() {
 
   const loadWard = useCallback(async () => {
     if (!wardId) return;
-    setIsLoading(true);
+    const cacheKey = `ward:${wardId}`;
+    const cachedWard = getClientCache<Ward>(cacheKey, CLIENT_CACHE_TTL.ward);
+
+    if (cachedWard) {
+      setWard(cachedWard);
+      const cachedBed = cachedWard.beds?.find((item) => item.id === bedId);
+      if (cachedBed) {
+        setBed(cachedBed);
+      }
+      setIsLoading(false);
+    } else {
+      setIsLoading(true);
+    }
+
     setError("");
 
     try {
@@ -42,6 +60,7 @@ export default function BedDetailPage() {
         throw new Error("Ward not found");
       }
       setWard(wardData);
+      setClientCache(cacheKey, wardData);
 
       // Find the specific bed
       const foundBed = wardData.beds?.find((b) => b.id === bedId);
@@ -51,6 +70,12 @@ export default function BedDetailPage() {
       setBed(foundBed);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unknown error";
+
+      if (cachedWard) {
+        setError(`Showing cached ward data - ${message}`);
+        return;
+      }
+
       setError(message);
     } finally {
       setIsLoading(false);

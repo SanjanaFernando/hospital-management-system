@@ -4,6 +4,7 @@ import {
   createContext,
   PropsWithChildren,
   useContext,
+  useEffect,
   useMemo,
   useState,
 } from "react";
@@ -22,23 +23,23 @@ const AuthSessionContext = createContext<AuthSessionContextValue | undefined>(
 );
 
 export function AuthSessionProvider({ children }: PropsWithChildren) {
-  const [session, setSessionState] = useState<UserSession>(() => {
-    if (typeof window === "undefined") {
-      return normalizeSession({ role: "admin", displayName: "System Admin" });
-    }
+  const [session, setSessionState] = useState<UserSession>(() =>
+    normalizeSession({ role: "admin", displayName: "System Admin" })
+  );
 
+  useEffect(() => {
     try {
       const raw = window.localStorage.getItem(STORAGE_KEY);
       if (!raw) {
-        return normalizeSession({ role: "admin", displayName: "System Admin" });
+        return;
       }
 
       const parsed = JSON.parse(raw) as Partial<UserSession>;
-      return normalizeSession(parsed);
+      setSessionState(normalizeSession(parsed));
     } catch {
-      return normalizeSession({ role: "admin", displayName: "System Admin" });
+      // Ignore malformed persisted session and keep default.
     }
-  });
+  }, []);
 
   const setSession = (nextSession: UserSession) => {
     const normalized = normalizeSession(nextSession);

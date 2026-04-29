@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
 import { Bed, Ward } from "@/app/types";
@@ -16,6 +16,11 @@ import {
   canManageWardActions,
   canRegisterPatient,
 } from "@/lib/rbac";
+import {
+  CLIENT_CACHE_TTL,
+  getClientCache,
+  setClientCache,
+} from "@/app/utils/clientCache";
 
 export default function WardPage() {
   const params = useParams<{ wardId: string }>();
@@ -27,10 +32,23 @@ export default function WardPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isAddingBed, setIsAddingBed] = useState(false);
   const [error, setError] = useState("");
+  const bedGridRef = useRef<HTMLDivElement | null>(null);
+  const [bedGridHeight, setBedGridHeight] = useState<number | undefined>(
+    undefined
+  );
 
   const loadWard = useCallback(async () => {
     if (!wardId) return;
-    setIsLoading(true);
+    const cacheKey = `ward:${wardId}`;
+    const cachedWard = getClientCache<Ward>(cacheKey, CLIENT_CACHE_TTL.ward);
+
+    if (cachedWard) {
+      setWard(cachedWard);
+      setIsLoading(false);
+    } else {
+      setIsLoading(true);
+    }
+
     setError("");
 
     try {
@@ -39,8 +57,15 @@ export default function WardPage() {
         throw new Error("Ward not found");
       }
       setWard(wardData);
+      setClientCache(cacheKey, wardData);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unknown error";
+
+      if (cachedWard) {
+        setError(`Showing cached ward data - ${message}`);
+        return;
+      }
+
       setError(message);
     } finally {
       setIsLoading(false);
@@ -50,6 +75,30 @@ export default function WardPage() {
   useEffect(() => {
     void loadWard();
   }, [loadWard]);
+
+  useEffect(() => {
+    const updateBedGridHeight = () => {
+      const nextHeight = bedGridRef.current?.offsetHeight;
+      if (!nextHeight) {
+        return;
+      }
+      setBedGridHeight(nextHeight);
+    };
+
+    updateBedGridHeight();
+    window.addEventListener("resize", updateBedGridHeight);
+
+    let resizeObserver: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== "undefined" && bedGridRef.current) {
+      resizeObserver = new ResizeObserver(updateBedGridHeight);
+      resizeObserver.observe(bedGridRef.current);
+    }
+
+    return () => {
+      window.removeEventListener("resize", updateBedGridHeight);
+      resizeObserver?.disconnect();
+    };
+  }, [ward?.beds?.length]);
 
   const handleBedClick = (bed: Bed) => {
     if (!ward) {
@@ -65,31 +114,27 @@ export default function WardPage() {
   };
 
   const handleAddBed = async (type: "normal" | "icu") => {
-  if (!ward) return;
+    if (!ward) return;
 
-  setError("");
-  setIsAddingBed(true);
+    setError("");
+    setIsAddingBed(true);
 
-  try {
-    const result = await addBedToWard(
-      ward.wardId || ward.id,
-      session,
-      type 
-    );
+    try {
+      const result = await addBedToWard(ward.wardId || ward.id, session, type);
 
-    if (!result.success) {
-      setError(result.error || "Failed to add bed");
-      return;
+      if (!result.success) {
+        setError(result.error || "Failed to add bed");
+        return;
+      }
+
+      await loadWard();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      setError(message);
+    } finally {
+      setIsAddingBed(false);
     }
-
-    await loadWard();
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown error";
-    setError(message);
-  } finally {
-    setIsAddingBed(false);
-  }
-};
+  };
   if (isLoading) {
     return <MedicalCrossLoader message="Loading Ward..." fullScreen />;
   }
@@ -190,8 +235,8 @@ export default function WardPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="bg-white rounded-lg shadow-md p-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+          <div className="bg-white h-fit rounded-lg shadow-md p-6">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-2xl font-bold text-gray-800">Beds</h2>
               <div className="relative group">
@@ -202,15 +247,16 @@ export default function WardPage() {
                   {!canManageWard
                     ? "Not allowed"
                     : isAddingBed
-                    ? "Adding..."
-                    : "+ Add Bed"}
+                      ? "Adding..."
+                      : "+ Add Bed"}
                 </button>
 
                 {/* Dropdown */}
-                <div className="absolute right-0 mt-2 w-40 bg-white border border-gray-400 rounded-xl shadow-lg 
+                <div
+                  className="absolute right-0 mt-2 w-40 bg-white border border-gray-400 rounded-xl shadow-lg 
                 opacity-0 invisible group-hover:opacity-100 group-hover:visible 
-                transition-all duration-200 z-10 overflow-hidden">
-
+                transition-all duration-200 z-10 overflow-hidden"
+                >
                   <button
                     onClick={() => handleAddBed("normal")}
                     className="w-full text-left px-4 py-2 text-sm text-blue-400 hover:bg-blue-50 hover:text-blue-600 transition flex items-center gap-2"
@@ -224,23 +270,33 @@ export default function WardPage() {
                   >
                     ❤️ ICU Bed
                   </button>
-
                 </div>
               </div>
             </div>
             {ward?.beds && ward.beds.length > 0 ? (
-              <BedGrid
-                beds={ward.beds}
-                wardName={ward.name || ""}
-                onAvailableBedClick={handleBedClick}
-                canInteract={wardAccessAllowed}
-              />
+              <div ref={bedGridRef}>
+                <BedGrid
+                  beds={ward.beds}
+                  wardName={ward.name || ""}
+                  onAvailableBedClick={handleBedClick}
+                  canInteract={wardAccessAllowed}
+                />
+              </div>
             ) : (
               <p className="text-gray-600">No beds available</p>
             )}
           </div>
 
-          <div className="bg-white rounded-lg shadow-md p-6">
+          <div
+            className="bg-white rounded-lg shadow-md p-6 flex flex-col"
+            style={
+              bedGridHeight
+                ? {
+                    height: `${bedGridHeight + 100}px`,
+                  }
+                : undefined
+            }
+          >
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-2xl font-bold text-gray-800">Queue</h2>
               <div className="flex gap-2">
@@ -261,20 +317,25 @@ export default function WardPage() {
                 </Link>
               </div>
             </div>
-            {ward?.patientQueue && ward.patientQueue.length > 0 ? (
-              <PatientQueue
-                patients={ward.patientQueue}
-                beds={ward.beds || []}
-                wardId={ward.wardId || ward.id}
-                wardName={ward.name}
-                onPatientAssigned={loadWard}
-                queueOrderStrategy={ward.queueOrderStrategy}
-                queueOrderMessage={ward.queueOrderMessage}
-                canAssign={canAssignPatients}
-              />
-            ) : (
-              <p className="text-gray-600">No patients in queue</p>
-            )}
+            <div className="flex-1 min-h-0">
+              {ward?.patientQueue && ward.patientQueue.length > 0 ? (
+                <PatientQueue
+                  patients={ward.patientQueue}
+                  beds={ward.beds || []}
+                  wardId={ward.wardId || ward.id}
+                  wardName={ward.name}
+                  onPatientAssigned={loadWard}
+                  queueOrderStrategy={ward.queueOrderStrategy}
+                  queueOrderMessage={ward.queueOrderMessage}
+                  canAssign={canAssignPatients}
+                  listMaxHeight={
+                    bedGridHeight ? Math.max(0, bedGridHeight - 88) : undefined
+                  }
+                />
+              ) : (
+                <p className="text-gray-600">No patients in queue</p>
+              )}
+            </div>
           </div>
         </div>
       </div>

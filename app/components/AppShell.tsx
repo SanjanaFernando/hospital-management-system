@@ -60,6 +60,7 @@ function AppShellContent({ children }: PropsWithChildren) {
   const pathname = usePathname();
   const { session, setSession } = useAuthSession();
   const [wards, setWards] = useState<Ward[]>([]);
+  const [shiftCountdown, setShiftCountdown] = useState("");
 
   useEffect(() => {
     const loadSidebarData = async () => {
@@ -68,6 +69,19 @@ function AppShellContent({ children }: PropsWithChildren) {
     };
 
     void loadSidebarData();
+  }, []);
+
+  useEffect(() => {
+    const updateShiftCountdown = () => {
+      setShiftCountdown(formatShiftCountdown());
+    };
+
+    updateShiftCountdown();
+    const timer = window.setInterval(updateShiftCountdown, 60000);
+
+    return () => {
+      window.clearInterval(timer);
+    };
   }, []);
 
   const activeWardId = session.wardId || wards[0]?.wardId || wards[0]?.id;
@@ -92,7 +106,9 @@ function AppShellContent({ children }: PropsWithChildren) {
 
     for (const ward of scopedWards) {
       if (ward.availableBeds === 0 && ward.patientQueue.length > 0) {
-        critical.push(`⚠️ ${ward.name} full - ${ward.patientQueue.length} waiting`);
+        critical.push(
+          `⚠️ ${ward.name} full - ${ward.patientQueue.length} waiting`
+        );
       }
       if (ward.patientQueue.length > 10) {
         critical.push(`⚠️ ${ward.name} queue > 10`);
@@ -155,13 +171,17 @@ function AppShellContent({ children }: PropsWithChildren) {
               <span className="rounded-full bg-teal-500/25 px-2 py-1 font-semibold text-teal-100">
                 {ROLE_LABELS[session.role]}
               </span>
-              <span className="text-teal-100/85">{formatShiftCountdown()}</span>
+              <span className="text-teal-100/85">
+                {shiftCountdown || "Shift details"}
+              </span>
             </div>
           </div>
 
           <div className="mt-4 grid grid-cols-2 gap-3">
             <div className="rounded-2xl border border-white/10 bg-gradient-to-b from-teal-900/70 to-teal-950/60 p-3">
-              <p className="text-2xl font-bold text-emerald-200">{availableBeds}</p>
+              <p className="text-2xl font-bold text-emerald-200">
+                {availableBeds}
+              </p>
               <p className="text-[11px] uppercase tracking-[0.18em] text-teal-100/80">
                 Available
               </p>

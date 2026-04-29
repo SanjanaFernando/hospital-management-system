@@ -8,15 +8,24 @@ if (!MONGODB_URI) {
   );
 }
 
-interface MongoConnection {
+interface MongoGlobalCache {
   client: MongoClient | null;
   db: Db | null;
+  promise: Promise<MongoClient> | null;
 }
 
-const mongoConnection: MongoConnection = {
-  client: null,
-  db: null,
-};
+declare global {
+  var __mongoCache: MongoGlobalCache | undefined;
+}
+
+const mongoConnection: MongoGlobalCache =
+  global.__mongoCache || {
+    client: null,
+    db: null,
+    promise: null,
+  };
+
+global.__mongoCache = mongoConnection;
 
 const MAX_RETRIES = 5;
 const INITIAL_RETRY_DELAY = 2000; // 2 seconds
@@ -40,17 +49,23 @@ export async function connectToDatabase(): Promise<{
 
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
-      console.log(`🔄 MongoDB connection attempt ${attempt}/${MAX_RETRIES}...`);
-      const client = new MongoClient(MONGODB_URI, {
-        serverSelectionTimeoutMS: 15000, // 15 seconds
-        socketTimeoutMS: 15000, // 15 seconds
-        connectTimeoutMS: 15000, // 15 seconds
-        retryWrites: true,
-        maxPoolSize: 10,
-        minPoolSize: 2,
-      });
+      if (!mongoConnection.promise) {
+        console.log(
+          `🔄 MongoDB connection attempt ${attempt}/${MAX_RETRIES}...`,
+        );
+        const client = new MongoClient(MONGODB_URI, {
+          serverSelectionTimeoutMS: 15000, // 15 seconds
+          socketTimeoutMS: 15000, // 15 seconds
+          connectTimeoutMS: 15000, // 15 seconds
+          retryWrites: true,
+          maxPoolSize: 10,
+          minPoolSize: 2,
+        });
 
-      await client.connect();
+        mongoConnection.promise = client.connect();
+      }
+
+      const client = await mongoConnection.promise;
 
       const db = client.db("hospital-management");
 
@@ -64,6 +79,7 @@ export async function connectToDatabase(): Promise<{
       return { client, db };
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
+      mongoConnection.promise = null;
       console.error(
         `❌ MongoDB connection error (attempt ${attempt}/${MAX_RETRIES}):`,
         lastError.message,

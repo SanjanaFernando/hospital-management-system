@@ -55,7 +55,7 @@ export default function BedGrid({
   };
 
   return (
-    <div className="w-full">
+    <div className="w-full ">
       <h3 className="text-lg font-semibold mb-4 text-gray-800">{wardName}</h3>
       <div className="grid grid-cols-5 gap-3">
         {beds.map((bed) => (
@@ -63,7 +63,9 @@ export default function BedGrid({
             key={bed.id}
             onClick={() => handleBedClick(bed)}
             className={`${getBedColor(bed)} text-white rounded-lg p-4 transition-all shadow-md flex flex-col items-center justify-center min-h-[120px] h-full ${
-              canInteract ? "cursor-pointer hover:shadow-lg" : "cursor-not-allowed opacity-70"
+              canInteract
+                ? "cursor-pointer hover:shadow-lg"
+                : "cursor-not-allowed opacity-70"
             }`}
             title={`${statusLabels[bed.status]}${bed.patient ? ` - ${bed.patient.name}` : ""}`}
           >
