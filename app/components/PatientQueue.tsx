@@ -16,6 +16,7 @@ interface PatientQueueProps {
   queueOrderStrategy?: "ai" | "priority";
   queueOrderMessage?: string;
   canAssign?: boolean;
+  listMaxHeight?: number;
 }
 
 const priorityColors = {
@@ -74,6 +75,7 @@ export default function PatientQueue({
   queueOrderStrategy = "priority",
   queueOrderMessage = "",
   canAssign = true,
+  listMaxHeight,
 }: PatientQueueProps) {
   const { session } = useAuthSession();
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
@@ -201,7 +203,7 @@ export default function PatientQueue({
   ];
 
   return (
-    <div className="w-full">
+    <div className="w-full h-full">
       <h3 className="text-lg font-semibold mb-4 text-gray-800">
         Patient Queue ({patients.length})
       </h3>
@@ -217,7 +219,16 @@ export default function PatientQueue({
       {queueOrderMessage && (
         <p className="text-xs text-blue-700 mb-3">{queueOrderMessage}</p>
       )}
-      <div className="space-y-3 max-h-[65vh] overflow-y-auto">
+      <div
+        className="space-y-3 overflow-y-auto"
+        style={
+          listMaxHeight
+            ? {
+                maxHeight: `${listMaxHeight}px`,
+              }
+            : undefined
+        }
+      >
         {displayPatients.map((patient, index) => (
           <div
             key={patient.id}
@@ -256,7 +267,10 @@ export default function PatientQueue({
                 <p className="text-xs font-semibold text-amber-900 mb-2">
                   Consultant Doctor: set triage level for this patient.
                 </p>
-                <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
+                <div
+                  className="flex gap-2"
+                  onClick={(e) => e.stopPropagation()}
+                >
                   <select
                     value={resolveTriageDraft(patient)}
                     onChange={(e) =>
@@ -311,7 +325,9 @@ export default function PatientQueue({
           </div>
         ))}
       </div>
-      {triageError && <p className="mt-3 text-xs text-red-700">{triageError}</p>}
+      {triageError && (
+        <p className="mt-3 text-xs text-red-700">{triageError}</p>
+      )}
 
       {showAssignModal && selectedPatient && wardId && canAssign && (
         <AssignFromQueueModal
