@@ -112,6 +112,14 @@ export async function getWardsWithPatients(): Promise<Ward[]> {
           })
         );
 
+        // Sort beds: ICU first (by bedNumber asc), then NORMAL (by bedNumber asc)
+        formattedBeds.sort((a, b) => {
+          const aPriority = a.type === "ICU" ? 0 : 1;
+          const bPriority = b.type === "ICU" ? 0 : 1;
+          if (aPriority !== bPriority) return aPriority - bPriority;
+          return (a.bedNumber || 0) - (b.bedNumber || 0);
+        });
+
         return {
           id:
             (wardSerialized?._id as string) ||
@@ -218,6 +226,14 @@ export async function getWardWithPatients(
           : undefined,
     })
   );
+
+  // Sort beds: ICU first then NORMAL; within each type sort by bedNumber ascending
+  formattedBeds.sort((a, b) => {
+    const aPriority = a.type === "ICU" ? 0 : 1;
+    const bPriority = b.type === "ICU" ? 0 : 1;
+    if (aPriority !== bPriority) return aPriority - bPriority;
+    return (a.bedNumber || 0) - (b.bedNumber || 0);
+  });
 
   const allWardDocs = await db.collection("wards").find({}).toArray();
   const wardSnapshots = await Promise.all(
