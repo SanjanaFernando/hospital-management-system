@@ -371,13 +371,13 @@ export default function WardPage() {
                     grid.
                   </p>
                 </div>
-                <span className="rounded-full bg-cyan-100 px-3 py-1 text-xs font-semibold text-cyan-800">
-                  {specialAssigns.length} transferred
+                <span className=" bg-cyan-100 px-1 w-full max-w-25 flex justify-center py-1 text-xs font-semibold text-cyan-800">
+                  {specialAssigns.length} transfer
                 </span>
               </div>
 
               {specialAssigns.length > 0 ? (
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                <div className="grid grid-cols-2">
                   {specialAssigns.map((assign) => (
                     <Link
                       key={assign.patient.id}
@@ -395,13 +395,7 @@ export default function WardPage() {
                               ? `ICU Bed ${assign.targetBed.bedNumber}`
                               : `Bed ${assign.targetBed.bedNumber}`}
                           </p>
-                          <p className="text-xs text-gray-500 mt-1">
-                            Current status: {assign.targetBed.status}
-                          </p>
                         </div>
-                        <span className="rounded-full bg-white px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-cyan-800">
-                          Special
-                        </span>
                       </div>
                     </Link>
                   ))}
