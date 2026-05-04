@@ -28,17 +28,19 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
   );
 
   useEffect(() => {
-    try {
-      const raw = window.localStorage.getItem(STORAGE_KEY);
-      if (!raw) {
-        return;
-      }
-
-      const parsed = JSON.parse(raw) as Partial<UserSession>;
-      setSessionState(normalizeSession(parsed));
-    } catch {
-      // Ignore malformed persisted session and keep default.
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    if (!raw) {
+      return;
     }
+
+    queueMicrotask(() => {
+      try {
+        const parsed = JSON.parse(raw) as Partial<UserSession>;
+        setSessionState(normalizeSession(parsed));
+      } catch {
+        // Ignore malformed persisted session and keep default.
+      }
+    });
   }, []);
 
   const setSession = (nextSession: UserSession) => {

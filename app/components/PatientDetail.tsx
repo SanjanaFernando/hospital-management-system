@@ -30,6 +30,15 @@ const ageGroupColors = {
   Elderly: "bg-pink-500",
 };
 
+const formatWardLabel = (wardId?: string | null) => {
+  if (!wardId) {
+    return "";
+  }
+
+  const normalized = wardId.toUpperCase().replace("WARD-", "Ward ");
+  return normalized.startsWith("Ward ") ? normalized : wardId;
+};
+
 export default function PatientDetail({
   patient,
   onDischargeSuccess,
@@ -178,6 +187,11 @@ export default function PatientDetail({
           >
             {patient.ageGroup}
           </span>
+          {patient.assignedFromWardId && patient.assignedFromWardId !== patient.wardId && (
+            <span className="bg-cyan-500 text-white px-3 py-1 rounded-full text-sm font-semibold">
+              From {formatWardLabel(patient.assignedFromWardId)}
+            </span>
+          )}
           {canManageActions && (
             <>
               <button

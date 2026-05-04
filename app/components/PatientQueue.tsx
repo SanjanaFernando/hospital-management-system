@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Patient, Bed } from "@/app/types";
+import { Patient, Bed, Ward } from "@/app/types";
 import AssignFromQueueModal from "./AssignFromQueueModal";
 import { updatePatient } from "@/app/utils/api";
 import { useAuthSession } from "@/app/context/AuthSessionContext";
@@ -10,6 +10,7 @@ import { canSetTriage } from "@/lib/rbac";
 interface PatientQueueProps {
   patients: Patient[];
   beds?: Bed[];
+  wards?: Ward[];
   wardId?: string;
   wardName?: string;
   onPatientAssigned?: () => void;
@@ -69,6 +70,7 @@ function resolvePriorityClass(priority: string): string {
 export default function PatientQueue({
   patients = [],
   beds = [],
+  wards,
   wardId = "",
   wardName = "",
   onPatientAssigned,
@@ -335,6 +337,7 @@ export default function PatientQueue({
           wardName={wardName || `Ward ${wardId}`}
           patient={selectedPatient}
           beds={beds}
+          wards={wards}
           onAssigned={handleAssignSuccess}
           onClose={handleModalClose}
         />

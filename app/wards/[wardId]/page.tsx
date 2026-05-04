@@ -1,14 +1,18 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
-import { Bed, Ward } from "@/app/types";
+import { Bed, Patient, Ward } from "@/app/types";
 import BedGrid from "@/app/components/BedGrid";
 import PatientQueue from "@/app/components/PatientQueue";
 import MedicalCrossLoader from "@/app/components/MedicalCrossLoader";
-import { addBedToWard, getWardWithPatients } from "@/app/actions/wardActions";
+import {
+  addBedToWard,
+  getWardWithPatients,
+  getWardsWithPatients,
+} from "@/app/actions/wardActions";
 import { useAuthSession } from "@/app/context/AuthSessionContext";
 import {
   canAccessWard,
@@ -29,6 +33,7 @@ export default function WardPage() {
   const { session } = useAuthSession();
 
   const [ward, setWard] = useState<Ward | null>(null);
+  const [wards, setWards] = useState<Ward[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isAddingBed, setIsAddingBed] = useState(false);
   const [error, setError] = useState("");
@@ -72,9 +77,42 @@ export default function WardPage() {
     }
   }, [wardId]);
 
+  const canCrossWardAssign =
+    session.role === "admin" || session.role === "consultant_doctor";
+
+  const loadWards = useCallback(async () => {
+    if (!canCrossWardAssign) {
+      setWards([]);
+      return;
+    }
+
+    const cacheKey = "wards:all";
+    const cachedWards = getClientCache<Ward[]>(
+      cacheKey,
+      CLIENT_CACHE_TTL.wards
+    );
+
+    if (cachedWards && cachedWards.length > 0) {
+      setWards(cachedWards);
+    }
+
+    try {
+      const wardsData = await getWardsWithPatients();
+      if (wardsData && wardsData.length > 0) {
+        setWards(wardsData);
+        setClientCache(cacheKey, wardsData);
+      }
+    } catch {
+      if (!cachedWards || cachedWards.length === 0) {
+        setWards([]);
+      }
+    }
+  }, [canCrossWardAssign]);
+
   useEffect(() => {
     void loadWard();
-  }, [loadWard]);
+    void loadWards();
+  }, [loadWard, loadWards]);
 
   useEffect(() => {
     const updateBedGridHeight = () => {
@@ -135,6 +173,42 @@ export default function WardPage() {
       setIsAddingBed(false);
     }
   };
+
+  const resolvedWardId = ward?.wardId || ward?.id || "";
+
+  const specialAssigns = useMemo(() => {
+    if (!resolvedWardId || !wards.length) {
+      return [] as Array<{
+        patient: Patient;
+        targetWardId: string;
+        targetWardName: string;
+        targetBed: Bed;
+      }>;
+    }
+
+    return wards.flatMap((wardItem) => {
+      const targetWardId = wardItem.wardId || wardItem.id;
+
+      if (targetWardId === resolvedWardId) {
+        return [];
+      }
+
+      return wardItem.beds
+        .filter((bed) => bed.patient?.assignedFromWardId === resolvedWardId)
+        .filter((bed) => Boolean(bed.patient))
+        .map((bed) => ({
+          patient: bed.patient as Patient,
+          targetWardId,
+          targetWardName: wardItem.name,
+          targetBed: bed,
+        }));
+    });
+  }, [resolvedWardId, wards]);
+
+  useEffect(() => {
+    void loadWards();
+  }, [loadWards]);
+
   if (isLoading) {
     return <MedicalCrossLoader message="Loading Ward..." fullScreen />;
   }
@@ -164,7 +238,6 @@ export default function WardPage() {
     );
   }
 
-  const resolvedWardId = ward.wardId || ward.id;
   const wardAccessAllowed = canAccessWard(session, resolvedWardId);
   const canManageWard = canManageWardActions(session, resolvedWardId);
   const canAssignPatients = canAssignOrDischargePatient(
@@ -278,6 +351,7 @@ export default function WardPage() {
                 <BedGrid
                   beds={ward.beds}
                   wardName={ward.name || ""}
+                  wardId={ward.wardId || ward.id}
                   onAvailableBedClick={handleBedClick}
                   canInteract={wardAccessAllowed}
                 />
@@ -285,6 +359,59 @@ export default function WardPage() {
             ) : (
               <p className="text-gray-600">No beds available</p>
             )}
+
+            <div className="mt-6 rounded-2xl border border-cyan-200 bg-linear-to-br from-cyan-50 via-white to-sky-50 p-4 shadow-sm ring-1 ring-cyan-100/60">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-lg font-semibold text-cyan-950">
+                    Special Assigns
+                  </h3>
+                  <p className="text-sm text-cyan-700">
+                    Patients transferred here from this ward, shown in a compact
+                    grid.
+                  </p>
+                </div>
+                <span className="rounded-full bg-cyan-100 px-3 py-1 text-xs font-semibold text-cyan-800">
+                  {specialAssigns.length} transferred
+                </span>
+              </div>
+
+              {specialAssigns.length > 0 ? (
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                  {specialAssigns.map((assign) => (
+                    <Link
+                      key={assign.patient.id}
+                      href={`/wards/${assign.targetWardId}/${assign.targetBed.id}`}
+                      className="group rounded-xl border border-cyan-200 bg-white/90 p-3 shadow-sm transition hover:-translate-y-0.5 hover:border-cyan-300 hover:bg-cyan-50 hover:shadow-md"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="font-semibold text-gray-900">
+                            {assign.patient.name}
+                          </p>
+                          <p className="text-xs text-gray-600 mt-1">
+                            Now in {assign.targetWardName} -{" "}
+                            {assign.targetBed.type === "ICU"
+                              ? `ICU Bed ${assign.targetBed.bedNumber}`
+                              : `Bed ${assign.targetBed.bedNumber}`}
+                          </p>
+                          <p className="text-xs text-gray-500 mt-1">
+                            Current status: {assign.targetBed.status}
+                          </p>
+                        </div>
+                        <span className="rounded-full bg-white px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-cyan-800">
+                          Special
+                        </span>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-xl border border-dashed border-cyan-200 bg-white/70 p-4 text-sm text-cyan-800">
+                  No transferred patients from this ward.
+                </div>
+              )}
+            </div>
           </div>
 
           <div
@@ -322,6 +449,7 @@ export default function WardPage() {
                 <PatientQueue
                   patients={ward.patientQueue}
                   beds={ward.beds || []}
+                  wards={wards}
                   wardId={ward.wardId || ward.id}
                   wardName={ward.name}
                   onPatientAssigned={loadWard}

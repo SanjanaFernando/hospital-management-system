@@ -33,6 +33,7 @@ export interface Patient {
   queueWaitTime?: number; // in minutes
   specialRequirements?: string[];
   wardId?: string;
+  assignedFromWardId?: string | null;
   status?: "queued" | "admitted" | "discharged";
   triageRequested?: boolean;
 }
