@@ -14,12 +14,22 @@ const WARD_LETTER_TO_INDEX: Record<string, string> = {
   d: "3",
 };
 
+const LEGACY_WARD_ID_MAP: Record<string, string> = {
+  "ward-0": "ward-3",
+  "ward-1": "ward-4",
+  "ward-2": "ward-5",
+};
+
 export function normalizeWardId(wardId?: string): string | undefined {
   if (!wardId) {
     return undefined;
   }
 
   const value = wardId.trim().toLowerCase();
+
+  if (value in LEGACY_WARD_ID_MAP) {
+    return LEGACY_WARD_ID_MAP[value];
+  }
 
   const byNumber = value.match(/^ward[-_\s]?([0-9]+)$/);
   if (byNumber) {
@@ -60,14 +70,25 @@ export function normalizeSession(
 }
 
 export function canAccessWard(session: UserSession, wardId: string): boolean {
+  // Admins can access everything. Consultants may view other wards,
+  // but management/update operations will still enforce same-ward checks.
   if (session.role === "admin") {
+    return true;
+  }
+
+  if (session.role === "consultant_doctor") {
+    // Consultants are allowed to view other wards (read-only access).
     return true;
   }
 
   const sessionWardId = normalizeWardId(session.wardId);
   const targetWardId = normalizeWardId(wardId);
 
-  return Boolean(sessionWardId) && Boolean(targetWardId) && sessionWardId === targetWardId;
+  return (
+    Boolean(sessionWardId) &&
+    Boolean(targetWardId) &&
+    sessionWardId === targetWardId
+  );
 }
 
 export function canManageStaff(session: UserSession): boolean {
@@ -78,27 +99,30 @@ export function canManageWardActions(
   session: UserSession,
   wardId: string
 ): boolean {
-  if (!canAccessWard(session, wardId)) {
-    return false;
-  }
+  // Admins can manage any ward. Non-admin managers must be assigned to the same ward.
+  if (session.role === "admin") return true;
 
-  return (
-    session.role === "admin" ||
-    session.role === "consultant_doctor" ||
-    session.role === "main_sister"
-  );
+  const sessionWardId = normalizeWardId(session.wardId);
+  const targetWardId = normalizeWardId(wardId);
+  if (!sessionWardId || !targetWardId || sessionWardId !== targetWardId)
+    return false;
+
+  return session.role === "consultant_doctor" || session.role === "main_sister";
 }
 
 export function canUpdateBedStatus(
   session: UserSession,
   wardId: string
 ): boolean {
-  if (!canAccessWard(session, wardId)) {
+  // Admins may update any ward. Others require same-ward assignment.
+  if (session.role === "admin") return true;
+
+  const sessionWardId = normalizeWardId(session.wardId);
+  const targetWardId = normalizeWardId(wardId);
+  if (!sessionWardId || !targetWardId || sessionWardId !== targetWardId)
     return false;
-  }
 
   return (
-    session.role === "admin" ||
     session.role === "consultant_doctor" ||
     session.role === "main_sister" ||
     session.role === "main_attendant"
@@ -112,23 +136,56 @@ export function canAssignOrDischargePatient(
   return canManageWardActions(session, wardId);
 }
 
+export function canAssignQueuedPatientAcrossWards(
+  session: UserSession,
+  sourceWardId: string,
+  targetWardId: string
+): boolean {
+  if (session.role === "admin") {
+    return true;
+  }
+
+  if (session.role !== "consultant_doctor") {
+    return false;
+  }
+
+  const sessionWardId = normalizeWardId(session.wardId);
+  const normalizedSourceWardId = normalizeWardId(sourceWardId);
+  const normalizedTargetWardId = normalizeWardId(targetWardId);
+
+  return (
+    Boolean(sessionWardId) &&
+    Boolean(normalizedSourceWardId) &&
+    Boolean(normalizedTargetWardId) &&
+    sessionWardId === normalizedSourceWardId
+  );
+}
+
 export function canRegisterPatient(
   session: UserSession,
   wardId: string
 ): boolean {
-  if (!canAccessWard(session, wardId)) {
+  // Admins can register anywhere. Non-admins must be assigned to the ward.
+  if (session.role === "admin") return true;
+
+  const sessionWardId = normalizeWardId(session.wardId);
+  const targetWardId = normalizeWardId(wardId);
+  if (!sessionWardId || !targetWardId || sessionWardId !== targetWardId)
     return false;
-  }
 
   return session.role !== "main_attendant";
 }
 
 export function canSetTriage(session: UserSession, wardId: string): boolean {
-  if (!canAccessWard(session, wardId)) {
-    return false;
-  }
+  // Admins can set triage anywhere. Consultants may set triage only in their ward.
+  if (session.role === "admin") return true;
 
-  return session.role === "admin" || session.role === "consultant_doctor";
+  const sessionWardId = normalizeWardId(session.wardId);
+  const targetWardId = normalizeWardId(wardId);
+  if (!sessionWardId || !targetWardId || sessionWardId !== targetWardId)
+    return false;
+
+  return session.role === "consultant_doctor";
 }
 
 export function assertPermission(
