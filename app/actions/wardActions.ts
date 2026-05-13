@@ -94,6 +94,15 @@ export async function getWardsWithPatients(): Promise<Ward[]> {
           (b: Record<string, unknown>) => b.status === "maintenance"
         ).length;
 
+        const queueResult = reorderQueueWithAi({
+          targetWardId: wardId,
+          targetWardName: (wardSerialized?.name as string) || wardId,
+          targetWardQueue: queuedPatients as unknown as Patient[],
+          targetWardOccupiedBeds: occupiedBeds,
+          targetWardTotalBeds: bedsSerialized.length,
+          wards: [],
+        });
+
         // Format beds as Ward expects
         const formattedBeds: Bed[] = bedsSerialized.map(
           (bed: Record<string, unknown>) => ({
@@ -129,7 +138,7 @@ export async function getWardsWithPatients(): Promise<Ward[]> {
           name: (wardSerialized?.name as string) || "",
           beds: formattedBeds,
           patients: admittedPatients as unknown as Patient[],
-          patientQueue: queuedPatients as unknown as Patient[],
+          patientQueue: queueResult.orderedPatients,
           dischargedPatients: dischargedPatients as unknown as Patient[],
           totalBeds: bedsSerialized.length,
           occupiedBeds,
@@ -283,8 +292,8 @@ export async function getWardWithPatients(
   });
 
   const orderedQueue = queueResult.orderedPatients || [];
-  const pendingTriagePatients = orderedQueue.filter(
-    (patient) => Boolean(patient.triageRequested)
+  const pendingTriagePatients = orderedQueue.filter((patient) =>
+    Boolean(patient.triageRequested)
   );
   const remainingPatients = orderedQueue.filter(
     (patient) => !patient.triageRequested
@@ -444,7 +453,7 @@ export async function addBedToWard(
       bedId: nextBedId,
       wardId: effectiveWardId,
       bedNumber: nextBedNumber,
-      type: bedType, 
+      type: bedType,
       status: "available",
       patientId: null,
       createdAt: new Date(),
@@ -452,10 +461,12 @@ export async function addBedToWard(
     });
 
     // 📝 Update ward timestamp
-    await db.collection("wards").updateOne(
-      { wardId: effectiveWardId },
-      { $set: { updatedAt: new Date() } }
-    );
+    await db
+      .collection("wards")
+      .updateOne(
+        { wardId: effectiveWardId },
+        { $set: { updatedAt: new Date() } }
+      );
 
     return { success: true, bedId: nextBedId };
   } catch (error) {

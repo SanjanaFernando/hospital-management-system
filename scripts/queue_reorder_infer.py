@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import json
 import sys
+from pathlib import Path
 from datetime import datetime, timezone
 from typing import Any
 
@@ -20,6 +21,9 @@ PRIORITY_TO_TRIAGE = {
     "Urgent": 3,
     "Non-urgent": 5,
 }
+
+
+ACTION_CACHE_PATH = Path(__file__).resolve().parents[1] / ".queue_action_cache.json"
 
 
 class DDQN(nn.Module):
@@ -80,7 +84,59 @@ def gender_score(patient: dict[str, Any]) -> float:
     return 1.0 if gender in {"F", "FEMALE"} else 0.0
 
 
-def build_state(payload: dict[str, Any], state_dim: int = 16) -> np.ndarray:
+def build_legacy_state(payload: dict[str, Any], state_dim: int = 12) -> np.ndarray:
+    queue = payload.get("targetWardQueue", [])
+    total_beds = max(
+        1,
+        int(
+            payload.get(
+                "targetWardTotalBeds",
+                payload.get("totalBeds", 15),
+            )
+        ),
+    )
+    occupied_beds = int(
+        payload.get("targetWardOccupiedBeds", payload.get("occupiedBeds", 0))
+    )
+
+    occ = min(max(occupied_beds / total_beds, 0.0), 1.0)
+    qlen = min(max(len(queue) / 20.0, 0.0), 1.0)
+
+    triage_in_queue = np.zeros(5)
+    longest_wait = 0.0
+
+    if queue:
+        for patient in queue:
+            triage_index = priority_to_triage_level(patient.get("priority")) - 1
+            triage_index = max(0, min(4, triage_index))
+            triage_in_queue[triage_index] += 1
+            wait_hours = normalized_wait_hours(patient, datetime.now(timezone.utc))
+            longest_wait = max(longest_wait, wait_hours)
+
+        triage_in_queue /= len(queue)
+        longest_wait = min(longest_wait / 24.0, 1.0)
+
+    state = np.array(
+        [
+            occ,
+            qlen,
+            *triage_in_queue,
+            longest_wait,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+        ],
+        dtype=np.float32,
+    )
+
+    if len(state) < state_dim:
+        state = np.pad(state, (0, state_dim - len(state)), "constant")
+
+    return np.clip(state[:state_dim], 0.0, 1.0)
+
+
+def build_richer_state(payload: dict[str, Any], state_dim: int = 16) -> np.ndarray:
     queue = payload.get("targetWardQueue", [])
     total_beds = max(
         1,
@@ -149,6 +205,13 @@ def build_state(payload: dict[str, Any], state_dim: int = 16) -> np.ndarray:
     return np.clip(state, 0.0, 1.0)
 
 
+def build_state(payload: dict[str, Any], state_dim: int, action_dim: int) -> np.ndarray:
+    if action_dim == 64 and state_dim <= 12:
+        return build_legacy_state(payload, state_dim=state_dim)
+
+    return build_richer_state(payload, state_dim=state_dim)
+
+
 def action_to_weights(action: int, action_dim: int) -> list[float]:
     if action_dim == 81:
         w_triage = [0.3, 0.5, 0.7][action // 27]
@@ -156,11 +219,10 @@ def action_to_weights(action: int, action_dim: int) -> list[float]:
         w_age = [0.1, 0.2, 0.3][(action // 3) % 3]
         w_gender = [0.0, 0.05, 0.1][action % 3]
     elif action_dim == 64:
-        # Legacy model family: 4-level weighting over triage/wait/age.
-        w_triage = [0.25, 0.45, 0.65, 0.85][action // 16]
-        w_wait = [0.2, 0.4, 0.6, 0.8][(action // 4) % 4]
-        w_age = [0.1, 0.2, 0.3, 0.4][action % 4]
-        w_gender = 0.0
+        # Legacy model family: 8x8 weighting over triage and wait only.
+        w_triage = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8][action // 8]
+        w_wait = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7][action % 8]
+        return [w_triage, w_wait]
     else:
         denom = max(1, action_dim - 1)
         r0 = action / denom
@@ -208,11 +270,15 @@ def infer_model_layout(state_dict: dict[str, torch.Tensor]) -> tuple[int, tuple[
 
 
 def patient_score(patient: dict[str, Any], now: datetime, weights: list[float]) -> float:
-    w_triage, w_wait, w_age, w_gender = weights
-
     triage_level = priority_to_triage_level(patient.get("priority"))
     triage_score = (6 - triage_level) / 5.0
     wait_score = min(normalized_wait_hours(patient, now) / 48.0, 1.0)
+
+    if len(weights) == 2:
+        w_triage, w_wait = weights
+        return (w_triage * triage_score) + (w_wait * wait_score)
+
+    w_triage, w_wait, w_age, w_gender = weights
     age_score = min(float(patient.get("age", 0)) / 85.0, 1.0)
     female_score = gender_score(patient)
 
@@ -222,6 +288,120 @@ def patient_score(patient: dict[str, Any], now: datetime, weights: list[float]) 
         + (w_age * age_score)
         + (w_gender * female_score)
     )
+
+
+def load_action_cache() -> dict[str, dict[str, Any]]:
+    if not ACTION_CACHE_PATH.exists():
+        return {}
+
+    try:
+        with ACTION_CACHE_PATH.open("r", encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+    if isinstance(data, dict):
+        return data
+
+    return {}
+
+
+def save_action_cache(cache: dict[str, dict[str, Any]]) -> None:
+    try:
+        ACTION_CACHE_PATH.write_text(json.dumps(cache), encoding="utf-8")
+    except OSError:
+        # Cache persistence is best-effort and should not break inference.
+        return
+
+
+def choose_stable_action(
+    ward_id: str | None,
+    q_values: np.ndarray,
+    suggested_action: int,
+    disallowed_actions: set[int],
+    payload: dict[str, Any],
+) -> tuple[int, dict[str, Any]]:
+    if not ward_id:
+        return suggested_action, {"reason": "no-ward"}
+
+    margin = float(payload.get("actionSwitchMargin", 3.0))
+    max_hold_minutes = float(payload.get("actionMaxHoldMinutes", 45))
+
+    cache = load_action_cache()
+    entry = cache.get(ward_id)
+
+    selected_action = suggested_action
+    reason = "fresh"
+    prev_action = None
+    q_gap = None
+
+    if isinstance(entry, dict):
+        prev_action_raw = entry.get("action")
+        prev_ts_raw = entry.get("updatedAt")
+
+        if isinstance(prev_action_raw, int) and 0 <= prev_action_raw < len(q_values):
+            if prev_action_raw in disallowed_actions:
+                prev_action = None
+            else:
+                prev_action = prev_action_raw
+
+        if prev_action is not None:
+            prev_q = float(q_values[prev_action])
+            best_q = float(q_values[suggested_action])
+            q_gap = best_q - prev_q
+
+            age_minutes = None
+            if isinstance(prev_ts_raw, str):
+                prev_ts = parse_iso(prev_ts_raw)
+                if prev_ts is not None:
+                    now = datetime.now(timezone.utc)
+                    if prev_ts.tzinfo is None:
+                        prev_ts = prev_ts.replace(tzinfo=timezone.utc)
+                    age_minutes = max(0.0, (now - prev_ts).total_seconds() / 60.0)
+
+            hold_expired = age_minutes is not None and age_minutes >= max_hold_minutes
+            wants_switch = suggested_action != prev_action
+
+            # Hysteresis: keep current action unless the new winner is clearly better,
+            # or the hold window has expired and it is at least not worse.
+            if wants_switch:
+                if q_gap >= margin:
+                    selected_action = suggested_action
+                    reason = "switch-margin"
+                elif hold_expired and q_gap >= 0:
+                    selected_action = suggested_action
+                    reason = "switch-expired"
+                else:
+                    selected_action = prev_action
+                    reason = "hold"
+            else:
+                selected_action = suggested_action
+                reason = "same"
+    
+    if selected_action in disallowed_actions:
+        # Fallback safety: choose best allowed action when a disallowed action slips through.
+        selection_q = q_values.copy()
+        for blocked in disallowed_actions:
+            if 0 <= blocked < len(selection_q):
+                selection_q[blocked] = -np.inf
+        selected_action = int(np.argmax(selection_q))
+        reason = "forced-allowed"
+
+    cache[ward_id] = {
+        "action": int(selected_action),
+        "updatedAt": datetime.now(timezone.utc).isoformat(),
+    }
+    save_action_cache(cache)
+
+    meta = {
+        "reason": reason,
+        "previousAction": prev_action,
+        "suggestedAction": suggested_action,
+        "selectedAction": selected_action,
+        "switchMargin": margin,
+        "qGapVsPrevious": q_gap,
+    }
+    return selected_action, meta
 
 
 def main() -> int:
@@ -237,7 +417,7 @@ def main() -> int:
     state_dict = extract_state_dict(checkpoint)
     state_dim, hidden_dims, action_dim = infer_model_layout(state_dict)
 
-    state = build_state(payload, state_dim=state_dim)
+    state = build_state(payload, state_dim=state_dim, action_dim=action_dim)
 
     model = DDQN(state_dim=state_dim, action_dim=action_dim, hidden_dims=hidden_dims)
     model.load_state_dict(state_dict)
@@ -246,7 +426,23 @@ def main() -> int:
     with torch.no_grad():
         q_values = model(torch.FloatTensor(state).unsqueeze(0)).squeeze(0).numpy()
 
-    action = int(np.argmax(q_values))
+    disallowed_actions: set[int] = set()
+    if action_dim == 64:
+        disallowed_actions.add(0)
+
+    selection_q_values = q_values.copy()
+    for blocked in disallowed_actions:
+        if 0 <= blocked < len(selection_q_values):
+            selection_q_values[blocked] = -np.inf
+
+    suggested_action = int(np.argmax(selection_q_values))
+    action, stability_meta = choose_stable_action(
+        ward_id=payload.get("targetWardId"),
+        q_values=q_values,
+        suggested_action=suggested_action,
+        disallowed_actions=disallowed_actions,
+        payload=payload,
+    )
     weights = action_to_weights(action, action_dim=action_dim)
 
     now = datetime.now(timezone.utc)
@@ -264,11 +460,13 @@ def main() -> int:
                 "orderedPatientIds": [p.get("id") for p in sorted_queue if p.get("id")],
                 "meta": {
                     "action": action,
+                    "suggestedAction": suggested_action,
                     "actionDim": action_dim,
                     "stateDim": state_dim,
                     "hiddenDims": list(hidden_dims),
                     "weights": weights,
                     "qValues": [float(x) for x in q_values],
+                    "actionStability": stability_meta,
                     "modelApplied": True,
                 },
             }

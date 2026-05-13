@@ -1,6 +1,7 @@
 import { connectToDatabase } from "@/lib/mongodb";
 import { NextResponse, NextRequest } from "next/server";
 import { canManageStaff, getSessionFromHeaders } from "@/lib/rbac";
+import { reorderQueueWithAi } from "@/lib/queueAi";
 
 export async function GET(request: NextRequest) {
   try {
@@ -31,11 +32,19 @@ export async function GET(request: NextRequest) {
         const queuedPatients = allPatients.filter(
           (p: Record<string, unknown>) => p.status === "queued"
         );
+        const queueResult = reorderQueueWithAi({
+          targetWardId: wardId,
+          targetWardName: (ward?.name as string) || wardId,
+          targetWardQueue: queuedPatients as unknown[],
+          targetWardOccupiedBeds: 0,
+          targetWardTotalBeds: 0,
+          wards: [],
+        });
 
         return {
           ...ward,
           patients: admittedPatients,
-          patientQueue: queuedPatients,
+          patientQueue: queueResult.orderedPatients,
           totalPatients: allPatients.length,
         };
       })
