@@ -272,13 +272,15 @@ def infer_model_layout(state_dict: dict[str, torch.Tensor]) -> tuple[int, tuple[
 def patient_score(patient: dict[str, Any], now: datetime, weights: list[float]) -> float:
     triage_level = priority_to_triage_level(patient.get("priority"))
     triage_score = (6 - triage_level) / 5.0
-    wait_score = min(normalized_wait_hours(patient, now) / 48.0, 1.0)
 
     if len(weights) == 2:
         w_triage, w_wait = weights
+        # Keep legacy (64-action) ranking consistent with legacy state features.
+        wait_score = min(normalized_wait_hours(patient, now) / 24.0, 1.0)
         return (w_triage * triage_score) + (w_wait * wait_score)
 
     w_triage, w_wait, w_age, w_gender = weights
+    wait_score = min(normalized_wait_hours(patient, now) / 48.0, 1.0)
     age_score = min(float(patient.get("age", 0)) / 85.0, 1.0)
     female_score = gender_score(patient)
 

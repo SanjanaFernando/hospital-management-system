@@ -290,14 +290,7 @@ export async function getWardWithPatients(
     targetWardTotalBeds: bedsSerialized.length,
     wards: wardSnapshots.filter((w) => w.wardId),
   });
-
   const orderedQueue = queueResult.orderedPatients || [];
-  const pendingTriagePatients = orderedQueue.filter((patient) =>
-    Boolean(patient.triageRequested)
-  );
-  const remainingPatients = orderedQueue.filter(
-    (patient) => !patient.triageRequested
-  );
 
   return {
     id:
@@ -308,17 +301,14 @@ export async function getWardWithPatients(
     name: (wardSerialized?.name as string) || "",
     beds: formattedBeds,
     patients: admittedPatients as unknown as Patient[],
-    patientQueue: [...pendingTriagePatients, ...remainingPatients],
+    patientQueue: orderedQueue,
     dischargedPatients: dischargedPatients as unknown as Patient[],
     totalBeds: bedsSerialized.length,
     occupiedBeds,
     availableBeds,
     maintenanceBeds,
     queueOrderStrategy: queueResult.strategy,
-    queueOrderMessage:
-      pendingTriagePatients.length > 0
-        ? `${queueResult.message} Pending doctor triage patients are pinned at the top.`
-        : queueResult.message,
+    queueOrderMessage: queueResult.message,
   } as Ward;
 }
 

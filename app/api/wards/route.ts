@@ -2,6 +2,7 @@ import { connectToDatabase } from "@/lib/mongodb";
 import { NextResponse, NextRequest } from "next/server";
 import { canManageStaff, getSessionFromHeaders } from "@/lib/rbac";
 import { reorderQueueWithAi } from "@/lib/queueAi";
+import { Patient } from "@/app/types";
 
 export async function GET(request: NextRequest) {
   try {
@@ -35,7 +36,7 @@ export async function GET(request: NextRequest) {
         const queueResult = reorderQueueWithAi({
           targetWardId: wardId,
           targetWardName: (ward?.name as string) || wardId,
-          targetWardQueue: queuedPatients as unknown[],
+          targetWardQueue: queuedPatients as unknown as Patient[],
           targetWardOccupiedBeds: 0,
           targetWardTotalBeds: 0,
           wards: [],

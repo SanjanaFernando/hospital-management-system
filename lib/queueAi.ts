@@ -96,6 +96,10 @@ export function reorderQueueWithAi(input: QueueAiInput): QueueAiResult {
 
   const payload = JSON.stringify({
     modelPath,
+    // Disable action hysteresis so each ward can immediately switch to the
+    // best-scoring action for its current queue state.
+    actionSwitchMargin: 0,
+    actionMaxHoldMinutes: 0,
     ...input,
   });
 
