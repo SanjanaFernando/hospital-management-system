@@ -1,9 +1,13 @@
 "use server";
 
 import { connectToDatabase } from "@/lib/mongodb";
-import { Ward, Patient, Bed, UserSession } from "@/app/types";
-import { reorderQueueWithAi } from "@/lib/queueAi";
+import {
+  getWardWithPatientsData,
+  getWardsWithPatientsData,
+} from "@/lib/hospital-data";
+import { Ward, UserSession } from "@/app/types";
 import { ObjectId } from "mongodb";
+import { revalidateTag } from "next/cache";
 import {
   assertPermission,
   canManageWardActions,
@@ -45,107 +49,10 @@ function serializeDoc(doc: unknown): unknown {
 
 export async function getWardsWithPatients(): Promise<Ward[]> {
   try {
-    console.log("📡 Server Action: Fetching wards with patients...");
-    const { db } = await connectToDatabase();
-
-    // Fetch all wards
-    const wards = await db.collection("wards").find({}).toArray();
-
-    // For each ward, fetch patients and beds
-    const wardsWithData = await Promise.all(
-      wards.map(async (ward: Record<string, unknown>) => {
-        const wardSerialized = serializeDoc(ward) as Record<string, unknown>;
-        const wardId = wardSerialized?.wardId as string;
-
-        // Fetch patients for this ward
-        const allPatients = await db
-          .collection("patients")
-          .find({ wardId })
-          .toArray();
-        const patientsSerialized = allPatients.map(
-          (p) => serializeDoc(p) as Record<string, unknown>
-        );
-
-        // Fetch beds for this ward
-        const allBeds = await db.collection("beds").find({ wardId }).toArray();
-        const bedsSerialized = allBeds.map(
-          (b) => serializeDoc(b) as Record<string, unknown>
-        );
-
-        // Separate patients by status
-        const admittedPatients = patientsSerialized.filter(
-          (p: Record<string, unknown>) => p.status === "admitted"
-        );
-        const queuedPatients = patientsSerialized.filter(
-          (p: Record<string, unknown>) => p.status === "queued"
-        );
-        const dischargedPatients = patientsSerialized.filter(
-          (p: Record<string, unknown>) => p.status === "discharged"
-        );
-
-        // Separate beds by status
-        const availableBeds = bedsSerialized.filter(
-          (b: Record<string, unknown>) => b.status === "available"
-        ).length;
-        const occupiedBeds = bedsSerialized.filter(
-          (b: Record<string, unknown>) => b.status === "occupied"
-        ).length;
-        const maintenanceBeds = bedsSerialized.filter(
-          (b: Record<string, unknown>) => b.status === "maintenance"
-        ).length;
-
-        // Format beds as Ward expects
-        const formattedBeds: Bed[] = bedsSerialized.map(
-          (bed: Record<string, unknown>) => ({
-            id: (bed?.bedId as string) || (bed?._id as string) || "",
-            bedNumber: (bed?.bedNumber as number) || 0,
-            status:
-              (bed?.status as "available" | "occupied" | "maintenance") ||
-              "available",
-            type: (bed?.type as "ICU" | "NORMAL") || "NORMAL",
-            patient:
-              bed?.patientId && admittedPatients.length > 0
-                ? (admittedPatients.find(
-                    (p: Record<string, unknown>) => p?.id === bed?.patientId
-                  ) as unknown as Patient)
-                : undefined,
-          })
-        );
-
-        // Sort beds: ICU first (by bedNumber asc), then NORMAL (by bedNumber asc)
-        formattedBeds.sort((a, b) => {
-          const aPriority = a.type === "ICU" ? 0 : 1;
-          const bPriority = b.type === "ICU" ? 0 : 1;
-          if (aPriority !== bPriority) return aPriority - bPriority;
-          return (a.bedNumber || 0) - (b.bedNumber || 0);
-        });
-
-        return {
-          id:
-            (wardSerialized?._id as string) ||
-            (wardSerialized?.wardId as string) ||
-            "",
-          wardId: (wardSerialized?.wardId as string) || "",
-          name: (wardSerialized?.name as string) || "",
-          beds: formattedBeds,
-          patients: admittedPatients as unknown as Patient[],
-          patientQueue: queuedPatients as unknown as Patient[],
-          dischargedPatients: dischargedPatients as unknown as Patient[],
-          totalBeds: bedsSerialized.length,
-          occupiedBeds,
-          availableBeds,
-          maintenanceBeds,
-        } as Ward;
-      })
-    );
-
-    console.log(
-      `✅ Server Action: Fetched ${wardsWithData.length} wards successfully`
-    );
-    return wardsWithData;
+    return await getWardsWithPatientsData();
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : "Unknown error";
-    console.error("❌ Server Action Error:", errorMsg);
+    console.error("Server Action Error:", errorMsg);
     throw new Error(`Failed to fetch wards: ${errorMsg}`);
   }
 }
@@ -153,164 +60,7 @@ export async function getWardsWithPatients(): Promise<Ward[]> {
 export async function getWardWithPatients(
   wardId: string
 ): Promise<Ward | null> {
-  if (!wardId) {
-    return null;
-  }
-
-  const { db } = await connectToDatabase();
-
-  let ward = await db.collection("wards").findOne({ wardId });
-
-  if (!ward && ObjectId.isValid(wardId)) {
-    ward = await db.collection("wards").findOne({
-      _id: new ObjectId(wardId),
-    });
-  }
-
-  if (!ward) {
-    return null;
-  }
-
-  const wardSerialized = serializeDoc(ward) as Record<string, unknown>;
-  const effectiveWardId = (wardSerialized?.wardId as string) || wardId;
-
-  const allPatients = await db
-    .collection("patients")
-    .find({ wardId: effectiveWardId })
-    .toArray();
-  const patientsSerialized = allPatients.map(
-    (p) => serializeDoc(p) as Record<string, unknown>
-  );
-
-  const allBeds = await db
-    .collection("beds")
-    .find({ wardId: effectiveWardId })
-    .toArray();
-  const bedsSerialized = allBeds.map(
-    (b) => serializeDoc(b) as Record<string, unknown>
-  );
-
-  const admittedPatients = patientsSerialized.filter(
-    (p: Record<string, unknown>) => p.status === "admitted"
-  );
-  const queuedPatients = patientsSerialized.filter(
-    (p: Record<string, unknown>) => p.status === "queued"
-  );
-  const dischargedPatients = patientsSerialized.filter(
-    (p: Record<string, unknown>) => p.status === "discharged"
-  );
-
-  const availableBeds = bedsSerialized.filter(
-    (b: Record<string, unknown>) => b.status === "available"
-  ).length;
-  const occupiedBeds = bedsSerialized.filter(
-    (b: Record<string, unknown>) => b.status === "occupied"
-  ).length;
-  const maintenanceBeds = bedsSerialized.filter(
-    (b: Record<string, unknown>) => b.status === "maintenance"
-  ).length;
-
-  const formattedBeds: Bed[] = bedsSerialized.map(
-    (bed: Record<string, unknown>) => ({
-      id: (bed?.bedId as string) || (bed?._id as string) || "",
-      bedNumber: (bed?.bedNumber as number) || 0,
-      status:
-        (bed?.status as "available" | "occupied" | "maintenance") ||
-        "available",
-      type: (bed?.type as "ICU" | "NORMAL") || "NORMAL",
-      patient:
-        bed?.patientId && admittedPatients.length > 0
-          ? (admittedPatients.find(
-              (p: Record<string, unknown>) => p?.id === bed?.patientId
-            ) as unknown as Patient)
-          : undefined,
-    })
-  );
-
-  // Sort beds: ICU first then NORMAL; within each type sort by bedNumber ascending
-  formattedBeds.sort((a, b) => {
-    const aPriority = a.type === "ICU" ? 0 : 1;
-    const bPriority = b.type === "ICU" ? 0 : 1;
-    if (aPriority !== bPriority) return aPriority - bPriority;
-    return (a.bedNumber || 0) - (b.bedNumber || 0);
-  });
-
-  const allWardDocs = await db.collection("wards").find({}).toArray();
-  const wardSnapshots = await Promise.all(
-    allWardDocs.map(async (wardDoc: Record<string, unknown>) => {
-      const serialized = serializeDoc(wardDoc) as Record<string, unknown>;
-      const wid = (serialized?.wardId as string) || "";
-
-      if (!wid) {
-        return {
-          wardId: "",
-          name: (serialized?.name as string) || "",
-          occupiedBeds: 0,
-          totalBeds: 0,
-          queueLength: 0,
-        };
-      }
-
-      const [bedsForWard, queuedCount] = await Promise.all([
-        db.collection("beds").find({ wardId: wid }).toArray(),
-        db
-          .collection("patients")
-          .countDocuments({ wardId: wid, status: "queued" }),
-      ]);
-
-      const serializedBeds = bedsForWard.map(
-        (b) => serializeDoc(b) as Record<string, unknown>
-      );
-
-      return {
-        wardId: wid,
-        name: (serialized?.name as string) || wid,
-        occupiedBeds: serializedBeds.filter((b) => b.status === "occupied")
-          .length,
-        totalBeds: serializedBeds.length,
-        queueLength: queuedCount,
-      };
-    })
-  );
-
-  const queueResult = reorderQueueWithAi({
-    targetWardId: effectiveWardId,
-    targetWardName: (wardSerialized?.name as string) || effectiveWardId,
-    targetWardQueue: queuedPatients as unknown as Patient[],
-    targetWardOccupiedBeds: occupiedBeds,
-    targetWardTotalBeds: bedsSerialized.length,
-    wards: wardSnapshots.filter((w) => w.wardId),
-  });
-
-  const orderedQueue = queueResult.orderedPatients || [];
-  const pendingTriagePatients = orderedQueue.filter(
-    (patient) => Boolean(patient.triageRequested)
-  );
-  const remainingPatients = orderedQueue.filter(
-    (patient) => !patient.triageRequested
-  );
-
-  return {
-    id:
-      (wardSerialized?._id as string) ||
-      (wardSerialized?.wardId as string) ||
-      "",
-    wardId: (wardSerialized?.wardId as string) || "",
-    name: (wardSerialized?.name as string) || "",
-    beds: formattedBeds,
-    patients: admittedPatients as unknown as Patient[],
-    patientQueue: [...pendingTriagePatients, ...remainingPatients],
-    dischargedPatients: dischargedPatients as unknown as Patient[],
-    totalBeds: bedsSerialized.length,
-    occupiedBeds,
-    availableBeds,
-    maintenanceBeds,
-    queueOrderStrategy: queueResult.strategy,
-    queueOrderMessage:
-      pendingTriagePatients.length > 0
-        ? `${queueResult.message} Pending doctor triage patients are pinned at the top.`
-        : queueResult.message,
-  } as Ward;
+  return await getWardWithPatientsData(wardId);
 }
 
 export async function updateBedStatus(
@@ -371,6 +121,11 @@ export async function updateBedStatus(
     if (result.matchedCount === 0) {
       return { success: false, error: "Bed not found" };
     }
+
+    revalidateTag("beds", "max");
+    revalidateTag("wards", "max");
+    revalidateTag("patients", "max");
+    revalidateTag("dashboard", "max");
 
     console.log("✅ Bed status updated successfully");
     return { success: true };
@@ -444,7 +199,7 @@ export async function addBedToWard(
       bedId: nextBedId,
       wardId: effectiveWardId,
       bedNumber: nextBedNumber,
-      type: bedType, 
+      type: bedType,
       status: "available",
       patientId: null,
       createdAt: new Date(),
@@ -452,10 +207,16 @@ export async function addBedToWard(
     });
 
     // 📝 Update ward timestamp
-    await db.collection("wards").updateOne(
-      { wardId: effectiveWardId },
-      { $set: { updatedAt: new Date() } }
-    );
+    await db
+      .collection("wards")
+      .updateOne(
+        { wardId: effectiveWardId },
+        { $set: { updatedAt: new Date() } }
+      );
+
+    revalidateTag("beds", "max");
+    revalidateTag("wards", "max");
+    revalidateTag("dashboard", "max");
 
     return { success: true, bedId: nextBedId };
   } catch (error) {

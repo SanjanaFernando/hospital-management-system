@@ -22,6 +22,7 @@ import RoleSwitcher from "@/app/components/RoleSwitcher";
 import { getWardsWithPatients } from "@/app/actions/wardActions";
 import { Ward } from "@/app/types";
 import { ROLE_LABELS } from "@/lib/rbac";
+import { UserSession } from "@/app/types";
 
 interface SidebarItem {
   label: string;
@@ -149,8 +150,8 @@ function AppShellContent({ children }: PropsWithChildren) {
 
   return (
     <div className="min-h-screen bg-linear-to-br from-slate-100 via-teal-50 to-cyan-100">
-      <div className="mx-auto flex max-w-[1650px] flex-col gap-4 p-4 lg:flex-row lg:gap-6 lg:p-6">
-        <aside className="w-full rounded-3xl border border-teal-800/10 bg-[#0b2b33] p-5 text-slate-100 shadow-[0_20px_45px_rgba(3,17,26,0.25)] lg:sticky lg:top-4 lg:h-[calc(100vh-2rem)] lg:w-[340px] lg:overflow-y-auto">
+      <div className="mx-auto flex max-w-412.5 flex-col gap-4 p-4 lg:flex-row lg:gap-6 lg:p-6">
+        <aside className="w-full rounded-3xl border border-teal-800/10 bg-[#0b2b33] p-5 text-slate-100 shadow-[0_20px_45px_rgba(3,17,26,0.25)] lg:sticky lg:top-4 lg:h-[calc(100vh-2rem)] lg:w-85 lg:overflow-y-auto">
           <div className="border-b border-white/15 pb-4">
             <h1 className="text-xl font-bold tracking-tight text-white">
               Karapitiya National Hospital
@@ -178,7 +179,7 @@ function AppShellContent({ children }: PropsWithChildren) {
           </div>
 
           <div className="mt-4 grid grid-cols-2 gap-3">
-            <div className="rounded-2xl border border-white/10 bg-gradient-to-b from-teal-900/70 to-teal-950/60 p-3">
+            <div className="rounded-2xl border border-white/10 bg-linear-to-b from-teal-900/70 to-teal-950/60 p-3">
               <p className="text-2xl font-bold text-emerald-200">
                 {availableBeds}
               </p>
@@ -186,7 +187,7 @@ function AppShellContent({ children }: PropsWithChildren) {
                 Available
               </p>
             </div>
-            <div className="rounded-2xl border border-white/10 bg-gradient-to-b from-cyan-900/70 to-cyan-950/60 p-3">
+            <div className="rounded-2xl border border-white/10 bg-linear-to-b from-cyan-900/70 to-cyan-950/60 p-3">
               <p className="text-2xl font-bold text-cyan-200">{queueLength}</p>
               <p className="text-[11px] uppercase tracking-[0.18em] text-cyan-100/80">
                 In Queue
@@ -302,9 +303,12 @@ function AppShellContent({ children }: PropsWithChildren) {
   );
 }
 
-export default function AppShell({ children }: PropsWithChildren) {
+export default function AppShell({
+  children,
+  initialSession,
+}: PropsWithChildren & { initialSession?: UserSession }) {
   return (
-    <AuthSessionProvider>
+    <AuthSessionProvider initialSession={initialSession}>
       <AppShellContent>{children}</AppShellContent>
     </AuthSessionProvider>
   );

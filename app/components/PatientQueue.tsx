@@ -199,10 +199,8 @@ export default function PatientQueue({
       )
     : patients;
 
-  const displayPatients = [
-    ...sortedPatients.filter((patient) => patient.triageRequested),
-    ...sortedPatients.filter((patient) => !patient.triageRequested),
-  ];
+  // Preserve backend order (AI/priority score). Do not pin triageRequested here.
+  const displayPatients = sortedPatients;
 
   return (
     <div className="w-full h-full">

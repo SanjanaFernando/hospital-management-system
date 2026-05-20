@@ -1,0 +1,114 @@
+"use client";
+
+import Link from "next/link";
+import { useState } from "react";
+import { ChevronLeft } from "lucide-react";
+import { Ward } from "@/app/types";
+import PatientRegistrationForm from "@/app/components/PatientRegistrationForm";
+import PatientList from "@/app/components/PatientList";
+import { getWardWithPatients } from "@/app/actions/wardActions";
+import { useAuthSession } from "@/app/context/AuthSessionContext";
+import { canAccessWard, canRegisterPatient } from "@/lib/rbac";
+
+interface WardPatientsClientProps {
+  initialWard: Ward;
+}
+
+export default function WardPatientsClient({
+  initialWard,
+}: WardPatientsClientProps) {
+  const { session } = useAuthSession();
+  const [ward, setWard] = useState(initialWard);
+  const [showRegistrationForm, setShowRegistrationForm] = useState(false);
+  const [error, setError] = useState("");
+
+  const resolvedWardId = ward.wardId || ward.id;
+  const wardAccessAllowed = canAccessWard(session, resolvedWardId);
+  const canRegisterInWard = canRegisterPatient(session, resolvedWardId);
+
+  const refreshWard = async () => {
+    const wardData = await getWardWithPatients(resolvedWardId);
+    if (wardData) {
+      setWard(wardData);
+    }
+  };
+
+  if (!wardAccessAllowed) {
+    return (
+      <div className="min-h-screen bg-linear-to-br from-blue-50 to-indigo-100 p-8">
+        <div className="mx-auto max-w-4xl rounded-lg bg-white p-8 shadow-md">
+          <h1 className="mb-2 text-2xl font-bold text-gray-800">
+            Access denied
+          </h1>
+          <p className="text-gray-600">
+            Your role is scoped to a different ward.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-linear-to-br from-blue-50 to-indigo-100 p-8">
+      <div className="mx-auto max-w-6xl">
+        <div className="mb-6 flex items-center justify-between">
+          <Link
+            href={`/wards/${resolvedWardId}`}
+            className="inline-flex items-center gap-2 rounded-lg bg-gray-600 px-4 py-2 text-white transition-colors hover:bg-gray-700"
+          >
+            <ChevronLeft size={20} />
+            Back to Ward
+          </Link>
+          <h1 className="text-2xl font-bold text-gray-800">
+            {ward.name} - Patients
+          </h1>
+        </div>
+
+        {error && (
+          <div className="mb-6 rounded-lg border border-yellow-200 bg-yellow-50 p-4">
+            <p className="text-sm text-yellow-800">{error}</p>
+          </div>
+        )}
+
+        <div className="mb-6 flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-gray-800">
+            Manage Patients
+          </h2>
+          <button
+            onClick={() => setShowRegistrationForm((prev) => !prev)}
+            disabled={!canRegisterInWard}
+            className="rounded-lg bg-green-600 px-4 py-2 font-semibold text-white transition-colors hover:bg-green-700 disabled:cursor-not-allowed disabled:bg-green-300"
+          >
+            {!canRegisterInWard
+              ? "Registration blocked"
+              : showRegistrationForm
+                ? "Close Form"
+                : "+ Register Patient"}
+          </button>
+        </div>
+
+        {showRegistrationForm && canRegisterInWard && (
+          <div className="mb-8">
+            <PatientRegistrationForm
+              wardId={resolvedWardId}
+              onSuccess={async () => {
+                setShowRegistrationForm(false);
+                await refreshWard();
+              }}
+              onCancel={() => setShowRegistrationForm(false)}
+            />
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+          <PatientList title="Admitted Patients" patients={ward.patients} />
+          <PatientList title="Queued Patients" patients={ward.patientQueue} />
+          <PatientList
+            title="Discharged Patients"
+            patients={ward.dischargedPatients || []}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}

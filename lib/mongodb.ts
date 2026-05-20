@@ -1,6 +1,7 @@
 import { MongoClient, Db } from "mongodb";
 
 const MONGODB_URI = process.env.MONGODB_URI as string;
+const MONGODB_DB = process.env.MONGODB_DB || "hospital-management";
 
 if (!MONGODB_URI) {
   throw new Error(
@@ -49,16 +50,15 @@ export async function connectToDatabase(): Promise<{
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
       if (!mongoConnection.promise) {
-        console.log(
-          `🔄 MongoDB connection attempt ${attempt}/${MAX_RETRIES}...`
-        );
+        console.log(`MongoDB connection attempt ${attempt}/${MAX_RETRIES}...`);
         const client = new MongoClient(MONGODB_URI, {
-          serverSelectionTimeoutMS: 15000, // 15 seconds
-          socketTimeoutMS: 15000, // 15 seconds
-          connectTimeoutMS: 15000, // 15 seconds
+          serverSelectionTimeoutMS: 10000,
+          socketTimeoutMS: 10000,
+          connectTimeoutMS: 10000,
           retryWrites: true,
           maxPoolSize: 10,
-          minPoolSize: 2,
+          minPoolSize: 0,
+          maxIdleTimeMS: 30000,
         });
 
         mongoConnection.promise = client.connect();
@@ -66,30 +66,24 @@ export async function connectToDatabase(): Promise<{
 
       const client = await mongoConnection.promise;
 
-      const db = client.db("hospital-management");
-
-      // Verify connection with a ping
-      await db.admin().ping();
+      const db = client.db(MONGODB_DB);
 
       mongoConnection.client = client;
       mongoConnection.db = db;
 
-      console.log("✅ Connected to MongoDB Successfully");
+      console.log("Connected to MongoDB successfully");
       return { client, db };
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
       mongoConnection.promise = null;
       console.error(
-        `❌ MongoDB connection error (attempt ${attempt}/${MAX_RETRIES}):`,
+        `MongoDB connection error (attempt ${attempt}/${MAX_RETRIES}):`,
         lastError.message
       );
 
       if (attempt < MAX_RETRIES) {
-        // Exponential backoff: 2s, 4s, 8s, 16s, 32s
         const delayMs = INITIAL_RETRY_DELAY * Math.pow(2, attempt - 1);
-        console.log(
-          `⏳ Retrying in ${delayMs}ms... (Waiting for network/DNS recovery)`
-        );
+        console.log(`Retrying in ${delayMs}ms...`);
         await delay(delayMs);
       }
     }

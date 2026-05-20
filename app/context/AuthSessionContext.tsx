@@ -4,49 +4,34 @@ import {
   createContext,
   PropsWithChildren,
   useContext,
-  useEffect,
   useMemo,
   useState,
 } from "react";
 import { UserSession } from "@/app/types";
 import { normalizeSession } from "@/lib/rbac";
+import { SESSION_COOKIE_NAME, stringifySessionCookie } from "@/lib/session";
 
 interface AuthSessionContextValue {
   session: UserSession;
   setSession: (session: UserSession) => void;
 }
 
-const STORAGE_KEY = "hospital-rbac-session";
-
 const AuthSessionContext = createContext<AuthSessionContextValue | undefined>(
   undefined
 );
 
-export function AuthSessionProvider({ children }: PropsWithChildren) {
+export function AuthSessionProvider({
+  children,
+  initialSession,
+}: PropsWithChildren & { initialSession?: UserSession }) {
   const [session, setSessionState] = useState<UserSession>(() =>
-    normalizeSession({ role: "admin", displayName: "System Admin" })
+    normalizeSession(initialSession)
   );
-
-  useEffect(() => {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) {
-      return;
-    }
-
-    queueMicrotask(() => {
-      try {
-        const parsed = JSON.parse(raw) as Partial<UserSession>;
-        setSessionState(normalizeSession(parsed));
-      } catch {
-        // Ignore malformed persisted session and keep default.
-      }
-    });
-  }, []);
 
   const setSession = (nextSession: UserSession) => {
     const normalized = normalizeSession(nextSession);
     setSessionState(normalized);
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(normalized));
+    document.cookie = `${SESSION_COOKIE_NAME}=${stringifySessionCookie(normalized)}; path=/; max-age=31536000; samesite=lax`;
   };
 
   const value = useMemo(() => ({ session, setSession }), [session]);

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Poppins, Inter } from "next/font/google";
 import "./globals.css";
 import AppShell from "@/app/components/AppShell";
+import { getServerSession } from "@/lib/session.server";
 
 const poppins = Poppins({
   variable: "--font-poppins",
@@ -23,15 +24,17 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const initialSession = await getServerSession();
+
   return (
     <html lang="en">
       <body className={`${poppins.variable} ${inter.variable} antialiased`}>
-        <AppShell>{children}</AppShell>
+        <AppShell initialSession={initialSession}>{children}</AppShell>
       </body>
     </html>
   );

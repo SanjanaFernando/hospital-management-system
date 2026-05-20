@@ -1,0 +1,15 @@
+{
+  "modelPath": "C:/Ruhuna Eng/Semester 7/EC7802 Undergraduate Project/FYP/hospital-management/model/best_ddqn_hospital_fair.pth",
+  "targetWardId": "test-same-priority",
+  "targetWardName": "Test Ward",
+  "targetWardOccupiedBeds": 10,
+  "targetWardTotalBeds": 20,
+  "actionSwitchMargin": 0,
+  "actionMaxHoldMinutes": 0,
+  "wards": [],
+  "targetWardQueue": [
+    {"id":"t2-short","priority":"Triage 2","age":35,"gender":"Male","queueWaitTime":20},
+    {"id":"t2-medium","priority":"Triage 2","age":40,"gender":"Female","queueWaitTime":200},
+    {"id":"t2-long","priority":"Triage 2","age":45,"gender":"Male","queueWaitTime":800}
+  ]
+}
