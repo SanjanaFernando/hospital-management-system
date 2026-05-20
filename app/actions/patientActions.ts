@@ -2,6 +2,7 @@
 
 import { connectToDatabase } from "@/lib/mongodb";
 import { ObjectId } from "mongodb";
+import { revalidateTag } from "next/cache";
 import { UserSession } from "@/app/types";
 import {
   assertPermission,
@@ -94,6 +95,11 @@ export async function dischargePatientById(
       }
     );
   }
+
+  revalidateTag("patients", "max");
+  revalidateTag("beds", "max");
+  revalidateTag("wards", "max");
+  revalidateTag("dashboard", "max");
 }
 
 interface AssignPatientInput {
@@ -205,6 +211,11 @@ export async function assignPatientToBed(
       },
     }
   );
+
+  revalidateTag("patients", "max");
+  revalidateTag("beds", "max");
+  revalidateTag("wards", "max");
+  revalidateTag("dashboard", "max");
 }
 
 export async function movePatientToQueue(
@@ -286,6 +297,11 @@ export async function movePatientToQueue(
       },
     }
   );
+
+  revalidateTag("patients", "max");
+  revalidateTag("beds", "max");
+  revalidateTag("wards", "max");
+  revalidateTag("dashboard", "max");
 }
 
 export async function forceAssignPatientToBed(
@@ -414,4 +430,9 @@ export async function forceAssignPatientToBed(
       },
     }
   );
+
+  revalidateTag("patients", "max");
+  revalidateTag("beds", "max");
+  revalidateTag("wards", "max");
+  revalidateTag("dashboard", "max");
 }
