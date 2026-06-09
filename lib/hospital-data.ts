@@ -2,6 +2,7 @@ import { unstable_cache } from "next/cache";
 import { ObjectId } from "mongodb";
 import { connectToDatabase } from "@/lib/mongodb";
 import { Bed, Patient, Ward } from "@/app/types";
+import { reorderQueueWithAi } from "@/lib/queueAi";
 
 type MongoDoc = Record<string, unknown>;
 
@@ -388,17 +389,29 @@ async function queryWardWithPatients(wardId: string): Promise<Ward | null> {
     )
   );
 
-  const queueResult = queuedPatients.length
-    ? {
-        orderedPatients: queuedPatients,
-        strategy: "priority" as const,
-        message: "Queue data loaded from server cache",
-      }
-    : {
-        orderedPatients: [],
-        strategy: "priority" as const,
-        message: "Queue is empty",
-      };
+  let queueResult;
+  if (queuedPatients.length === 0) {
+    queueResult = {
+      orderedPatients: [],
+      strategy: "priority" as const,
+      message: "Queue is empty",
+    };
+  } else {
+    // Use AI model to reorder the queue
+    const aiResult = reorderQueueWithAi({
+      targetWardId: effectiveWardId,
+      targetWardName: String(ward.name || effectiveWardId),
+      targetWardQueue: queuedPatients,
+      targetWardOccupiedBeds: beds.filter((bed) => bed.status === "occupied").length,
+      targetWardTotalBeds: beds.length,
+      wards: [], // Not needed for single ward queue reordering
+    });
+    queueResult = {
+      orderedPatients: aiResult.orderedPatients,
+      strategy: aiResult.strategy,
+      message: aiResult.message,
+    };
+  }
 
   return {
     id: String(ward._id || ward.wardId || ""),
