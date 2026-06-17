@@ -24,11 +24,15 @@ type ChartMetric = "occupancy" | "queue" | "maintenance";
 
 interface DashboardChartsProps {
   wards: DashboardWardSummary[];
+  showOccupancy?: boolean;
 }
 
 const pieColors = ["#3b82f6", "#06b6d4", "#8b5cf6", "#14b8a6", "#6366f1"];
 
-export default function DashboardCharts({ wards }: DashboardChartsProps) {
+export default function DashboardCharts({
+  wards,
+  showOccupancy = true,
+}: DashboardChartsProps) {
   const [chartMetric, setChartMetric] = useState<ChartMetric>("occupancy");
 
   const chartSets = useMemo(() => {
@@ -116,55 +120,57 @@ export default function DashboardCharts({ wards }: DashboardChartsProps) {
   };
 
   return (
-    <div className="grid gap-6 lg:grid-cols-2">
-      <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-        <div className="mb-4 flex items-center justify-between gap-4">
-          <div>
-            <h3 className="text-lg font-semibold text-slate-900">
-              {getChartTitle()}
-            </h3>
-            <p className="text-sm text-slate-500">{getChartDescription()}</p>
-          </div>
-          <select
-            value={chartMetric}
-            onChange={(event) =>
-              setChartMetric(event.target.value as ChartMetric)
-            }
-            className="rounded-xl border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700"
-          >
-            <option value="occupancy">Overall Occupancy</option>
-            <option value="queue">Overall Queue</option>
-            <option value="maintenance">Maintenance Beds</option>
-          </select>
-        </div>
-
-        <ChartContainer
-          config={{
-            occupiedBeds: { label: "Occupied Beds", color: "#3b82f6" },
-          }}
-          className="h-75 w-full"
-        >
-          <PieChart>
-            <Pie
-              data={getChartData()}
-              dataKey={getChartDataKey()}
-              nameKey="name"
-              innerRadius={60}
-              outerRadius={100}
-              label
+    <div className={showOccupancy ? "grid gap-6 lg:grid-cols-2" : "grid gap-6"}>
+      {showOccupancy && (
+        <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="mb-4 flex items-center justify-between gap-4">
+            <div>
+              <h3 className="text-lg font-semibold text-slate-900">
+                {getChartTitle()}
+              </h3>
+              <p className="text-sm text-slate-500">{getChartDescription()}</p>
+            </div>
+            <select
+              value={chartMetric}
+              onChange={(event) =>
+                setChartMetric(event.target.value as ChartMetric)
+              }
+              className="rounded-xl border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700"
             >
-              {getChartData().map((entry, index) => (
-                <Cell
-                  key={`${entry.name}-${index}`}
-                  fill={pieColors[index % pieColors.length]}
-                />
-              ))}
-            </Pie>
-            <Tooltip content={<ChartTooltip />} />
-            <Legend content={<ChartLegendContent />} />
-          </PieChart>
-        </ChartContainer>
-      </div>
+              <option value="occupancy">Overall Occupancy</option>
+              <option value="queue">Overall Queue</option>
+              <option value="maintenance">Maintenance Beds</option>
+            </select>
+          </div>
+
+          <ChartContainer
+            config={{
+              occupiedBeds: { label: "Occupied Beds", color: "#3b82f6" },
+            }}
+            className="h-75 w-full"
+          >
+            <PieChart>
+              <Pie
+                data={getChartData()}
+                dataKey={getChartDataKey()}
+                nameKey="name"
+                innerRadius={60}
+                outerRadius={100}
+                label
+              >
+                {getChartData().map((entry, index) => (
+                  <Cell
+                    key={`${entry.name}-${index}`}
+                    fill={pieColors[index % pieColors.length]}
+                  />
+                ))}
+              </Pie>
+              <Tooltip content={<ChartTooltip />} />
+              <Legend content={<ChartLegendContent />} />
+            </PieChart>
+          </ChartContainer>
+        </div>
+      )}
 
       <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
         <h3 className="text-lg font-semibold text-slate-900">Daily Patients</h3>

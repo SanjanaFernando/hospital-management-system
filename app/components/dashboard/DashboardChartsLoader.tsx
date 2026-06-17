@@ -1,6 +1,8 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import type { DashboardWardSummary } from "@/lib/hospital-data";
+import { useAuthSession } from "@/app/context/AuthSessionContext";
 
 const DashboardCharts = dynamic(
   () => import("@/app/components/dashboard/DashboardCharts"),
@@ -15,4 +17,29 @@ const DashboardCharts = dynamic(
   }
 );
 
-export default DashboardCharts;
+type LoaderProps = {
+  wards: DashboardWardSummary[];
+  showOccupancy?: boolean;
+};
+
+export default function DashboardChartsLoader(props: LoaderProps) {
+  const { session } = useAuthSession();
+
+  const effectiveShowOccupancy =
+    typeof props.showOccupancy === "boolean"
+      ? props.showOccupancy
+      : session.role === "admin";
+
+  let effectiveWards = props.wards ?? [];
+  if (session.role !== "admin" && session.wardId) {
+    const matched = effectiveWards.filter((w) => w.wardId === session.wardId);
+    effectiveWards = matched.length > 0 ? matched : effectiveWards.slice(0, 1);
+  }
+
+  return (
+    <DashboardCharts
+      wards={effectiveWards}
+      showOccupancy={effectiveShowOccupancy}
+    />
+  );
+}
