@@ -1,3 +1,4 @@
+// lib/mongodb.ts
 import { MongoClient, Db } from "mongodb";
 
 const MONGODB_URI = process.env.MONGODB_URI as string;
@@ -27,80 +28,44 @@ const mongoConnection: MongoGlobalCache = global.__mongoCache || {
 
 global.__mongoCache = mongoConnection;
 
-const MAX_RETRIES = 5;
-const INITIAL_RETRY_DELAY = 2000; // 2 seconds
-
-async function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 export async function connectToDatabase(): Promise<{
   client: MongoClient;
   db: Db;
 }> {
   if (mongoConnection.client && mongoConnection.db) {
-    return {
-      client: mongoConnection.client,
-      db: mongoConnection.db,
-    };
+    return { client: mongoConnection.client, db: mongoConnection.db };
   }
 
-  let lastError: Error | null = null;
+  if (!mongoConnection.promise) {
+    console.log("🔄 Connecting to Azure Cosmos DB (MongoDB API)...");
 
-  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-    try {
-      if (!mongoConnection.promise) {
-        console.log(`MongoDB connection attempt ${attempt}/${MAX_RETRIES}...`);
-        const client = new MongoClient(MONGODB_URI, {
-          serverSelectionTimeoutMS: 10000,
-          socketTimeoutMS: 10000,
-          connectTimeoutMS: 10000,
-          retryWrites: true,
-          maxPoolSize: 10,
-          minPoolSize: 0,
-          maxIdleTimeMS: 30000,
-        });
+    const client = new MongoClient(MONGODB_URI, {
+      serverSelectionTimeoutMS: 30000, // Increased
+      socketTimeoutMS: 30000,
+      connectTimeoutMS: 30000,
+      retryWrites: false,
+      maxPoolSize: 10,
+      minPoolSize: 1,
+      tls: true, // Explicitly enable TLS
+    });
 
-        mongoConnection.promise = client.connect();
-      }
-
-      const client = await mongoConnection.promise;
-
-      const db = client.db(MONGODB_DB);
-
-      mongoConnection.client = client;
-      mongoConnection.db = db;
-
-      console.log("Connected to MongoDB successfully");
-      return { client, db };
-    } catch (error) {
-      lastError = error instanceof Error ? error : new Error(String(error));
-      mongoConnection.promise = null;
-      console.error(
-        `MongoDB connection error (attempt ${attempt}/${MAX_RETRIES}):`,
-        lastError.message
-      );
-
-      if (attempt < MAX_RETRIES) {
-        const delayMs = INITIAL_RETRY_DELAY * Math.pow(2, attempt - 1);
-        console.log(`Retrying in ${delayMs}ms...`);
-        await delay(delayMs);
-      }
-    }
+    mongoConnection.promise = client.connect();
   }
 
-  const finalError = new Error(
-    `Failed to connect to MongoDB after ${MAX_RETRIES} attempts: ${lastError?.message}. 
+  try {
+    const client = await mongoConnection.promise;
+    const db = client.db(MONGODB_DB);
 
-Troubleshooting:
-1. Check your internet connection
-2. Verify MongoDB Atlas cluster is running (check cluster0 on mongodb.com)
-3. Ensure IP Whitelist includes your current IP address
-4. Try connecting from a different network (mobile hotspot)
-5. MongoDB Atlas may be temporarily unavailable - try again in a few minutes`
-  );
-  console.error(finalError.message);
-  throw finalError;
+    mongoConnection.client = client;
+    mongoConnection.db = db;
+
+    console.log("✅ Successfully connected to Azure Cosmos DB");
+    return { client, db };
+  } catch (error: any) {
+    mongoConnection.promise = null;
+    console.error("❌ Cosmos DB Connection Failed:", error.message);
+    throw error;
+  }
 }
 
 export async function closeDatabase() {

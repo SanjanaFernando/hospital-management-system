@@ -1,28 +1,42 @@
+// scripts/seedDatabase.mjs
 import fs from "node:fs";
 import path from "node:path";
 import { MongoClient } from "mongodb";
 
 function loadMongoUri() {
+  // Priority 1: Environment variable
   if (process.env.MONGODB_URI) {
-    return process.env.MONGODB_URI;
+    console.log("✅ Loaded MONGODB_URI from process.env");
+    return process.env.MONGODB_URI.trim();
   }
 
+  // Priority 2: Read from .env.local
   const envPath = path.join(process.cwd(), ".env.local");
   if (!fs.existsSync(envPath)) {
-    return null;
+    throw new Error(".env.local file not found!");
   }
 
   const envRaw = fs.readFileSync(envPath, "utf-8");
-  const line = envRaw
-    .split(/\r?\n/)
-    .find((entry) => entry.trim().startsWith("MONGODB_URI="));
+  const lines = envRaw.split(/\r?\n/);
 
-  if (!line) {
-    return null;
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (trimmed.startsWith("MONGODB_URI=")) {
+      let uri = trimmed.replace("MONGODB_URI=", "").trim();
+
+      // Remove surrounding quotes if present
+      uri = uri.replace(/^["']|["']$/g, "");
+
+      console.log("✅ Loaded MONGODB_URI from .env.local");
+      console.log("Connection string prefix:", uri.substring(0, 70) + "...");
+      return uri;
+    }
   }
 
-  return line.replace("MONGODB_URI=", "").trim();
+  throw new Error("MONGODB_URI not found in .env.local");
 }
+
+// ==================== Rest of the script (unchanged) ====================
 
 const TRIAGE_LEVELS = [
   "Triage 1",
@@ -165,17 +179,19 @@ function generatePatient(patientId, wardId, status) {
 
 async function resetDatabase() {
   const mongoUri = loadMongoUri();
-  if (!mongoUri) {
-    throw new Error("MONGODB_URI is missing in environment or .env.local");
-  }
 
-  const client = new MongoClient(mongoUri);
+  const client = new MongoClient(mongoUri, {
+    serverSelectionTimeoutMS: 30000,
+    socketTimeoutMS: 30000,
+    connectTimeoutMS: 30000,
+    retryWrites: false,
+  });
 
   try {
     await client.connect();
     const db = client.db("hospital-management");
 
-    console.log("Resetting collections: wards, beds, patients...");
+    console.log("🗑️ Clearing existing data...");
     await Promise.all([
       db.collection("wards").deleteMany({}),
       db.collection("beds").deleteMany({}),
@@ -243,27 +259,25 @@ async function resetDatabase() {
       const queued = [];
       const beds = [];
 
-      for (let i = 0; i < occupiedBeds; i += 1) {
+      for (let i = 0; i < occupiedBeds; i++) {
         const patientId = `${wardId}-admitted-${i + 1}`;
         admitted.push(generatePatient(patientId, wardId, "admitted"));
       }
 
-      for (let i = 0; i < queuePatients; i += 1) {
+      for (let i = 0; i < queuePatients; i++) {
         const patientId = `${wardId}-queue-${i + 1}`;
         queued.push(generatePatient(patientId, wardId, "queued"));
       }
 
       const bedBlueprints = [];
-
-      for (let bedNumber = 1; bedNumber <= normalBeds; bedNumber += 1) {
+      for (let bedNumber = 1; bedNumber <= normalBeds; bedNumber++) {
         bedBlueprints.push({
           bedId: `${wardId}-normal-${bedNumber}`,
           bedNumber,
           type: "NORMAL",
         });
       }
-
-      for (let bedNumber = 1; bedNumber <= icuBeds; bedNumber += 1) {
+      for (let bedNumber = 1; bedNumber <= icuBeds; bedNumber++) {
         bedBlueprints.push({
           bedId: `${wardId}-icu-${bedNumber}`,
           bedNumber,
@@ -274,9 +288,9 @@ async function resetDatabase() {
       const maintenanceStart = occupiedBeds;
       const maintenanceEnd = occupiedBeds + wardConfig.maintenanceBeds;
 
-      for (let index = 0; index < bedBlueprints.length; index += 1) {
+      for (let index = 0; index < bedBlueprints.length; index++) {
         const blueprint = bedBlueprints[index];
-        const admittedPatient = admitted[index];
+        const admittedPatient = admitted[index] || null;
 
         if (admittedPatient) {
           beds.push({
@@ -294,7 +308,6 @@ async function resetDatabase() {
 
         const isMaintenance =
           index >= maintenanceStart && index < maintenanceEnd;
-
         beds.push({
           bedId: blueprint.bedId,
           wardId,
@@ -310,9 +323,6 @@ async function resetDatabase() {
       await db.collection("wards").insertOne({
         wardId,
         name: wardName,
-        totalBeds: bedCount,
-        normalBeds,
-        icuBeds,
         createdAt: new Date(),
         updatedAt: new Date(),
       });
@@ -327,15 +337,12 @@ async function resetDatabase() {
       totalBeds += beds.length;
 
       console.log(
-        `Seeded ${wardName}: ${admitted.length} admitted, ${queued.length} queued, ${beds.length} beds`
+        `✅ Seeded ${wardName}: ${admitted.length} admitted, ${queued.length} queued, ${beds.length} beds`
       );
     }
 
     console.log(
-      `Database reset complete. Patients: ${totalPatients}, Beds: ${totalBeds}`
-    );
-    console.log(
-      "All patients now use triage levels Triage 1 to Triage 5 only."
+      `\n🎉 Database reset complete! Total Patients: ${totalPatients}, Total Beds: ${totalBeds}`
     );
   } finally {
     await client.close();
@@ -343,7 +350,6 @@ async function resetDatabase() {
 }
 
 resetDatabase().catch((error) => {
-  const message = error instanceof Error ? error.message : String(error);
-  console.error("DB reset failed:", message);
+  console.error("❌ DB reset failed:", error.message);
   process.exit(1);
 });

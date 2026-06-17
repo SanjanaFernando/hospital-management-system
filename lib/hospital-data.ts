@@ -389,11 +389,16 @@ async function queryWardWithPatients(wardId: string): Promise<Ward | null> {
     )
   );
 
-  let queueResult;
+  let queueResult: {
+    orderedPatients: Patient[];
+    strategy: "priority" | "ai";
+    message: string;
+  };
+
   if (queuedPatients.length === 0) {
     queueResult = {
       orderedPatients: [],
-      strategy: "priority" as const,
+      strategy: "priority",
       message: "Queue is empty",
     };
   } else {
@@ -402,7 +407,8 @@ async function queryWardWithPatients(wardId: string): Promise<Ward | null> {
       targetWardId: effectiveWardId,
       targetWardName: String(ward.name || effectiveWardId),
       targetWardQueue: queuedPatients,
-      targetWardOccupiedBeds: beds.filter((bed) => bed.status === "occupied").length,
+      targetWardOccupiedBeds: beds.filter((bed) => bed.status === "occupied")
+        .length,
       targetWardTotalBeds: beds.length,
       wards: [], // Not needed for single ward queue reordering
     });
@@ -458,8 +464,14 @@ async function queryPatientsPageData({
   }
 
   const sortOrder = trimmedSearch
-    ? ({ score: { $meta: "textScore" }, createdAt: -1 } as any)
-    : ({ createdAt: -1, admissionTime: -1, name: 1 } as any);
+    ? ({ score: { $meta: "textScore" }, createdAt: -1 } as unknown as Record<
+        string,
+        unknown
+      >)
+    : ({ createdAt: -1, admissionTime: -1, name: 1 } as unknown as Record<
+        string,
+        unknown
+      >);
 
   const [totalItems, patientDocs] = await Promise.all([
     db.collection("patients").countDocuments(query),
@@ -485,54 +497,21 @@ async function queryPatientsPageData({
   };
 }
 
-const cachedDashboardData = unstable_cache(
-  queryDashboardData,
-  ["dashboard-data"],
-  {
-    revalidate: DASHBOARD_REVALIDATE_SECONDS,
-    tags: WARD_SUMMARY_TAGS,
-  }
-);
-
-const cachedWardsWithPatients = unstable_cache(
-  queryWardsWithPatients,
-  ["wards-with-patients"],
-  {
-    revalidate: DASHBOARD_REVALIDATE_SECONDS,
-    tags: WARD_SUMMARY_TAGS,
-  }
-);
-
-const cachedWardWithPatients = unstable_cache(
-  queryWardWithPatients,
-  ["ward-with-patients"],
-  {
-    revalidate: WARD_DETAIL_REVALIDATE_SECONDS,
-    tags: WARD_SUMMARY_TAGS,
-  }
-);
-
-const cachedPatientsPage = unstable_cache(
-  queryPatientsPageData,
-  ["patients-page"],
-  {
-    revalidate: PATIENTS_PAGE_REVALIDATE_SECONDS,
-    tags: ["patients"],
-  }
-);
+// Temporarily disable unstable_cache to verify MongoDB behavior.
+// When MongoDB is down, we want failures to surface instead of returning cached responses.
 
 export async function getDashboardData(): Promise<DashboardData> {
-  return cachedDashboardData();
+  return queryDashboardData();
 }
 
 export async function getWardsWithPatientsData(): Promise<Ward[]> {
-  return cachedWardsWithPatients();
+  return queryWardsWithPatients();
 }
 
 export async function getWardWithPatientsData(
   wardId: string
 ): Promise<Ward | null> {
-  return cachedWardWithPatients(wardId);
+  return queryWardWithPatients(wardId);
 }
 
 export async function getPatientsPageData(input: {
@@ -541,5 +520,5 @@ export async function getPatientsPageData(input: {
   pageSize?: number;
   wardId?: string;
 }): Promise<PatientsPageData> {
-  return cachedPatientsPage(input);
+  return queryPatientsPageData(input);
 }
