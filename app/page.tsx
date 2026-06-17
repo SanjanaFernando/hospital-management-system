@@ -1,5 +1,5 @@
 import { Metadata } from "next";
-import { getDashboardData } from "@/lib/hospital-data";
+import { getDailyPatientData, getDashboardData } from "@/lib/hospital-data";
 import { getServerSession } from "@/lib/session.server";
 import { canAccessWard } from "@/lib/rbac";
 import DashboardCharts from "@/app/components/dashboard/DashboardChartsLoader";
@@ -15,7 +15,10 @@ export const metadata: Metadata = {
 export default async function Home() {
   const session = await getServerSession();
   const isAdmin = session.role === "admin";
-  const dashboardData = await getDashboardData();
+  const [dashboardData, dailyPatientData] = await Promise.all([
+    getDashboardData(),
+    getDailyPatientData(),
+  ]);
 
   const visibleWards = dashboardData.wards.filter((ward) =>
     canAccessWard(session, ward.wardId)
@@ -109,7 +112,10 @@ export default async function Home() {
           </div>
         </div>
 
-        <DashboardCharts wards={visibleWards} />
+        <DashboardCharts
+          wards={visibleWards}
+          dailyPatientData={dailyPatientData}
+        />
 
         <div className="mt-8 rounded-lg bg-white p-8 shadow-md">
           <div className="mb-6 flex items-center justify-between">

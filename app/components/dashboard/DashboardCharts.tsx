@@ -18,12 +18,16 @@ import {
   ChartLegendContent,
   ChartTooltip,
 } from "@/components/ui/chart";
-import { DashboardWardSummary } from "@/lib/hospital-data";
+import {
+  DailyPatientDataPoint,
+  DashboardWardSummary,
+} from "@/lib/hospital-data";
 
 type ChartMetric = "occupancy" | "queue" | "maintenance";
 
 interface DashboardChartsProps {
   wards: DashboardWardSummary[];
+  dailyPatientData: DailyPatientDataPoint[];
   showOccupancy?: boolean;
 }
 
@@ -31,6 +35,7 @@ const pieColors = ["#3b82f6", "#06b6d4", "#8b5cf6", "#14b8a6", "#6366f1"];
 
 export default function DashboardCharts({
   wards,
+  dailyPatientData,
   showOccupancy = true,
 }: DashboardChartsProps) {
   const [chartMetric, setChartMetric] = useState<ChartMetric>("occupancy");
@@ -51,29 +56,6 @@ export default function DashboardCharts({
       })),
     };
   }, [wards]);
-
-  const dailyPatientData = useMemo(() => {
-    const dayFormatter = new Intl.DateTimeFormat("en-US", {
-      weekday: "short",
-    });
-    const dayKeyFormatter = new Intl.DateTimeFormat("en-CA");
-    const start = new Date();
-    start.setHours(0, 0, 0, 0);
-    start.setDate(start.getDate() - 6);
-
-    const dateMap = new Map<string, { day: string; patients: number }>();
-
-    for (let index = 0; index < 7; index += 1) {
-      const date = new Date(start);
-      date.setDate(start.getDate() + index);
-      dateMap.set(dayKeyFormatter.format(date), {
-        day: dayFormatter.format(date),
-        patients: 0,
-      });
-    }
-
-    return Array.from(dateMap.values());
-  }, []);
 
   const getChartData = () => {
     switch (chartMetric) {

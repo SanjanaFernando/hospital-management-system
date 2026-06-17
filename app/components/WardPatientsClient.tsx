@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
 import { Ward } from "@/app/types";
 import PatientRegistrationForm from "@/app/components/PatientRegistrationForm";
@@ -18,9 +19,9 @@ export default function WardPatientsClient({
   initialWard,
 }: WardPatientsClientProps) {
   const { session } = useAuthSession();
+  const router = useRouter();
   const [ward, setWard] = useState(initialWard);
   const [showRegistrationForm, setShowRegistrationForm] = useState(false);
-  const [error, setError] = useState("");
 
   const resolvedWardId = ward.wardId || ward.id;
   const wardAccessAllowed = canAccessWard(session, resolvedWardId);
@@ -31,6 +32,7 @@ export default function WardPatientsClient({
     if (wardData) {
       setWard(wardData);
     }
+    router.refresh();
   };
 
   if (!wardAccessAllowed) {
@@ -63,12 +65,6 @@ export default function WardPatientsClient({
             {ward.name} - Patients
           </h1>
         </div>
-
-        {error && (
-          <div className="mb-6 rounded-lg border border-yellow-200 bg-yellow-50 p-4">
-            <p className="text-sm text-yellow-800">{error}</p>
-          </div>
-        )}
 
         <div className="mb-6 flex items-center justify-between">
           <h2 className="text-lg font-semibold text-gray-800">

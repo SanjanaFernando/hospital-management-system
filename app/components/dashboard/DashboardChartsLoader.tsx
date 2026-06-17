@@ -1,7 +1,10 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import type { DashboardWardSummary } from "@/lib/hospital-data";
+import type {
+  DailyPatientDataPoint,
+  DashboardWardSummary,
+} from "@/lib/hospital-data";
 import { useAuthSession } from "@/app/context/AuthSessionContext";
 
 const DashboardCharts = dynamic(
@@ -19,6 +22,7 @@ const DashboardCharts = dynamic(
 
 type LoaderProps = {
   wards: DashboardWardSummary[];
+  dailyPatientData: DailyPatientDataPoint[];
   showOccupancy?: boolean;
 };
 
@@ -39,6 +43,7 @@ export default function DashboardChartsLoader(props: LoaderProps) {
   return (
     <DashboardCharts
       wards={effectiveWards}
+      dailyPatientData={props.dailyPatientData}
       showOccupancy={effectiveShowOccupancy}
     />
   );
