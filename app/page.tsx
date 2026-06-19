@@ -59,7 +59,7 @@ export default async function Home() {
     totalBeds > 0 ? Math.round((totalMaintenance / totalBeds) * 100) : 0;
 
   return (
-    <div className="min-h-screen bg-linear-to-br from-blue-50 to-indigo-100 p-8">
+    <div className="min-h-screen bg-linear-to-br from-blue-50 to-indigo-100 p-4 xl:p-8">
       <div className="mx-auto max-w-7xl">
         <div className="mb-8">
           <h1 className="mb-2 text-4xl font-bold text-gray-800">
@@ -127,19 +127,21 @@ export default async function Home() {
                 key={ward.id}
                 className="rounded-2xl border border-slate-200 p-5 shadow-sm transition hover:shadow-md"
               >
-                <div className="mb-4 flex items-center justify-between">
+                <div className="mb-4 flex flex-col md:flex-row items-start md:items-center justify-between">
                   <div>
                     <h3 className="text-xl font-bold text-slate-900">
                       {ward.name}
                     </h3>
                     <p className="text-sm text-slate-500">{ward.wardId}</p>
                   </div>
-                  <a
-                    href={`/wards/${ward.wardId}`}
-                    className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white"
-                  >
-                    Open ward
-                  </a>
+                  <div className="flex justify-center md:justify-end w-full md:w-auto">
+                    <a
+                      href={`/wards/${ward.wardId}`}
+                      className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white"
+                    >
+                      Open ward
+                    </a>
+                  </div>
                 </div>
                 <div className="grid gap-3 md:grid-cols-4">
                   <div className="rounded-2xl bg-green-50 p-4">

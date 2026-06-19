@@ -102,10 +102,14 @@ export default function DashboardCharts({
   };
 
   return (
-    <div className={showOccupancy ? "grid gap-6 lg:grid-cols-2" : "grid gap-6"}>
+    <div
+      className={
+        showOccupancy ? "grid gap-6 lg:grid-cols-2" : "flex gap-6 flex-col"
+      }
+    >
       {showOccupancy && (
-        <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-          <div className="mb-4 flex items-center justify-between gap-4">
+        <div className="w-full min-w-0 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="mb-4 flex flex-col sm:flex-row items-center justify-between gap-4">
             <div>
               <h3 className="text-lg font-semibold text-slate-900">
                 {getChartTitle()}
@@ -154,12 +158,14 @@ export default function DashboardCharts({
         </div>
       )}
 
-      <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-        <h3 className="text-lg font-semibold text-slate-900">Daily Patients</h3>
+      <div className="w-full min-w-0 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+        <h3 className="text-lg w-fit font-semibold text-slate-900">
+          Daily Patients
+        </h3>
         <p className="mb-4 text-sm text-slate-500">Last 7 days admissions</p>
         <ChartContainer
           config={{ patients: { label: "Patients", color: "#8b5cf6" } }}
-          className="h-75 w-full"
+          className="h-65 mt-[40px] ml-[-30px]  sm:mt-[60px] w-full min-w-0 xl:mt-0 xl:h-75"
         >
           <BarChart data={dailyPatientData}>
             <CartesianGrid vertical={false} strokeDasharray="3 3" />

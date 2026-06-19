@@ -77,7 +77,7 @@ function ChartContainer({
         data-slot="chart"
         data-chart={chartId}
         className={cn(
-          "flex aspect-video justify-center text-xs [&_.recharts-cartesian-axis-tick_text]:fill-gray-500 [&_.recharts-legend-item_text]:fill-gray-700 [&_.recharts-tooltip-cursor]:stroke-gray-300 [&_.recharts-pie-label-text]:fill-gray-700",
+          "flex w-full min-w-0 aspect-video justify-center text-xs [&_.recharts-cartesian-axis-tick_text]:fill-gray-500 [&_.recharts-legend-item_text]:fill-gray-700 [&_.recharts-tooltip-cursor]:stroke-gray-300 [&_.recharts-pie-label-text]:fill-gray-700",
           className,
         )}
         {...props}

@@ -8,6 +8,7 @@ import { Ward } from "@/app/types";
 import PatientRegistrationForm from "@/app/components/PatientRegistrationForm";
 import PatientList from "@/app/components/PatientList";
 import { getWardWithPatients } from "@/app/actions/wardActions";
+import { dischargePatientById } from "@/app/actions/patientActions";
 import { useAuthSession } from "@/app/context/AuthSessionContext";
 import { canAccessWard, canRegisterPatient } from "@/lib/rbac";
 
@@ -33,6 +34,25 @@ export default function WardPatientsClient({
       setWard(wardData);
     }
     router.refresh();
+  };
+
+  const handleDischargePatient = async (patientId: string) => {
+    const patient = [
+      ...ward.patients,
+      ...ward.patientQueue,
+    ].find((entry) => entry.id === patientId || entry._id === patientId);
+
+    const patientName = patient?.name || "this patient";
+    const shouldDischarge = window.confirm(
+      `Discharge ${patientName} from ${ward.name}?`
+    );
+
+    if (!shouldDischarge) {
+      return;
+    }
+
+    await dischargePatientById(patientId, session);
+    await refreshWard();
   };
 
   if (!wardAccessAllowed) {
@@ -97,8 +117,18 @@ export default function WardPatientsClient({
         )}
 
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-          <PatientList title="Admitted Patients" patients={ward.patients} />
-          <PatientList title="Queued Patients" patients={ward.patientQueue} />
+          <PatientList
+            title="Admitted Patients"
+            patients={ward.patients}
+            actionLabel="Discharge"
+            onAction={(patient) => handleDischargePatient(patient.id)}
+          />
+          <PatientList
+            title="Queued Patients"
+            patients={ward.patientQueue}
+            actionLabel="Discharge"
+            onAction={(patient) => handleDischargePatient(patient.id)}
+          />
           <PatientList
             title="Discharged Patients"
             patients={ward.dischargedPatients || []}
