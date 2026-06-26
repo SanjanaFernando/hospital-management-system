@@ -123,6 +123,11 @@ export default function ReportsTabs({ wards, role, wardId }: ReportsTabsProps) {
     <div>
       <style jsx global>{`
         @media print {
+          @page {
+            size: A4 portrait;
+            margin: 20mm 18mm 24mm 18mm;
+          }
+
           body * {
             visibility: hidden !important;
           }
@@ -134,13 +139,50 @@ export default function ReportsTabs({ wards, role, wardId }: ReportsTabsProps) {
 
           .printable-report {
             position: absolute !important;
-            left: 0 !important;
-            top: 0 !important;
+            inset: 0 !important;
             width: 100% !important;
             margin: 0 !important;
+            padding: 0 !important;
+            border: none !important;
+            box-shadow: none !important;
+            background: white !important;
+          }
+
+          /* Each section block should not break in the middle */
+          .report-section {
+            page-break-inside: avoid;
+            break-inside: avoid;
+          }
+
+          /* Activity log should start on same page if possible */
+          .report-log-section {
+            page-break-inside: avoid;
+            break-inside: avoid;
+          }
+
+          /* Keep stat grid together */
+          .report-stat-grid {
+            page-break-inside: avoid;
+            break-inside: avoid;
+          }
+
+          /* Row-level protection */
+          .report-row {
+            page-break-inside: avoid;
+            break-inside: avoid;
+          }
+
+          .report-print-title {
+            display: block !important;
           }
         }
+
+        /* Hide the generated print title on screen */
+        .report-print-title {
+          display: none;
+        }
       `}</style>
+
       <div className="mb-6 flex flex-wrap gap-2 rounded-2xl bg-white p-2 shadow-sm print:hidden">
         {[
           { id: "ward" as const, label: "Ward-wise Report" },
@@ -207,8 +249,8 @@ export default function ReportsTabs({ wards, role, wardId }: ReportsTabsProps) {
           </div>
 
           {selectedWard && selectedWardStats && (
-            <div className="printable-report mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-5 shadow-sm print:border-0 print:bg-white print:p-0 print:shadow-none">
-              <div className="mb-4 flex items-start justify-between gap-3">
+            <div className="printable-report mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-5 shadow-sm print:rounded-none print:border-0 print:bg-white print:p-0 print:shadow-none">
+              <div className="mb-6 flex items-start justify-between gap-3 print:hidden">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.18em] text-teal-700">
                     Ward Report
@@ -223,18 +265,17 @@ export default function ReportsTabs({ wards, role, wardId }: ReportsTabsProps) {
                 <button
                   type="button"
                   onClick={() => window.print()}
-                  className="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-800 print:hidden"
+                  className="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-800"
                 >
                   <Printer className="h-4 w-4" />
                   Save PDF
                 </button>
               </div>
 
-              <ReportTextBlock
-                text={buildWardReportText(selectedWard, selectedWardStats)}
-              />
+              <WardReportLayout ward={selectedWard} stats={selectedWardStats} />
             </div>
           )}
+
           <div className="mt-4 space-y-4 print:hidden">
             {visibleWards.map((ward) => {
               const stats = countWardStats(ward);
@@ -375,8 +416,8 @@ export default function ReportsTabs({ wards, role, wardId }: ReportsTabsProps) {
               ))}
             </div>
 
-            <div className="printable-report rounded-2xl border border-slate-200 bg-slate-50 p-5 shadow-sm print:border-0 print:bg-white print:p-0 print:shadow-none">
-              <div className="mb-4 flex items-start justify-between gap-3">
+            <div className="printable-report rounded-2xl border border-slate-200 bg-slate-50 p-5 shadow-sm print:rounded-none print:border-0 print:bg-white print:p-0 print:shadow-none">
+              <div className="mb-6 flex items-start justify-between gap-3 print:hidden">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.18em] text-teal-700">
                     Patient Report
@@ -389,7 +430,7 @@ export default function ReportsTabs({ wards, role, wardId }: ReportsTabsProps) {
                   <button
                     type="button"
                     onClick={() => window.print()}
-                    className="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-800 print:hidden"
+                    className="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-800"
                   >
                     <Printer className="h-4 w-4" />
                     Save PDF
@@ -399,14 +440,13 @@ export default function ReportsTabs({ wards, role, wardId }: ReportsTabsProps) {
 
               {patientSearch.trim() && filteredWardPatients.length === 0 ? (
                 <p className="rounded-xl bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">
-                  No patient matched "{patientSearch.trim()}" in this ward.
+                  No patient matched &ldquo;{patientSearch.trim()}&rdquo; in
+                  this ward.
                 </p>
               ) : selectedPatient ? (
-                <ReportTextBlock
-                  text={buildPatientReportText(
-                    selectedPatient,
-                    selectedWard?.name
-                  )}
+                <PatientReportLayout
+                  patient={selectedPatient}
+                  wardName={selectedWard?.name}
                 />
               ) : (
                 <p className="text-sm text-slate-500">
@@ -506,8 +546,8 @@ export default function ReportsTabs({ wards, role, wardId }: ReportsTabsProps) {
           </div>
 
           {selectedWard && selectedBed ? (
-            <div className="printable-report mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-5 shadow-sm print:border-0 print:bg-white print:p-0 print:shadow-none">
-              <div className="mb-4 flex items-start justify-between gap-3">
+            <div className="printable-report mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-5 shadow-sm print:rounded-none print:border-0 print:bg-white print:p-0 print:shadow-none">
+              <div className="mb-6 flex items-start justify-between gap-3 print:hidden">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.18em] text-teal-700">
                     Bed Report
@@ -518,25 +558,21 @@ export default function ReportsTabs({ wards, role, wardId }: ReportsTabsProps) {
                       : `Bed ${selectedBed.bedNumber}`}
                   </h3>
                   <p className="text-sm text-slate-500">
-                    {selectedWard.name} -{" "}
+                    {selectedWard.name} &ndash;{" "}
                     {selectedWard.wardId || selectedWard.id}
                   </p>
                 </div>
                 <button
                   type="button"
                   onClick={() => window.print()}
-                  className="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-800 print:hidden"
+                  className="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-800"
                 >
                   <Printer className="h-4 w-4" />
                   Save PDF
                 </button>
               </div>
 
-              <div className="space-y-3">
-                <ReportTextBlock
-                  text={buildBedReportText(selectedBed, selectedWard.name)}
-                />
-              </div>
+              <BedReportLayout bed={selectedBed} wardName={selectedWard.name} />
             </div>
           ) : (
             <div className="mt-6 rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-5 text-sm text-slate-500">
@@ -548,6 +584,370 @@ export default function ReportsTabs({ wards, role, wardId }: ReportsTabsProps) {
     </div>
   );
 }
+
+// ─── Report layout components ─────────────────────────────────────────────────
+
+function ReportDivider({ label }: { label: string }) {
+  return (
+    <div className="report-section mb-1 mt-5 flex items-center gap-3">
+      <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-teal-700">
+        {label}
+      </span>
+      <div className="h-px flex-1 bg-slate-200" />
+    </div>
+  );
+}
+
+function ReportFieldRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="report-row flex items-center justify-between gap-6 border-b border-slate-100 py-2.5 last:border-0">
+      <span className="min-w-0 shrink-0 text-sm text-slate-500">{label}</span>
+      <span className="text-right text-sm font-semibold text-slate-900">
+        {value}
+      </span>
+    </div>
+  );
+}
+
+function ReportStatGrid({
+  items,
+}: {
+  items: { label: string; value: string | number; accent?: boolean }[];
+}) {
+  return (
+    <div className="report-stat-grid my-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+      {items.map((item) => (
+        <div
+          key={item.label}
+          className={`rounded-xl border p-3 text-center ${
+            item.accent
+              ? "border-teal-200 bg-teal-50"
+              : "border-slate-200 bg-white"
+          }`}
+        >
+          <p
+            className={`text-2xl font-bold ${
+              item.accent ? "text-teal-700" : "text-slate-900"
+            }`}
+          >
+            {item.value}
+          </p>
+          <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-[0.15em] text-slate-500">
+            {item.label}
+          </p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function StatusBadge({ status }: { status: string }) {
+  const map: Record<string, string> = {
+    available: "bg-emerald-100 text-emerald-800",
+    occupied: "bg-blue-100 text-blue-800",
+    maintenance: "bg-amber-100 text-amber-800",
+    admitted: "bg-blue-100 text-blue-800",
+    queued: "bg-amber-100 text-amber-800",
+    discharged: "bg-slate-100 text-slate-700",
+  };
+  return (
+    <span
+      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold capitalize ${
+        map[status.toLowerCase()] ?? "bg-slate-100 text-slate-700"
+      }`}
+    >
+      {status}
+    </span>
+  );
+}
+
+function ReportPrintHeader({
+  title,
+  subtitle,
+  generatedAt,
+}: {
+  title: string;
+  subtitle?: string;
+  generatedAt: string;
+}) {
+  return (
+    <div className="report-print-title mb-6 border-b-2 border-teal-600 pb-4">
+      <div className="flex items-end justify-between">
+        <div>
+          <p className="text-[10px] font-bold uppercase tracking-[0.25em] text-teal-700">
+            Hospital Management System
+          </p>
+          <h2 className="mt-0.5 text-2xl font-bold text-slate-900">{title}</h2>
+          {subtitle && (
+            <p className="mt-0.5 text-sm text-slate-500">{subtitle}</p>
+          )}
+        </div>
+        <p className="text-right text-xs text-slate-400">{generatedAt}</p>
+      </div>
+    </div>
+  );
+}
+
+// ─── Ward report layout ───────────────────────────────────────────────────────
+
+function WardReportLayout({
+  ward,
+  stats,
+}: {
+  ward: Ward;
+  stats: ReturnType<typeof countWardStats>;
+}) {
+  const now = new Date().toLocaleString();
+  const occupancyPct =
+    stats.total === 0 ? 0 : Math.round((stats.occupied / stats.total) * 100);
+
+  return (
+    <div className="space-y-1">
+      <ReportPrintHeader
+        title={ward.name}
+        subtitle={`Ward ID: ${ward.wardId || ward.id}`}
+        generatedAt={`Generated: ${now}`}
+      />
+
+      <ReportDivider label="Bed Summary" />
+      <ReportStatGrid
+        items={[
+          { label: "Total Beds", value: stats.total },
+          { label: "Available", value: stats.available, accent: true },
+          { label: "Occupied", value: stats.occupied },
+          { label: "Maintenance", value: stats.maintenance },
+        ]}
+      />
+
+      <ReportDivider label="Patient Summary" />
+      <ReportStatGrid
+        items={[
+          { label: "Admitted", value: stats.admitted, accent: true },
+          { label: "Queued", value: stats.queued },
+          { label: "Discharged", value: stats.discharged },
+          { label: "Occupancy", value: `${occupancyPct}%` },
+        ]}
+      />
+
+      <ReportDivider label="Ward Details" />
+      <div className="report-section rounded-xl border border-slate-200 bg-white px-4 py-1">
+        <ReportFieldRow label="Ward Name" value={ward.name} />
+        <ReportFieldRow label="Ward ID" value={ward.wardId || ward.id} />
+        <ReportFieldRow
+          label="Queue Status"
+          value={stats.queued > 0 ? `${stats.queued} waiting` : "No queue"}
+        />
+        <ReportFieldRow label="Occupancy Rate" value={`${occupancyPct}%`} />
+        <ReportFieldRow label="Report Generated" value={now} />
+      </div>
+    </div>
+  );
+}
+
+// ─── Patient report layout ────────────────────────────────────────────────────
+
+function PatientReportLayout({
+  patient,
+  wardName,
+}: {
+  patient: Ward["patients"][number];
+  wardName?: string;
+}) {
+  const now = new Date().toLocaleString();
+
+  return (
+    <div className="space-y-1">
+      <ReportPrintHeader
+        title={patient.name}
+        subtitle={`Patient ID: ${patient.id}`}
+        generatedAt={`Generated: ${now}`}
+      />
+
+      <div className="report-section mb-4 flex items-center gap-2">
+        <StatusBadge status={patient.status || "unknown"} />
+        <span className="text-xs text-slate-500">
+          {wardName || patient.wardId || "Unknown ward"}
+        </span>
+      </div>
+
+      <ReportDivider label="Demographics" />
+      <div className="report-section rounded-xl border border-slate-200 bg-white px-4 py-1">
+        <ReportFieldRow label="Full Name" value={patient.name} />
+        <ReportFieldRow label="Patient ID" value={patient.id} />
+        <ReportFieldRow label="Age" value={`${patient.age} years`} />
+        <ReportFieldRow label="Age Group" value={patient.ageGroup} />
+        <ReportFieldRow
+          label="Gender"
+          value={patient.gender || "Not specified"}
+        />
+      </div>
+
+      <ReportDivider label="Clinical Information" />
+      <div className="report-section rounded-xl border border-slate-200 bg-white px-4 py-1">
+        <ReportFieldRow label="Diagnosis / Disease" value={patient.disease} />
+        <ReportFieldRow label="Priority" value={patient.priority} />
+        <ReportFieldRow
+          label="Special Requirements"
+          value={
+            patient.specialRequirements?.length
+              ? patient.specialRequirements.join(", ")
+              : "None"
+          }
+        />
+        <ReportFieldRow
+          label="Transferred From"
+          value={patient.assignedFromWardId || "N/A"}
+        />
+        <ReportFieldRow
+          label="Ward"
+          value={wardName || patient.wardId || "Unknown"}
+        />
+      </div>
+
+      <ReportDivider label="Admission Timeline" />
+      <div className="report-section rounded-xl border border-slate-200 bg-white px-4 py-1">
+        <ReportFieldRow label="Status" value={patient.status || "Unknown"} />
+        <ReportFieldRow
+          label="Admission Time"
+          value={
+            patient.admissionTime
+              ? new Date(patient.admissionTime).toLocaleString()
+              : "Not available"
+          }
+        />
+        <ReportFieldRow
+          label="Discharge Time"
+          value={
+            patient.dischargeTime
+              ? new Date(patient.dischargeTime).toLocaleString()
+              : "Not yet discharged"
+          }
+        />
+        <ReportFieldRow
+          label="Queue Wait Time"
+          value={
+            typeof patient.queueWaitTime === "number"
+              ? `${patient.queueWaitTime} min(s)`
+              : "N/A"
+          }
+        />
+        <ReportFieldRow label="Report Generated" value={now} />
+      </div>
+    </div>
+  );
+}
+
+// ─── Bed report layout ────────────────────────────────────────────────────────
+
+function getBedTimestamp(
+  bed: Record<string, unknown>,
+  key: "createdAt" | "updatedAt"
+): string {
+  const value = bed[key];
+  if (!value) return "N/A";
+  const date = new Date(String(value));
+  return Number.isNaN(date.getTime()) ? "N/A" : date.toLocaleString();
+}
+
+function BedReportLayout({
+  bed,
+  wardName,
+}: {
+  bed: Ward["beds"][number];
+  wardName: string;
+}) {
+  const now = new Date().toLocaleString();
+  const bedRecord = bed as unknown as Record<string, unknown> & {
+    patient?: Ward["patients"][number];
+    patientId?: string | null;
+  };
+  const patient = bedRecord.patient;
+  const bedLabel =
+    bed.type === "ICU" ? `ICU Bed ${bed.bedNumber}` : `Bed ${bed.bedNumber}`;
+  const createdAt = getBedTimestamp(bedRecord, "createdAt");
+  const updatedAt = getBedTimestamp(bedRecord, "updatedAt");
+
+  return (
+    <div className="space-y-1">
+      <ReportPrintHeader
+        title={bedLabel}
+        subtitle={`${wardName} — Bed ID: ${bed.id}`}
+        generatedAt={`Generated: ${now}`}
+      />
+
+      <div className="report-section mb-4">
+        <StatusBadge status={bed.status} />
+      </div>
+
+      <ReportDivider label="Bed Details" />
+      <div className="report-section rounded-xl border border-slate-200 bg-white px-4 py-1">
+        <ReportFieldRow label="Bed Label" value={bedLabel} />
+        <ReportFieldRow label="Bed ID" value={bed.id} />
+        <ReportFieldRow label="Ward" value={wardName} />
+        <ReportFieldRow label="Status" value={bed.status} />
+        <ReportFieldRow label="Bed Status Since" value={createdAt} />
+        <ReportFieldRow label="Last Updated" value={updatedAt} />
+      </div>
+
+      <ReportDivider label="Current Patient" />
+      <div className="report-section rounded-xl border border-slate-200 bg-white px-4 py-1">
+        <ReportFieldRow
+          label="Patient Name"
+          value={patient?.name || "No patient assigned"}
+        />
+        <ReportFieldRow
+          label="Patient ID"
+          value={patient?.id || (bedRecord.patientId as string) || "N/A"}
+        />
+        <ReportFieldRow
+          label="Admission Time"
+          value={
+            patient?.admissionTime
+              ? new Date(patient.admissionTime).toLocaleString()
+              : "N/A"
+          }
+        />
+        <ReportFieldRow
+          label="Discharge Time"
+          value={
+            patient?.dischargeTime
+              ? new Date(patient.dischargeTime).toLocaleString()
+              : "N/A"
+          }
+        />
+      </div>
+
+      <ReportDivider label="Activity Log" />
+      <div className="report-log-section rounded-xl border border-slate-200 bg-white px-4 py-1">
+        <ReportFieldRow label="Bed created" value={createdAt} />
+        <ReportFieldRow label="Current state updated" value={updatedAt} />
+        <ReportFieldRow
+          label="Admission recorded"
+          value={
+            patient?.admissionTime
+              ? new Date(patient.admissionTime).toLocaleString()
+              : "No admission recorded"
+          }
+        />
+        <ReportFieldRow
+          label="Discharge recorded"
+          value={
+            patient?.dischargeTime
+              ? new Date(patient.dischargeTime).toLocaleString()
+              : "No discharge recorded"
+          }
+        />
+        <ReportFieldRow
+          label="Current patient"
+          value={patient?.name || "None"}
+        />
+        <ReportFieldRow label="Report Generated" value={now} />
+      </div>
+    </div>
+  );
+}
+
+// ─── Shared UI helpers (unchanged) ───────────────────────────────────────────
 
 function SummaryCard({
   label,
@@ -577,158 +977,5 @@ function StatChip({ label, value }: { label: string; value: number }) {
       </p>
       <p className="mt-1 text-lg font-bold text-slate-900">{value}</p>
     </div>
-  );
-}
-
-function DetailRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-center justify-between gap-4 rounded-xl bg-white px-4 py-3">
-      <p className="text-sm font-medium text-slate-500">{label}</p>
-      <p className="text-sm font-semibold text-slate-900 text-right">{value}</p>
-    </div>
-  );
-}
-
-function LogRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-start justify-between gap-4 rounded-lg bg-white px-4 py-3">
-      <p className="text-sm font-medium text-slate-500">{label}</p>
-      <p className="text-right text-sm font-semibold text-slate-900">{value}</p>
-    </div>
-  );
-}
-
-function getBedTimestamp(
-  bed: Record<string, unknown>,
-  key: "createdAt" | "updatedAt"
-): string {
-  const value = bed[key];
-  if (!value) return "N/A";
-
-  const date = new Date(String(value));
-  return Number.isNaN(date.getTime()) ? "N/A" : date.toLocaleString();
-}
-
-function buildWardReportText(
-  ward: Ward,
-  stats: NonNullable<ReturnType<typeof countWardStats>>
-): string {
-  return [
-    `Ward Report`,
-    `Ward Name: ${ward.name}`,
-    `Ward ID: ${ward.wardId || ward.id}`,
-    `Total Beds: ${stats.total}`,
-    `Available Beds: ${stats.available}`,
-    `Occupied Beds: ${stats.occupied}`,
-    `Maintenance Beds: ${stats.maintenance}`,
-    `Admitted Patients: ${stats.admitted}`,
-    `Queued Patients: ${stats.queued}`,
-    `Discharged Patients: ${stats.discharged}`,
-    `Current Occupancy: ${
-      stats.total === 0 ? 0 : Math.round((stats.occupied / stats.total) * 100)
-    }%`,
-    `Queue Status: ${
-      stats.queued > 0 ? `${stats.queued} waiting` : "No queue"
-    }`,
-  ].join("\n");
-}
-
-function buildPatientReportText(
-  patient: Ward["patients"][number],
-  wardName?: string
-): string {
-  return [
-    `Patient Report`,
-    `Patient Name: ${patient.name}`,
-    `Patient ID: ${patient.id}`,
-    `Ward: ${wardName || patient.wardId || "Unknown"}`,
-    `Status: ${patient.status || "unknown"}`,
-    `Age: ${patient.age} years`,
-    `Age Group: ${patient.ageGroup}`,
-    `Gender: ${patient.gender || "Not set"}`,
-    `Disease: ${patient.disease}`,
-    `Priority: ${patient.priority}`,
-    `Admission Time: ${
-      patient.admissionTime
-        ? new Date(patient.admissionTime).toLocaleString()
-        : "Not available"
-    }`,
-    `Discharge Time: ${
-      patient.dischargeTime
-        ? new Date(patient.dischargeTime).toLocaleString()
-        : "Not discharged"
-    }`,
-    `Queue Wait Time: ${
-      typeof patient.queueWaitTime === "number"
-        ? `${patient.queueWaitTime} min(s)`
-        : "Not available"
-    }`,
-    `Special Requirements: ${
-      patient.specialRequirements?.length
-        ? patient.specialRequirements.join(", ")
-        : "None"
-    }`,
-    `Transferred From: ${patient.assignedFromWardId || "N/A"}`,
-  ].join("\n");
-}
-
-function buildBedReportText(
-  bed: Ward["beds"][number],
-  wardName: string
-): string {
-  const bedRecord = bed as unknown as Record<string, unknown> & {
-    patient?: Ward["patients"][number];
-    patientId?: string | null;
-  };
-  const patient = bedRecord.patient;
-  const bedCreatedAt = getBedTimestamp(bedRecord, "createdAt");
-  const bedUpdatedAt = getBedTimestamp(bedRecord, "updatedAt");
-
-  return [
-    `Bed Report`,
-    `Ward Name: ${wardName}`,
-    `Bed ID: ${bed.id}`,
-    `Bed Label: ${
-      bed.type === "ICU" ? `ICU Bed ${bed.bedNumber}` : `Bed ${bed.bedNumber}`
-    }`,
-    `Status: ${bed.status}`,
-    `Current Patient: ${patient?.name || "No patient assigned"}`,
-    `Patient ID: ${patient?.id || bedRecord.patientId || "N/A"}`,
-    `Admission Time: ${
-      patient?.admissionTime
-        ? new Date(patient.admissionTime).toLocaleString()
-        : "N/A"
-    }`,
-    `Discharge Time: ${
-      patient?.dischargeTime
-        ? new Date(patient.dischargeTime).toLocaleString()
-        : "N/A"
-    }`,
-    `Maintenance / Last Update: ${
-      bed.status === "maintenance" ? bedUpdatedAt : bedUpdatedAt || bedCreatedAt
-    }`,
-    `Bed Status Since: ${bedCreatedAt || bedUpdatedAt}`,
-    `Activity Log:`,
-    `- Bed created: ${bedCreatedAt}`,
-    `- Current state updated: ${bedUpdatedAt}`,
-    `- Admission record: ${
-      patient?.admissionTime
-        ? new Date(patient.admissionTime).toLocaleString()
-        : "No admission recorded"
-    }`,
-    `- Discharge record: ${
-      patient?.dischargeTime
-        ? new Date(patient.dischargeTime).toLocaleString()
-        : "No discharge recorded"
-    }`,
-    `- Current patient: ${patient?.name || "None"}`,
-  ].join("\n");
-}
-
-function ReportTextBlock({ text }: { text: string }) {
-  return (
-    <pre className="whitespace-pre-wrap rounded-xl border border-slate-200 bg-white p-4 font-mono text-sm leading-6 text-slate-800 shadow-sm">
-      {text}
-    </pre>
   );
 }
