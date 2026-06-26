@@ -2,11 +2,13 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
 import { Ward } from "@/app/types";
 import PatientRegistrationForm from "@/app/components/PatientRegistrationForm";
 import PatientList from "@/app/components/PatientList";
 import { getWardWithPatients } from "@/app/actions/wardActions";
+import { dischargePatientById } from "@/app/actions/patientActions";
 import { useAuthSession } from "@/app/context/AuthSessionContext";
 import { canAccessWard, canRegisterPatient } from "@/lib/rbac";
 
@@ -18,9 +20,9 @@ export default function WardPatientsClient({
   initialWard,
 }: WardPatientsClientProps) {
   const { session } = useAuthSession();
+  const router = useRouter();
   const [ward, setWard] = useState(initialWard);
   const [showRegistrationForm, setShowRegistrationForm] = useState(false);
-  const [error, setError] = useState("");
 
   const resolvedWardId = ward.wardId || ward.id;
   const wardAccessAllowed = canAccessWard(session, resolvedWardId);
@@ -31,6 +33,26 @@ export default function WardPatientsClient({
     if (wardData) {
       setWard(wardData);
     }
+    router.refresh();
+  };
+
+  const handleDischargePatient = async (patientId: string) => {
+    const patient = [
+      ...ward.patients,
+      ...ward.patientQueue,
+    ].find((entry) => entry.id === patientId || entry._id === patientId);
+
+    const patientName = patient?.name || "this patient";
+    const shouldDischarge = window.confirm(
+      `Discharge ${patientName} from ${ward.name}?`
+    );
+
+    if (!shouldDischarge) {
+      return;
+    }
+
+    await dischargePatientById(patientId, session);
+    await refreshWard();
   };
 
   if (!wardAccessAllowed) {
@@ -64,12 +86,6 @@ export default function WardPatientsClient({
           </h1>
         </div>
 
-        {error && (
-          <div className="mb-6 rounded-lg border border-yellow-200 bg-yellow-50 p-4">
-            <p className="text-sm text-yellow-800">{error}</p>
-          </div>
-        )}
-
         <div className="mb-6 flex items-center justify-between">
           <h2 className="text-lg font-semibold text-gray-800">
             Manage Patients
@@ -101,8 +117,18 @@ export default function WardPatientsClient({
         )}
 
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-          <PatientList title="Admitted Patients" patients={ward.patients} />
-          <PatientList title="Queued Patients" patients={ward.patientQueue} />
+          <PatientList
+            title="Admitted Patients"
+            patients={ward.patients}
+            actionLabel="Discharge"
+            onAction={(patient) => handleDischargePatient(patient.id)}
+          />
+          <PatientList
+            title="Queued Patients"
+            patients={ward.patientQueue}
+            actionLabel="Discharge"
+            onAction={(patient) => handleDischargePatient(patient.id)}
+          />
           <PatientList
             title="Discharged Patients"
             patients={ward.dischargedPatients || []}

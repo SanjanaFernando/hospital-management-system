@@ -147,10 +147,7 @@ export default function PatientRegistrationForm({
         specialRequirements: [],
       });
 
-      // Call onSuccess callback after a brief delay
-      setTimeout(() => {
-        onSuccess();
-      }, 1500);
+      onSuccess();
     } catch (error) {
       setErrorMessage(
         error instanceof Error ? error.message : "Failed to register patient"

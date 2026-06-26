@@ -1,5 +1,6 @@
 import { connectToDatabase } from "@/lib/mongodb";
 import { NextResponse, NextRequest } from "next/server";
+import { revalidatePath, revalidateTag } from "next/cache";
 import {
   canAccessWard,
   canRegisterPatient,
@@ -102,11 +103,24 @@ export async function POST(request: NextRequest) {
       body.triageRequested = true;
     }
 
+    const admissionTime = body.admissionTime
+      ? new Date(body.admissionTime)
+      : new Date();
+
     const result = await db.collection("patients").insertOne({
       ...body,
+      admissionTime,
       createdAt: new Date(),
       updatedAt: new Date(),
     });
+
+    revalidateTag("patients", "max");
+    revalidateTag("dashboard", "max");
+    revalidateTag("wards", "max");
+
+    revalidatePath("/");
+    revalidatePath(`/wards/${body.wardId}`);
+    revalidatePath(`/wards/${body.wardId}/patients`);
 
     return NextResponse.json(
       { success: true, insertedId: result.insertedId },

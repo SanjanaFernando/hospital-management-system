@@ -38,6 +38,11 @@ export interface PatientsPageData {
   wardId?: string;
 }
 
+export interface DailyPatientDataPoint {
+  day: string;
+  patients: number;
+}
+
 const WARD_SUMMARY_TAGS = ["dashboard", "wards", "patients", "beds"];
 const DASHBOARD_REVALIDATE_SECONDS = 30;
 const WARD_DETAIL_REVALIDATE_SECONDS = 15;
@@ -448,6 +453,12 @@ async function queryPatientsPageData({
   const skip = (normalizedPage - 1) * normalizedPageSize;
 
   const query: Record<string, unknown> = {};
+  type PatientSortOrder = {
+    score?: { $meta: "textScore" };
+    createdAt?: -1;
+    admissionTime?: -1;
+    name?: 1;
+  };
 
   if (wardId) {
     query.wardId = wardId;
@@ -458,9 +469,9 @@ async function queryPatientsPageData({
     query.$text = { $search: trimmedSearch };
   }
 
-  const sortOrder = trimmedSearch
-    ? ({ score: { $meta: "textScore" }, createdAt: -1 } as any)
-    : ({ createdAt: -1, admissionTime: -1, name: 1 } as any);
+  const sortOrder: PatientSortOrder = trimmedSearch
+    ? { score: { $meta: "textScore" }, createdAt: -1 }
+    : { createdAt: -1, admissionTime: -1, name: 1 };
 
   const [totalItems, patientDocs] = await Promise.all([
     db.collection("patients").countDocuments(query),
@@ -484,6 +495,66 @@ async function queryPatientsPageData({
     searchTerm: trimmedSearch,
     wardId,
   };
+}
+
+async function queryDailyPatientData(): Promise<DailyPatientDataPoint[]> {
+  const { db } = await connectToDatabase();
+
+  const dayFormatter = new Intl.DateTimeFormat("en-US", {
+    weekday: "short",
+  });
+  const dayKeyFormatter = new Intl.DateTimeFormat("en-CA");
+
+  const start = new Date();
+  start.setHours(0, 0, 0, 0);
+  start.setDate(start.getDate() - 6);
+
+  const days = new Map<string, DailyPatientDataPoint>();
+  for (let index = 0; index < 7; index += 1) {
+    const date = new Date(start);
+    date.setDate(start.getDate() + index);
+    days.set(dayKeyFormatter.format(date), {
+      day: dayFormatter.format(date),
+      patients: 0,
+    });
+  }
+
+  const end = new Date(start);
+  end.setDate(end.getDate() + 7);
+
+  const patientDocs = await db
+    .collection("patients")
+    .find(
+      {
+        admissionTime: {
+          $gte: start,
+          $lt: end,
+        },
+      },
+      { projection: { admissionTime: 1 } }
+    )
+    .toArray();
+
+  for (const doc of patientDocs as MongoDoc[]) {
+    const admissionTime = doc.admissionTime
+      ? new Date(String(doc.admissionTime))
+      : null;
+    if (!admissionTime || Number.isNaN(admissionTime.getTime())) {
+      continue;
+    }
+
+    if (admissionTime >= end) {
+      continue;
+    }
+
+    const key = dayKeyFormatter.format(admissionTime);
+    const entry = days.get(key);
+    if (entry) {
+      entry.patients += 1;
+    }
+  }
+
+  return Array.from(days.values());
 }
 
 const cachedDashboardData = unstable_cache(
@@ -522,6 +593,15 @@ const cachedPatientsPage = unstable_cache(
   }
 );
 
+const cachedDailyPatientData = unstable_cache(
+  queryDailyPatientData,
+  ["daily-patient-data"],
+  {
+    revalidate: PATIENTS_PAGE_REVALIDATE_SECONDS,
+    tags: ["patients"],
+  }
+);
+
 export async function getDashboardData(): Promise<DashboardData> {
   return cachedDashboardData();
 }
@@ -543,4 +623,8 @@ export async function getPatientsPageData(input: {
   wardId?: string;
 }): Promise<PatientsPageData> {
   return cachedPatientsPage(input);
+}
+
+export async function getDailyPatientData(): Promise<DailyPatientDataPoint[]> {
+  return cachedDailyPatientData();
 }
