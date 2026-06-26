@@ -137,13 +137,25 @@ function AppShellContent({ children }: PropsWithChildren) {
       href: activeWardId ? `/wards/${activeWardId}/patients` : "/",
       icon: Activity,
     },
-    { label: "Reports", href: "/", icon: ClipboardSignature },
+    { label: "Reports", href: "/reports", icon: ClipboardSignature },
   ];
 
   const isActive = (href: string) => {
     if (href === "/") {
       return pathname === "/";
     }
+
+    if (href.includes("/patients")) {
+      return pathname === href;
+    }
+
+    if (href.includes("/wards/")) {
+      return (
+        (pathname === href || pathname.startsWith(`${href}/`)) &&
+        !pathname.endsWith("/patients")
+      );
+    }
+
     return pathname.startsWith(href);
   };
 
