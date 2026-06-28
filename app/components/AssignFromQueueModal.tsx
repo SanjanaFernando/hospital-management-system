@@ -1,15 +1,18 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Bed, Patient } from "@/app/types";
+import { Bed, Patient, Ward } from "@/app/types";
 import {
   assignPatientToBed,
   forceAssignPatientToBed,
   dischargePatientById,
 } from "@/app/actions/patientActions";
 import { useAuthSession } from "@/app/context/AuthSessionContext";
-import { canSetTriage } from "@/lib/rbac";
+import {
+  canAssignQueuedPatientAcrossWards,
+  canSetTriage,
+} from "@/lib/rbac";
 import { updatePatient } from "@/app/utils/api";
 
 interface AssignFromQueueModalProps {
@@ -17,6 +20,7 @@ interface AssignFromQueueModalProps {
   wardName: string;
   patient: Patient;
   beds: Bed[];
+  wards?: Ward[];
   onAssigned: () => void;
   onClose: () => void;
 }
@@ -26,12 +30,39 @@ export default function AssignFromQueueModal({
   wardName,
   patient,
   beds,
+  wards,
   onAssigned,
   onClose,
 }: AssignFromQueueModalProps) {
   const router = useRouter();
   const { session } = useAuthSession();
 
+  const targetWardOptions = useMemo(
+    () =>
+      wards && wards.length > 0
+        ? wards.map((ward) => ({
+            id: ward.id,
+            wardId: ward.wardId || ward.id,
+            name: ward.name,
+            beds: ward.beds,
+          }))
+        : [
+            {
+              id: wardId,
+              wardId,
+              name: wardName,
+              beds,
+            },
+          ],
+    [beds, wardId, wardName, wards]
+  );
+
+  const [selectedWardId, setSelectedWardId] = useState<string>(
+    targetWardOptions.find((ward) => ward.wardId === wardId)?.wardId ||
+      wardId ||
+      targetWardOptions[0]?.wardId ||
+      ""
+  );
   const [selectedBedId, setSelectedBedId] = useState<string>("");
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
@@ -43,13 +74,55 @@ export default function AssignFromQueueModal({
   const [isUpdatingTriage, setIsUpdatingTriage] = useState(false);
   const [triageError, setTriageError] = useState("");
 
-  const availableBeds = beds.filter((b) => b.status === "available");
-  const occupiedBeds = beds.filter((b) => b.status === "occupied");
+  const selectedWard =
+    targetWardOptions.find((ward) => ward.wardId === selectedWardId) ||
+    targetWardOptions[0];
+
+  useEffect(() => {
+    const selectedWardExists = targetWardOptions.some(
+      (ward) => ward.wardId === selectedWardId
+    );
+
+    if (selectedWardExists) {
+      return;
+    }
+
+    const currentWardOption = targetWardOptions.find(
+      (ward) => ward.wardId === wardId
+    );
+
+    if (currentWardOption) {
+      setSelectedWardId(currentWardOption.wardId);
+      setSelectedBedId("");
+      return;
+    }
+
+    if (targetWardOptions[0]) {
+      setSelectedWardId(targetWardOptions[0].wardId);
+      setSelectedBedId("");
+    }
+  }, [wardId, selectedWardId, targetWardOptions]);
+
+  const selectedBeds = selectedWard?.beds || beds;
+  const availableBeds = selectedBeds.filter((b) => b.status === "available");
+  const occupiedBeds = selectedBeds.filter((b) => b.status === "occupied");
+  const canCrossWardAssign = Boolean(
+    wards && wards.length > 1 && session.role !== "main_attendant"
+  );
 
   const canEditTriage = Boolean(wardId) && canSetTriage(session, wardId);
 
+  const selectedWardResolvedId = selectedWard?.wardId || wardId;
+  const canAssignToSelectedWard = canCrossWardAssign
+    ? canAssignQueuedPatientAcrossWards(
+        session,
+        wardId,
+        selectedWardResolvedId
+      )
+    : Boolean(selectedWardResolvedId && selectedWardResolvedId === wardId);
+
   const handleSaveTriage = async () => {
-    const targetPatientId = (patient as any)._id || patient.id;
+    const targetPatientId = patient._id || patient.id;
     setTriageError("");
     setIsUpdatingTriage(true);
     try {
@@ -69,16 +142,19 @@ export default function AssignFromQueueModal({
     setErrorMessage("");
     setIsLoading(true);
     try {
+      const targetWardId = selectedWardResolvedId;
       if (force) {
         await forceAssignPatientToBed({
-          wardId,
+          wardId: targetWardId,
+          sourceWardId: wardId,
           bedId: selectedBedId,
           patientId: patient.id,
           actor: session,
         });
       } else {
         await assignPatientToBed({
-          wardId,
+          wardId: targetWardId,
+          sourceWardId: wardId,
           bedId: selectedBedId,
           patientId: patient.id,
           actor: session,
@@ -86,7 +162,7 @@ export default function AssignFromQueueModal({
       }
       onAssigned();
       onClose();
-      router.push(`/wards/${wardId}`);
+      router.push(`/wards/${targetWardId}`);
     } catch (err) {
       setErrorMessage(
         err instanceof Error ? err.message : "Failed to assign patient"
@@ -113,7 +189,7 @@ export default function AssignFromQueueModal({
     }
   };
 
-  const selectedBed = beds.find((b) => b.id === selectedBedId);
+  const selectedBed = selectedBeds.find((b) => b.id === selectedBedId);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
@@ -199,10 +275,37 @@ export default function AssignFromQueueModal({
             )}
         </div>
 
+        {canCrossWardAssign && targetWardOptions.length > 1 && (
+          <div className="mb-6 rounded border bg-slate-50 p-4">
+            <label className="block text-sm font-semibold text-black mb-2">
+              Target Ward
+            </label>
+            <select
+              value={selectedWardId}
+              onChange={(e) => {
+                setSelectedWardId(e.target.value);
+                setSelectedBedId("");
+              }}
+              className="w-full rounded border px-3 py-2 text-sm text-black"
+            >
+              {targetWardOptions.map((wardOption) => (
+                <option key={wardOption.wardId} value={wardOption.wardId}>
+                  {wardOption.name}
+                </option>
+              ))}
+            </select>
+            {!canAssignToSelectedWard && (
+              <p className="mt-2 text-xs text-amber-700">
+                You can only transfer queued patients from your own ward.
+              </p>
+            )}
+          </div>
+        )}
+
         {availableBeds.length > 0 && (
           <div className="mb-6">
             <h4 className="font-semibold mb-2 text-black">
-              Available Beds ({availableBeds.length})
+              Available Beds in {selectedWard?.name || wardName} ({availableBeds.length})
             </h4>
             <div className="grid grid-cols-3 gap-2">
               {availableBeds.map((bed) => (
@@ -226,7 +329,7 @@ export default function AssignFromQueueModal({
         {occupiedBeds.length > 0 && (
           <div className="mb-6">
             <h4 className="font-semibold mb-2 text-black">
-              Occupied Beds ({occupiedBeds.length}) - Force Assign
+              Occupied Beds in {selectedWard?.name || wardName} ({occupiedBeds.length}) - Force Assign
             </h4>
             <p className="text-xs text-black mb-2">
               ⚠️ Force assigning will move the current patient back to the queue
@@ -257,7 +360,7 @@ export default function AssignFromQueueModal({
 
         {availableBeds.length === 0 && occupiedBeds.length === 0 && (
           <div className="bg-yellow-50 border rounded p-4 mb-6">
-            No beds available in {wardName}.
+            No beds available in {selectedWard?.name || wardName}.
           </div>
         )}
 

@@ -176,6 +176,7 @@ export default function WardBedsPage() {
           <BedGrid
             beds={ward.beds}
             wardName={ward.name}
+            wardId={ward.wardId || ward.id}
             onAvailableBedClick={handleAssignPatient}
             canInteract={canAssignPatients}
           />

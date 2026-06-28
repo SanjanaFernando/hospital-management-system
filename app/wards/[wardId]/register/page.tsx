@@ -17,6 +17,7 @@ export default function RegisterPatientPage() {
 
   const handleRegistrationSuccess = () => {
     router.push(`/wards/${wardId}`);
+    router.refresh();
   };
 
   const handleCancel = () => {

@@ -3,6 +3,9 @@ import { Patient } from "@/app/types";
 interface PatientListProps {
   title: string;
   patients: Patient[];
+  actionLabel?: string;
+  onAction?: (patient: Patient) => void | Promise<void>;
+  actionDisabled?: boolean;
 }
 
 const priorityClasses = {
@@ -13,30 +16,49 @@ const priorityClasses = {
   "Triage 5": "bg-blue-100 text-blue-800 border-blue-200",
 };
 
-export default function PatientList({ title, patients }: PatientListProps) {
+export default function PatientList({
+  title,
+  patients,
+  actionLabel,
+  onAction,
+  actionDisabled = false,
+}: PatientListProps) {
   return (
-    <div className="bg-white rounded-lg shadow-md p-6">
-      <h2 className="text-lg font-bold text-gray-800 mb-4">{title}</h2>
+    <div className="rounded-lg bg-white p-6 shadow-md">
+      <h2 className="mb-4 text-lg font-bold text-gray-800">{title}</h2>
       {patients.length === 0 ? (
-        <p className="text-gray-500 text-sm">No patients to display.</p>
+        <p className="text-sm text-gray-500">No patients to display.</p>
       ) : (
         <div className="space-y-3">
           {patients.map((patient) => (
             <div
               key={patient.id}
-              className="border border-gray-200 rounded-lg p-4 flex items-center justify-between"
+              className="flex items-center justify-between rounded-lg border border-gray-200 p-4"
             >
-              <div>
+              <div className="min-w-0">
                 <p className="font-semibold text-gray-800">{patient.name}</p>
                 <p className="text-sm text-gray-500">
-                  {patient.age} yrs • {patient.disease}
+                  {patient.age} yrs - {patient.disease}
                 </p>
+                <span
+                  className={`rounded-full border px-2 py-1 text-xs font-semibold ${priorityClasses[patient.priority]}`}
+                >
+                  {patient.priority}
+                </span>
               </div>
-              <span
-                className={`text-xs font-semibold px-2 py-1 rounded-full border ${priorityClasses[patient.priority]}`}
-              >
-                {patient.priority}
-              </span>
+
+              <div className="ml-3 flex  items-center gap-2">
+                {actionLabel && onAction && (
+                  <button
+                    type="button"
+                    onClick={() => void onAction(patient)}
+                    disabled={actionDisabled}
+                    className="rounded-md bg-red-600 px-2.5 py-1 text-xs font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-red-300"
+                  >
+                    {actionLabel}
+                  </button>
+                )}
+              </div>
             </div>
           ))}
         </div>

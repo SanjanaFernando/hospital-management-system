@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Patient, Bed } from "@/app/types";
+import { Patient, Bed, Ward } from "@/app/types";
 import AssignFromQueueModal from "./AssignFromQueueModal";
 import { updatePatient } from "@/app/utils/api";
 import { useAuthSession } from "@/app/context/AuthSessionContext";
@@ -10,6 +10,7 @@ import { canSetTriage } from "@/lib/rbac";
 interface PatientQueueProps {
   patients: Patient[];
   beds?: Bed[];
+  wards?: Ward[];
   wardId?: string;
   wardName?: string;
   onPatientAssigned?: () => void;
@@ -69,6 +70,7 @@ function resolvePriorityClass(priority: string): string {
 export default function PatientQueue({
   patients = [],
   beds = [],
+  wards,
   wardId = "",
   wardName = "",
   onPatientAssigned,
@@ -88,6 +90,7 @@ export default function PatientQueue({
     null
   );
   const [triageError, setTriageError] = useState("");
+  const [isOpen, setIsOpen] = useState(false);
 
   useEffect(() => {
     const intervalId = window.setInterval(() => {
@@ -105,14 +108,10 @@ export default function PatientQueue({
       return Math.max(0, Math.floor(patient.queueWaitTime));
     }
 
-    if (!patient.admissionTime) {
-      return null;
-    }
+    if (!patient.admissionTime) return null;
 
     const arrivalMs = new Date(patient.admissionTime).getTime();
-    if (Number.isNaN(arrivalMs)) {
-      return null;
-    }
+    if (Number.isNaN(arrivalMs)) return null;
 
     return Math.max(0, Math.floor((now - arrivalMs) / 60_000));
   };
@@ -161,13 +160,9 @@ export default function PatientQueue({
     try {
       await updatePatient(
         targetPatientId,
-        {
-          priority: nextPriority,
-          triageRequested: false,
-        },
+        { priority: nextPriority, triageRequested: false },
         session
       );
-
       onPatientAssigned?.();
     } catch (error) {
       setTriageError(
@@ -197,16 +192,32 @@ export default function PatientQueue({
       )
     : patients;
 
-  const displayPatients = [
-    ...sortedPatients.filter((patient) => patient.triageRequested),
-    ...sortedPatients.filter((patient) => !patient.triageRequested),
-  ];
+  const displayPatients = sortedPatients;
 
   return (
     <div className="w-full h-full">
-      <h3 className="text-lg font-semibold mb-4 text-gray-800">
-        Patient Queue ({patients.length})
-      </h3>
+      {/* Header with Toggle */}
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-lg font-semibold text-gray-800">
+          Patient Queue ({patients.length})
+        </h3>
+
+        <button
+          onClick={() => setIsOpen(!isOpen)}
+          className="lg:hidden flex items-center gap-2 text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors"
+          aria-expanded={isOpen}
+        >
+          {isOpen ? "Hide Queue" : "Show Queue"}
+          <span
+            className={`transition-transform duration-200 ${
+              isOpen ? "rotate-180" : ""
+            }`}
+          >
+            ▼
+          </span>
+        </button>
+      </div>
+
       {wardId && beds.length > 0 && (
         <p className="text-xs text-gray-500 mb-3">
           {!canAssign
@@ -216,115 +227,125 @@ export default function PatientQueue({
               : "Priority-ordered queue. Click a patient to assign to a bed."}
         </p>
       )}
+
       {queueOrderMessage && (
         <p className="text-xs text-blue-700 mb-3">{queueOrderMessage}</p>
       )}
-      <div
-        className="space-y-3 overflow-y-auto"
-        style={
-          listMaxHeight
-            ? {
-                maxHeight: `${listMaxHeight}px`,
-              }
-            : undefined
-        }
-      >
-        {displayPatients.map((patient, index) => (
-          <div
-            key={patient.id}
-            onClick={() => handlePatientClick(patient)}
-            className={`border-l-4 rounded-lg p-4 ${resolvePriorityClass(patient.priority)} ${
-              wardId && beds.length > 0 && canAssign
-                ? "cursor-pointer hover:shadow-lg transition-shadow"
-                : ""
-            }`}
-          >
-            <div className="flex justify-between items-start mb-2">
-              <div>
-                <p className="font-semibold">
-                  {index + 1}. {patient.name}
-                </p>
-                <p className="text-sm flex gap-2 mt-1">
-                  <span
-                    className={`px-2 py-1 rounded text-xs font-medium ${ageGroupBadgeColors[patient.ageGroup]}`}
-                  >
-                    {patient.ageGroup} ({patient.age}y)
-                  </span>
-                  <span className="px-2 py-1 rounded text-xs font-medium bg-gray-200">
-                    {patient.disease}
-                  </span>
-                  {patient.triageRequested && (
-                    <span className="px-2 py-1 rounded text-xs font-semibold bg-amber-200 text-amber-900">
-                      Pending Triage
-                    </span>
-                  )}
-                </p>
-              </div>
-              <span className="text-xs font-bold">{patient.priority}</span>
-            </div>
-            {triageEditable && patient.triageRequested && (
-              <div className="mt-2 rounded border border-amber-300 bg-amber-50 p-2">
-                <p className="text-xs font-semibold text-amber-900 mb-2">
-                  Consultant Doctor: set triage level for this patient.
-                </p>
-                <div
-                  className="flex gap-2"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <select
-                    value={resolveTriageDraft(patient)}
-                    onChange={(e) =>
-                      handleTriageDraftChange(
-                        patient.id,
-                        e.target.value as Patient["priority"]
-                      )
-                    }
-                    className="flex-1 rounded border border-amber-300 bg-white px-2 py-1 text-xs text-gray-900"
-                  >
-                    <option value="Triage 1">Triage 1</option>
-                    <option value="Triage 2">Triage 2</option>
-                    <option value="Triage 3">Triage 3</option>
-                    <option value="Triage 4">Triage 4</option>
-                    <option value="Triage 5">Triage 5</option>
-                  </select>
-                  <button
-                    type="button"
-                    onClick={() => handleSaveTriage(patient)}
-                    disabled={isUpdatingTriageId === patient.id}
-                    className="rounded bg-amber-600 px-2 py-1 text-xs font-semibold text-white hover:bg-amber-700 disabled:bg-amber-300"
-                  >
-                    {isUpdatingTriageId === patient.id ? "Saving..." : "Save"}
-                  </button>
-                </div>
-              </div>
-            )}
-            {patient.admissionTime && (
-              <p className="text-xs mt-2">
-                Arrival: {new Date(patient.admissionTime).toLocaleString()}
-              </p>
-            )}
-            {(() => {
-              const waitMinutes = resolveWaitMinutes(patient);
-              if (waitMinutes === null) {
-                return null;
-              }
 
-              return (
-                <p className="text-xs mt-1 font-semibold">
-                  Waiting: {waitMinutes} mins
-                </p>
-              );
-            })()}
-            {patient.specialRequirements &&
-              patient.specialRequirements.length > 0 && (
+      {/* Collapsible Queue Container */}
+      <div
+        className={`
+          overflow-hidden transition-all duration-300
+          ${isOpen ? "block" : "hidden lg:block"}
+        `}
+      >
+        <div
+          className="space-y-3 overflow-y-auto"
+          style={
+            listMaxHeight ? { maxHeight: `${listMaxHeight}px` } : undefined
+          }
+        >
+          {displayPatients.map((patient, index) => (
+            <div
+              key={patient.id}
+              onClick={() => handlePatientClick(patient)}
+              className={`border-l-4 rounded-lg p-4 ${resolvePriorityClass(
+                patient.priority
+              )} ${
+                wardId && beds.length > 0 && canAssign
+                  ? "cursor-pointer hover:shadow-lg transition-shadow"
+                  : ""
+              }`}
+            >
+              <div className="flex justify-between items-start mb-2">
+                <div>
+                  <p className="font-semibold">
+                    {index + 1}. {patient.name}
+                  </p>
+                  <p className="text-sm flex gap-2 mt-1">
+                    <span
+                      className={`px-2 py-1 rounded text-xs font-medium ${ageGroupBadgeColors[patient.ageGroup]}`}
+                    >
+                      {patient.ageGroup} ({patient.age}y)
+                    </span>
+                    <span className="px-2 py-1 rounded text-xs font-medium bg-gray-200">
+                      {patient.disease}
+                    </span>
+                    {patient.triageRequested && (
+                      <span className="px-2 py-1 rounded text-xs font-semibold bg-amber-200 text-amber-900">
+                        Pending Triage
+                      </span>
+                    )}
+                  </p>
+                </div>
+                <span className="text-xs font-bold">{patient.priority}</span>
+              </div>
+
+              {triageEditable && patient.triageRequested && (
+                <div className="mt-2 rounded border border-amber-300 bg-amber-50 p-2">
+                  <p className="text-xs font-semibold text-amber-900 mb-2">
+                    Consultant Doctor: set triage level for this patient.
+                  </p>
+                  <div
+                    className="flex gap-2"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <select
+                      value={resolveTriageDraft(patient)}
+                      onChange={(e) =>
+                        handleTriageDraftChange(
+                          patient.id,
+                          e.target.value as Patient["priority"]
+                        )
+                      }
+                      className="flex-1 rounded border border-amber-300 bg-white px-2 py-1 text-xs text-gray-900"
+                    >
+                      <option value="Triage 1">Triage 1</option>
+                      <option value="Triage 2">Triage 2</option>
+                      <option value="Triage 3">Triage 3</option>
+                      <option value="Triage 4">Triage 4</option>
+                      <option value="Triage 5">Triage 5</option>
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => handleSaveTriage(patient)}
+                      disabled={isUpdatingTriageId === patient.id}
+                      className="rounded bg-amber-600 px-2 py-1 text-xs font-semibold text-white hover:bg-amber-700 disabled:bg-amber-300"
+                    >
+                      {isUpdatingTriageId === patient.id ? "Saving..." : "Save"}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {patient.admissionTime && (
                 <p className="text-xs mt-2">
-                  <span className="font-semibold">Special needs:</span>{" "}
-                  {patient.specialRequirements.join(", ")}
+                  Arrival: {new Date(patient.admissionTime).toLocaleString()}
                 </p>
               )}
-          </div>
-        ))}
+
+              {(() => {
+                const waitMinutes = resolveWaitMinutes(patient);
+                if (waitMinutes === null) return null;
+                return (
+                  <p className="text-xs mt-1 font-semibold">
+                    Waiting: {waitMinutes} mins
+                  </p>
+                );
+              })()}
+
+              {patient.specialRequirements &&
+                patient.specialRequirements.length > 0 && (
+                  <p className="text-xs mt-2">
+                    <span className="font-semibold">Special needs:</span>{" "}
+                    {patient.specialRequirements.join(", ")}
+                  </p>
+                )}
+            </div>
+          ))}
+        </div>
       </div>
+
       {triageError && (
         <p className="mt-3 text-xs text-red-700">{triageError}</p>
       )}
@@ -335,6 +356,7 @@ export default function PatientQueue({
           wardName={wardName || `Ward ${wardId}`}
           patient={selectedPatient}
           beds={beds}
+          wards={wards}
           onAssigned={handleAssignSuccess}
           onClose={handleModalClose}
         />

@@ -1,0 +1,9 @@
+2026-06-28 13:22:09,172 - INFO - Starting data collection...
+2026-06-28 13:22:09,172 - WARNING - pymongo not installed. Skipping actual MongoDB connection.
+2026-06-28 13:22:09,172 - INFO - To use this script, install pymongo: pip install pymongo
+2026-06-28 13:22:09,172 - INFO - Creating sample data structure...
+2026-06-28 13:22:09,265 - INFO - Saved patients data to mlops\data\raw\patients_20260628_132209.csv
+2026-06-28 13:22:09,267 - INFO - Saved wards data to mlops\data\raw\wards_20260628_132209.csv
+2026-06-28 13:22:09,267 - INFO - Saved beds data to mlops\data\raw\beds_20260628_132209.csv
+2026-06-28 13:22:09,267 - INFO - Saved metadata to mlops\data\raw\metadata_20260628_132209.json
+2026-06-28 13:22:09,267 - INFO - Data collection completed successfully!

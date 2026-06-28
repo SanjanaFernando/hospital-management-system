@@ -2,11 +2,14 @@
 
 import { connectToDatabase } from "@/lib/mongodb";
 import { ObjectId } from "mongodb";
+import { revalidateTag } from "next/cache";
 import { UserSession } from "@/app/types";
 import {
   assertPermission,
   canAssignOrDischargePatient,
+  canAssignQueuedPatientAcrossWards,
   normalizeSession,
+  normalizeWardId,
 } from "@/lib/rbac";
 
 export async function dischargePatientById(
@@ -52,6 +55,7 @@ export async function dischargePatientById(
       },
       $unset: {
         admissionTime: "",
+        assignedFromWardId: "",
       },
     }
   );
@@ -68,6 +72,7 @@ export async function dischargePatientById(
         },
         $unset: {
           admissionTime: "",
+          assignedFromWardId: "",
         },
       }
     );
@@ -90,10 +95,16 @@ export async function dischargePatientById(
       }
     );
   }
+
+  revalidateTag("patients", "max");
+  revalidateTag("beds", "max");
+  revalidateTag("wards", "max");
+  revalidateTag("dashboard", "max");
 }
 
 interface AssignPatientInput {
   wardId: string;
+  sourceWardId?: string;
   bedId: string;
   patientId: string;
   actor: UserSession;
@@ -102,7 +113,7 @@ interface AssignPatientInput {
 export async function assignPatientToBed(
   input: AssignPatientInput
 ): Promise<void> {
-  const { wardId, bedId, patientId } = input;
+  const { wardId, sourceWardId, bedId, patientId } = input;
 
   if (!wardId || !bedId || !patientId) {
     throw new Error("Ward ID, bed ID, and patient ID are required");
@@ -127,15 +138,42 @@ export async function assignPatientToBed(
   }
 
   const effectiveWardId = (bed.wardId as string) || wardId;
+  const normalizedSourceWardId = normalizeWardId(sourceWardId || wardId);
 
-  assertPermission(
-    canAssignOrDischargePatient(session, effectiveWardId),
-    "You do not have permission to assign a patient in this ward."
-  );
+  if (normalizedSourceWardId && normalizedSourceWardId !== effectiveWardId) {
+    assertPermission(
+      canAssignQueuedPatientAcrossWards(
+        session,
+        normalizedSourceWardId,
+        effectiveWardId
+      ),
+      "You do not have permission to assign this queued patient to another ward."
+    );
+  } else {
+    assertPermission(
+      canAssignOrDischargePatient(session, effectiveWardId),
+      "You do not have permission to assign a patient in this ward."
+    );
+  }
 
-  const patient = await db
-    .collection("patients")
-    .findOne({ id: patientId, wardId: effectiveWardId });
+  const patientQuery: Record<string, unknown> = { id: patientId };
+  if (normalizedSourceWardId) {
+    patientQuery.wardId = normalizedSourceWardId;
+  }
+
+  let patient = await db.collection("patients").findOne(patientQuery);
+
+  if (!patient && ObjectId.isValid(patientId)) {
+    const objectIdQuery: Record<string, unknown> = {
+      _id: new ObjectId(patientId),
+    };
+
+    if (normalizedSourceWardId) {
+      objectIdQuery.wardId = normalizedSourceWardId;
+    }
+
+    patient = await db.collection("patients").findOne(objectIdQuery);
+  }
 
   if (!patient) {
     throw new Error("Patient not found in this ward queue");
@@ -144,6 +182,8 @@ export async function assignPatientToBed(
   if (patient.status !== "queued") {
     throw new Error("Selected patient is not in the queue");
   }
+
+  const patientWardFilter = normalizedSourceWardId || effectiveWardId;
 
   await db.collection("beds").updateOne(
     { bedId: bed.bedId || bedId, wardId: effectiveWardId },
@@ -157,15 +197,25 @@ export async function assignPatientToBed(
   );
 
   await db.collection("patients").updateOne(
-    { id: patientId, wardId: effectiveWardId },
+    { id: patientId, wardId: patientWardFilter },
     {
       $set: {
         status: "admitted",
+        wardId: effectiveWardId,
+        assignedFromWardId:
+          normalizedSourceWardId && normalizedSourceWardId !== effectiveWardId
+            ? normalizedSourceWardId
+            : null,
         admissionTime: new Date(),
         updatedAt: new Date(),
       },
     }
   );
+
+  revalidateTag("patients", "max");
+  revalidateTag("beds", "max");
+  revalidateTag("wards", "max");
+  revalidateTag("dashboard", "max");
 }
 
 export async function movePatientToQueue(
@@ -210,6 +260,7 @@ export async function movePatientToQueue(
       },
       $unset: {
         admissionTime: "",
+        assignedFromWardId: "",
       },
     }
   );
@@ -225,6 +276,7 @@ export async function movePatientToQueue(
         },
         $unset: {
           admissionTime: "",
+          assignedFromWardId: "",
         },
       }
     );
@@ -245,12 +297,17 @@ export async function movePatientToQueue(
       },
     }
   );
+
+  revalidateTag("patients", "max");
+  revalidateTag("beds", "max");
+  revalidateTag("wards", "max");
+  revalidateTag("dashboard", "max");
 }
 
 export async function forceAssignPatientToBed(
   input: AssignPatientInput
 ): Promise<void> {
-  const { wardId, bedId, patientId } = input;
+  const { wardId, sourceWardId, bedId, patientId } = input;
 
   if (!wardId || !bedId || !patientId) {
     throw new Error("Ward ID, bed ID, and patient ID are required");
@@ -276,16 +333,43 @@ export async function forceAssignPatientToBed(
   }
 
   const effectiveWardId = (bed.wardId as string) || wardId;
+  const normalizedSourceWardId = normalizeWardId(sourceWardId || wardId);
 
-  assertPermission(
-    canAssignOrDischargePatient(session, effectiveWardId),
-    "You do not have permission to force assign in this ward."
-  );
+  if (normalizedSourceWardId && normalizedSourceWardId !== effectiveWardId) {
+    assertPermission(
+      canAssignQueuedPatientAcrossWards(
+        session,
+        normalizedSourceWardId,
+        effectiveWardId
+      ),
+      "You do not have permission to force assign this queued patient to another ward."
+    );
+  } else {
+    assertPermission(
+      canAssignOrDischargePatient(session, effectiveWardId),
+      "You do not have permission to force assign in this ward."
+    );
+  }
 
   // Find the new patient to assign
-  const newPatient = await db
-    .collection("patients")
-    .findOne({ id: patientId, wardId: effectiveWardId });
+  const patientQuery: Record<string, unknown> = { id: patientId };
+  if (normalizedSourceWardId) {
+    patientQuery.wardId = normalizedSourceWardId;
+  }
+
+  let newPatient = await db.collection("patients").findOne(patientQuery);
+
+  if (!newPatient && ObjectId.isValid(patientId)) {
+    const objectIdQuery: Record<string, unknown> = {
+      _id: new ObjectId(patientId),
+    };
+
+    if (normalizedSourceWardId) {
+      objectIdQuery.wardId = normalizedSourceWardId;
+    }
+
+    newPatient = await db.collection("patients").findOne(objectIdQuery);
+  }
 
   if (!newPatient) {
     throw new Error("Patient not found in this ward queue");
@@ -294,6 +378,8 @@ export async function forceAssignPatientToBed(
   if (newPatient.status !== "queued") {
     throw new Error("Selected patient is not in the queue");
   }
+
+  const patientWardFilter = normalizedSourceWardId || effectiveWardId;
 
   // If bed is occupied, move current patient back to queue
   if (bed.status === "occupied" && bed.patientId) {
@@ -330,13 +416,23 @@ export async function forceAssignPatientToBed(
   );
 
   await db.collection("patients").updateOne(
-    { id: patientId, wardId: effectiveWardId },
+    { id: patientId, wardId: patientWardFilter },
     {
       $set: {
         status: "admitted",
+        wardId: effectiveWardId,
+        assignedFromWardId:
+          normalizedSourceWardId && normalizedSourceWardId !== effectiveWardId
+            ? normalizedSourceWardId
+            : null,
         admissionTime: new Date(),
         updatedAt: new Date(),
       },
     }
   );
+
+  revalidateTag("patients", "max");
+  revalidateTag("beds", "max");
+  revalidateTag("wards", "max");
+  revalidateTag("dashboard", "max");
 }

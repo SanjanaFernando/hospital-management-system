@@ -1,13 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState, useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
 import { Ward } from "@/app/types";
 import PatientQueue from "@/app/components/PatientQueue";
 import MedicalCrossLoader from "@/app/components/MedicalCrossLoader";
-import { getWardWithPatients } from "@/app/actions/wardActions";
+import {
+  getWardWithPatients,
+  getWardsWithPatients,
+} from "@/app/actions/wardActions";
 import { useAuthSession } from "@/app/context/AuthSessionContext";
 import { canAccessWard, canAssignOrDischargePatient } from "@/lib/rbac";
 import {
@@ -22,6 +25,7 @@ export default function WardQueuePage() {
   const { session } = useAuthSession();
 
   const [ward, setWard] = useState<Ward | null>(null);
+  const [wards, setWards] = useState<Ward[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -60,12 +64,43 @@ export default function WardQueuePage() {
     }
   }, [wardId]);
 
+  const loadWards = useCallback(async () => {
+    if (session.role !== "admin" && session.role !== "consultant_doctor") {
+      setWards([]);
+      return;
+    }
+
+    const cacheKey = "wards:all";
+    const cachedWards = getClientCache<Ward[]>(
+      cacheKey,
+      CLIENT_CACHE_TTL.wards
+    );
+
+    if (cachedWards && cachedWards.length > 0) {
+      setWards(cachedWards);
+    }
+
+    try {
+      const wardsData = await getWardsWithPatients();
+      if (wardsData && wardsData.length > 0) {
+        setWards(wardsData);
+        setClientCache(cacheKey, wardsData);
+      }
+    } catch {
+      if (!cachedWards || cachedWards.length === 0) {
+        setWards([]);
+      }
+    }
+  }, [session.role]);
+
   useEffect(() => {
     void loadWard();
-  }, [loadWard]);
+    void loadWards();
+  }, [loadWard, loadWards]);
 
   const handlePatientAssigned = () => {
-    loadWard();
+    void loadWard();
+    void loadWards();
   };
 
   if (isLoading) {
@@ -138,8 +173,9 @@ export default function WardQueuePage() {
 
         <div className="bg-white rounded-lg shadow-md p-8">
           <PatientQueue
-            patients={ward?.patientQueue || []}
+            patients={ward.patientQueue || []}
             beds={ward.beds || []}
+            wards={wards}
             wardId={ward.wardId || ward.id}
             wardName={ward.name}
             onPatientAssigned={handlePatientAssigned}

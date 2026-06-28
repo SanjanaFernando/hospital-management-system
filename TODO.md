@@ -1,0 +1,1 @@
+- [ ] Implement responsive Bed/PAtient accordion on <lg screens in app/components/BedGrid.tsx (patients shown first; beds toggled).

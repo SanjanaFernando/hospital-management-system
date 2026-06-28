@@ -6,10 +6,10 @@ import { useAuthSession } from "@/app/context/AuthSessionContext";
 import { ROLE_LABELS } from "@/lib/rbac";
 
 const wardOptions = [
-  { id: "ward-0", label: "Ward 3" },
-  { id: "ward-1", label: "Ward 4" },
-  { id: "ward-2", label: "Ward 5" },
-  { id: "ward-3", label: "Ward 6" },
+  { id: "ward-3", label: "Ward 3 - Surgical" },
+  { id: "ward-4", label: "Ward 4 - Surgical" },
+  { id: "ward-5", label: "Ward 5 - Surgical" },
+  { id: "ward-6", label: "Ward 6 - Surgical" },
 ];
 
 export default function RoleSwitcher() {
@@ -21,7 +21,7 @@ export default function RoleSwitcher() {
       return;
     }
 
-    const defaultWardId = session.wardId || "ward-0";
+    const defaultWardId = session.wardId || wardOptions[0].id;
     setSession({
       role,
       wardId: defaultWardId,
@@ -66,7 +66,7 @@ export default function RoleSwitcher() {
           <label className="text-xs font-semibold text-slate-700">
             Assigned Ward
             <select
-              value={session.wardId || "ward-0"}
+              value={session.wardId || wardOptions[0].id}
               onChange={(e) => updateWard(e.target.value)}
               disabled={session.role === "admin"}
               className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 disabled:bg-slate-100 disabled:text-slate-400"
@@ -102,7 +102,7 @@ export default function RoleSwitcher() {
           <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-800">
             {session.role === "admin"
               ? "Global Access"
-              : `Scoped to ${(session.wardId || "ward-0").toUpperCase()}`}
+              : `Scoped to ${wardOptions.find((ward) => ward.id === session.wardId)?.label || wardOptions[0].label}`}
           </span>
         </div>
       </div>

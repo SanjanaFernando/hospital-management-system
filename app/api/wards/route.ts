@@ -1,45 +1,19 @@
 import { connectToDatabase } from "@/lib/mongodb";
+import { getWardsWithPatientsData } from "@/lib/hospital-data";
 import { NextResponse, NextRequest } from "next/server";
 import { canManageStaff, getSessionFromHeaders } from "@/lib/rbac";
 
 export async function GET(request: NextRequest) {
   try {
     const session = getSessionFromHeaders(request.headers);
-    const { db } = await connectToDatabase();
+    const wardsWithPatients = await getWardsWithPatientsData();
 
-    // Fetch all wards
-    const wards = await db
-      .collection("wards")
-      .find(session.role === "admin" ? {} : { wardId: session.wardId })
-      .toArray();
-
-    // For each ward, fetch patients and organize by status
-    const wardsWithPatients = await Promise.all(
-      wards.map(async (ward: Record<string, unknown>) => {
-        const wardId = ward?.wardId as string;
-
-        // Fetch all patients for this ward
-        const allPatients = await db
-          .collection("patients")
-          .find({ wardId })
-          .toArray();
-
-        // Separate into admitted and queued
-        const admittedPatients = allPatients.filter(
-          (p: Record<string, unknown>) => p.status === "admitted"
-        );
-        const queuedPatients = allPatients.filter(
-          (p: Record<string, unknown>) => p.status === "queued"
-        );
-
-        return {
-          ...ward,
-          patients: admittedPatients,
-          patientQueue: queuedPatients,
-          totalPatients: allPatients.length,
-        };
-      })
-    );
+    if (session.role !== "admin") {
+      return NextResponse.json(
+        wardsWithPatients.filter((ward) => ward.wardId === session.wardId),
+        { status: 200 }
+      );
+    }
 
     return NextResponse.json(wardsWithPatients, { status: 200 });
   } catch (error) {

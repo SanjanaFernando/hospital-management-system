@@ -12,10 +12,10 @@ import { ROLE_LABELS, canManageStaff } from "@/lib/rbac";
 import { StaffMember } from "@/app/types";
 
 const wardOptions = [
-  { id: "ward-0", label: "Ward A" },
-  { id: "ward-1", label: "Ward B" },
-  { id: "ward-2", label: "Ward C" },
-  { id: "ward-3", label: "Ward D" },
+  { id: "ward-3", label: "Ward 3 - Surgical" },
+  { id: "ward-4", label: "Ward 4 - Surgical" },
+  { id: "ward-5", label: "Ward 5 - Surgical" },
+  { id: "ward-6", label: "Ward 6 - Surgical" },
 ];
 
 export default function AdminStaffPage() {
@@ -27,7 +27,7 @@ export default function AdminStaffPage() {
   const [formData, setFormData] = useState({
     name: "",
     role: "consultant_doctor" as StaffMember["role"],
-    wardId: "ward-0",
+    wardId: wardOptions[0].id,
   });
 
   const loadStaff = useCallback(async () => {
@@ -68,7 +68,7 @@ export default function AdminStaffPage() {
     }
 
     setMessage("Staff member registered successfully.");
-    setFormData({ name: "", role: "consultant_doctor", wardId: "ward-0" });
+    setFormData({ name: "", role: "consultant_doctor", wardId: wardOptions[0].id });
     await loadStaff();
   };
 

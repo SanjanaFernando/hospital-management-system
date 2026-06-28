@@ -8,8 +8,17 @@
     "start": "next start",
     "lint": "eslint",
     "db:reset": "node scripts/seedDatabase.mjs",
+    "db:indexes": "node scripts/createIndexes.mjs",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "mlops:collect": "python mlops/scripts/collect_data.py --days 30 --output mlops/data/raw",
+    "mlops:train": "python mlops/scripts/train_model.py --data mlops/data/processed --config mlops/config/training_config.json",
+    "mlops:evaluate": "python mlops/scripts/evaluate_model.py --model mlops/models/v1/model.pth",
+    "mlops:list-versions": "python mlops/scripts/deploy_model.py --list-versions",
+    "mlops:activate": "python mlops/scripts/deploy_model.py",
+    "mlops:deploy": "python mlops/scripts/deploy_model.py",
+    "mlops:monitor": "python mlops/scripts/monitor_inference.py",
+    "mlops:setup": "pip install -r mlops/requirements.txt && cp mlops/config/.env.example .env"
   },
   "dependencies": {
     "clsx": "^2.1.1",
@@ -31,6 +40,7 @@
     "prettier": "^3.8.1",
     "tailwindcss": "^4",
     "ts-node": "^10.9.2",
+    "tsx": "^4.22.4",
     "typescript": "^5"
   }
 }
