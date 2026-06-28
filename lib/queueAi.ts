@@ -24,6 +24,7 @@ interface QueueAiResult {
   orderedPatients: Patient[];
   strategy: "ai" | "priority";
   message: string;
+  action?: number;
 }
 
 interface QueueScriptResult {
@@ -127,6 +128,7 @@ export function reorderQueueWithAi(input: QueueAiInput): QueueAiResult {
           orderedPatients,
           strategy: "ai",
           message: `Mixed-priority AI reordered queue (action ${parsed.meta?.action ?? "n/a"}).`,
+          action: parsed.meta?.action,
         };
       } catch {
         // Try next executable or fallback if none succeeds.

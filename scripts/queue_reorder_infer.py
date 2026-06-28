@@ -407,6 +407,10 @@ def choose_stable_action(
 
 
 def main() -> int:
+    #edited
+    import time  
+    start = time.time()
+    #edited
     raw = sys.stdin.read()
     if not raw.strip():
         print(json.dumps({"error": "No input payload provided"}))
@@ -475,8 +479,27 @@ def main() -> int:
         )
     )
 
+    #edited
+    elapsed = (time.time() - start) * 1000
+    log_inference(success=True, latency_ms=elapsed)
+    #edited 
+    
     return 0
-
+#edited
+def log_inference(success: bool, latency_ms: float) -> None:
+    try:
+        log_entry = {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "success": success,
+            "latency_ms": latency_ms,
+            "strategy": "ddqn"
+        }
+        log_path = Path(__file__).resolve().parents[1] / "mlops/logs/inference/latest.log"
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(log_path, "a") as f:
+            f.write(json.dumps(log_entry) + "\n")
+    except Exception:
+        pass  # logging failure should never break inference
 
 if __name__ == "__main__":
     raise SystemExit(main())
