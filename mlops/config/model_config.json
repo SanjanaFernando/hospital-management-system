@@ -1,0 +1,52 @@
+{
+  "model": {
+    "name": "DDQN Hospital Queue Optimizer",
+    "type": "DDQN",
+    "description": "Double Deep Q-Network for fair patient queue reordering",
+    "version": "1.0.0"
+  },
+  "architecture": {
+    "state_dim": 16,
+    "action_dim": 81,
+    "hidden_dims": [128, 128],
+    "activation": "ReLU",
+    "output_activation": "Linear"
+  },
+  "features": {
+    "state_features": [
+      "patient_triage_level",
+      "patient_wait_hours",
+      "ward_occupancy_rate",
+      "ward_avg_triage",
+      "priority_distribution_5",
+      "age_group_mix",
+      "special_requirements_count",
+      "recent_discharges",
+      "avg_bed_turnover",
+      "season",
+      "day_of_week",
+      "hour_of_day",
+      "patient_age_normalized",
+      "queue_length",
+      "fairness_penalty",
+      "efficiency_bonus"
+    ],
+    "normalization": "minmax",
+    "feature_scaling": {
+      "triage_level": [1, 5],
+      "wait_hours": [0, 24],
+      "occupancy_rate": [0, 1],
+      "queue_length": [0, 50]
+    }
+  },
+  "actions": {
+    "total": 81,
+    "description": "Possible queue orderings (for up to ~9 patients at once)"
+  },
+  "performance_targets": {
+    "fairness_score": 0.85,
+    "efficiency_score": 0.90,
+    "inference_latency_ms": 100,
+    "accuracy": 0.85
+  }
+}

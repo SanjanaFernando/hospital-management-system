@@ -1,0 +1,4 @@
+patient_id,wardId,name,age,priority,admissionTime,queueWaitTime
+1,ward-0,Patient A,45,Critical,2026-06-28 13:22:09.172714,30
+2,ward-0,Patient B,65,Urgent,2026-06-28 13:22:09.172714,45
+3,ward-1,Patient C,35,Non-urgent,2026-06-28 13:22:09.172714,15
