@@ -76,11 +76,19 @@ function runPythonCommand(command: string[], input: string) {
 }
 
 export function reorderQueueWithAi(input: QueueAiInput): QueueAiResult {
-  const modelPath = path.join(
+  // Prefer the new 99-action model trained with the improved training code.
+  // Falls back to the legacy 64-action model if the new one is not available yet.
+  const newModelPath = path.join(
+    process.cwd(),
+    "model",
+    "best_ddqn_hospital_improved.pth"
+  );
+  const legacyModelPath = path.join(
     process.cwd(),
     "model",
     "best_ddqn_hospital_fair.pth"
   );
+  const modelPath = existsSync(newModelPath) ? newModelPath : legacyModelPath;
   const scriptPath = path.join(
     process.cwd(),
     "scripts",

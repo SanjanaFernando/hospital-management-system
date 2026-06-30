@@ -134,7 +134,6 @@ export default function BedDetailPage() {
             className="mb-6 inline-flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
           >
             <ChevronLeft size={20} />
-            Back to Ward
           </Link>
           <div className="bg-white rounded-lg shadow-md p-8">
             <h1 className="text-2xl font-bold text-gray-800 mb-2">
@@ -192,14 +191,13 @@ export default function BedDetailPage() {
           className="mb-6 inline-flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
         >
           <ChevronLeft size={20} />
-          Back to Ward
         </Link>
 
         <div className="bg-white rounded-lg shadow-md p-8">
           <div className="flex items-center justify-between mb-6">
             <div>
               <p className="text-sm text-gray-500 mb-2">{ward.name}</p>
-              <h1 className="text-3xl font-bold text-gray-800">
+              <h1 className="text-xl font-bold text-gray-800">
                 Bed {bed.bedNumber}
               </h1>
             </div>
@@ -288,7 +286,6 @@ export default function BedDetailPage() {
               className="flex-1 text-center inline-flex items-center justify-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
             >
               <ChevronLeft size={20} />
-              Back to Ward
             </Link>
 
             {bed.status === "available" && (

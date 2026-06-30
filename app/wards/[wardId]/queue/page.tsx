@@ -115,8 +115,7 @@ export default function WardQueuePage() {
             href="/"
             className="mb-6 inline-flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
           >
-            <ChevronLeft size={20} />
-            Back to Wards
+            <ChevronLeft size={20} />s
           </Link>
           <div className="bg-white rounded-lg shadow-md p-8">
             <h1 className="text-2xl font-bold text-gray-800">Ward not found</h1>
@@ -158,7 +157,6 @@ export default function WardQueuePage() {
             className="inline-flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
           >
             <ChevronLeft size={20} />
-            Back to Ward
           </Link>
           <h1 className="text-2xl font-bold text-gray-800">
             {ward.name} - Queue
