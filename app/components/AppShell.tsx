@@ -31,6 +31,7 @@ interface SidebarItem {
   label: string;
   href: string;
   icon: React.ComponentType<{ className?: string }>;
+  adminOnly?: boolean;
 }
 
 function formatShiftCountdown(date = new Date()): string {
@@ -139,12 +140,8 @@ function AppShellContent({ children }: PropsWithChildren) {
       icon: Activity,
     },
     { label: "Reports", href: "/reports", icon: ClipboardSignature },
+    { label: "User Logs", href: "/admin/logs", icon: ScrollText, adminOnly: true },
   ];
-
-  const adminNavItems: SidebarItem[] =
-    session.role === "admin"
-      ? [{ label: "User Logs", href: "/admin/logs", icon: ScrollText }]
-      : [];
 
   const isActive = (href: string) => {
     if (href === "/") {
@@ -194,6 +191,21 @@ function AppShellContent({ children }: PropsWithChildren) {
     navItems.map((item) => {
       const Icon = item.icon;
       const active = isActive(item.href);
+      const disabled = item.adminOnly && session.role !== "admin";
+
+      if (disabled) {
+        return (
+          <span
+            key={item.label}
+            className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium cursor-not-allowed opacity-40 select-none ${
+              compact ? "min-w-fit whitespace-nowrap" : ""
+            } text-slate-400`}
+          >
+            <Icon className="h-4 w-4" />
+            <span>{item.label}</span>
+          </span>
+        );
+      }
 
       return (
         <Link
@@ -288,34 +300,6 @@ function AppShellContent({ children }: PropsWithChildren) {
                 {renderNavLinks(false, () => setMobileMenuOpen(false))}
               </nav>
 
-              {adminNavItems.length > 0 && (
-                <div className="mt-3 border-t border-white/10 pt-3">
-                  <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-amber-200/70">
-                    Admin
-                  </p>
-                  <nav className="grid gap-1.5">
-                    {adminNavItems.map((item) => {
-                      const Icon = item.icon;
-                      const active = isActive(item.href);
-                      return (
-                        <Link
-                          key={item.label}
-                          href={item.href}
-                          onClick={() => setMobileMenuOpen(false)}
-                          className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition ${
-                            active
-                              ? "bg-amber-400/20 text-white ring-1 ring-amber-200/30"
-                              : "text-slate-200 hover:bg-white/10 hover:text-white"
-                          }`}
-                        >
-                          <Icon className="h-4 w-4" />
-                          <span>{item.label}</span>
-                        </Link>
-                      );
-                    })}
-                  </nav>
-                </div>
-              )}
 
               {alerts.length > 0 && (
                 <div className="mt-3 rounded-2xl border border-orange-300/30 bg-orange-500/10 p-3">
@@ -442,6 +426,19 @@ function AppShellContent({ children }: PropsWithChildren) {
             {navItems.map((item) => {
               const Icon = item.icon;
               const active = isActive(item.href);
+              const disabled = item.adminOnly && session.role !== "admin";
+
+              if (disabled) {
+                return (
+                  <span
+                    key={item.label}
+                    className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium cursor-not-allowed opacity-40 select-none text-slate-400"
+                  >
+                    <Icon className="h-4 w-4" />
+                    <span>{item.label}</span>
+                  </span>
+                );
+              }
 
               return (
                 <Link
@@ -459,35 +456,6 @@ function AppShellContent({ children }: PropsWithChildren) {
               );
             })}
           </nav>
-
-          {adminNavItems.length > 0 && (
-            <div className="mt-4 border-t border-white/10 pt-4">
-              <p className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-amber-200/70">
-                Admin
-              </p>
-              <nav className="space-y-1.5">
-                {adminNavItems.map((item) => {
-                  const Icon = item.icon;
-                  const active = isActive(item.href);
-
-                  return (
-                    <Link
-                      key={item.label}
-                      href={item.href}
-                      className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition ${
-                        active
-                          ? "bg-amber-400/20 text-white ring-1 ring-amber-200/30"
-                          : "text-slate-200 hover:bg-white/10 hover:text-white"
-                      }`}
-                    >
-                      <Icon className="h-4 w-4" />
-                      <span>{item.label}</span>
-                    </Link>
-                  );
-                })}
-              </nav>
-            </div>
-          )}
 
           {alerts.length > 0 && (
             <div className="mt-5 rounded-2xl border border-orange-300/30 bg-orange-500/10 p-3">
