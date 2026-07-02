@@ -69,3 +69,26 @@ export interface StaffMember {
   wardId: string;
   createdAt: Date;
 }
+
+export type LogAction =
+  | "patient_registered"
+  | "patient_discharged"
+  | "patient_assigned_bed"
+  | "patient_force_assigned"
+  | "patient_moved_to_queue"
+  | "staff_registered"
+  | "role_switched"
+  | "bed_status_updated";
+
+export interface UserLog {
+  _id?: string;
+  id: string;
+  action: LogAction;
+  actorName: string;
+  actorRole: StaffRole;
+  wardId?: string;
+  targetId?: string;
+  targetName?: string;
+  details?: string;
+  timestamp: Date;
+}

@@ -122,6 +122,23 @@ export async function POST(request: NextRequest) {
     revalidatePath(`/wards/${body.wardId}`);
     revalidatePath(`/wards/${body.wardId}/patients`);
 
+    // Audit log for patient registration
+    try {
+      await db.collection("user_logs").insertOne({
+        id: `log-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+        action: "patient_registered",
+        actorName: session.displayName || "Unknown",
+        actorRole: session.role,
+        wardId: body.wardId,
+        targetId: body.id || result.insertedId.toString(),
+        targetName: body.name,
+        details: `Registered patient in ${body.wardId} (${body.priority || "Triage 5"})`,
+        timestamp: new Date(),
+      });
+    } catch {
+      // Audit logging should never break main operations
+    }
+
     return NextResponse.json(
       { success: true, insertedId: result.insertedId },
       { status: 201 }

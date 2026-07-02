@@ -3,6 +3,7 @@
 import { connectToDatabase } from "@/lib/mongodb";
 import { StaffMember, UserSession } from "@/app/types";
 import { assertPermission, canManageStaff, normalizeSession } from "@/lib/rbac";
+import { createUserLog } from "@/app/actions/logActions";
 
 interface RegisterStaffInput {
   name: string;
@@ -36,6 +37,14 @@ export async function registerStaffMember(
       wardId,
       createdAt: new Date(),
       updatedAt: new Date(),
+    });
+
+    await createUserLog({
+      action: "staff_registered",
+      actor,
+      wardId,
+      targetName: name.trim(),
+      details: `Registered ${role.replace("_", " ")} for ${wardId}`,
     });
 
     return { success: true };
