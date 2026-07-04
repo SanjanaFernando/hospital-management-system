@@ -250,6 +250,7 @@ export default function PatientQueue({
           {displayPatients.map((patient, index) => (
             (() => {
               const patientReason =
+                patient.queueReason ||
                 patientReasonById[patient._id || patient.id] ||
                 patientReasonById[patient.id] ||
                 patientReasonById[patient._id || ""];

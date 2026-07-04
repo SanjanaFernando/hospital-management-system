@@ -32,9 +32,6 @@ export default function WardOverviewClient({
   const [wards, setWards] = useState<Ward[]>(initialWards);
   const [isAddingBed, setIsAddingBed] = useState(false);
   const [error, setError] = useState("");
-  const [patientReasonById, setPatientReasonById] = useState<
-    Record<string, string>
-  >({});
 
   const bedGridRef = useRef<HTMLDivElement>(null);
   const [bedGridHeight, setBedGridHeight] = useState<number | undefined>();
@@ -83,50 +80,6 @@ export default function WardOverviewClient({
       window.removeEventListener("resize", updateBedGridHeight);
     };
   }, [ward.beds.length, isLargeScreen]);
-
-  useEffect(() => {
-    let cancelled = false;
-    const targetWardId = ward.wardId || ward.id;
-
-    async function loadExplainability() {
-      if (!targetWardId) return;
-
-      try {
-        const response = await fetch(
-          `/api/explain?wardId=${encodeURIComponent(targetWardId)}`,
-          { cache: "no-store" }
-        );
-        const payload = await response.json();
-
-        if (cancelled || !response.ok || payload?.error) {
-          return;
-        }
-
-        const rankedQueue = Array.isArray(payload?.ranked_queue)
-          ? payload.ranked_queue
-          : [];
-
-        const nextMap: Record<string, string> = {};
-        for (const entry of rankedQueue) {
-          if (entry?.patientId && entry?.reason) {
-            nextMap[String(entry.patientId)] = String(entry.reason);
-          }
-        }
-
-        setPatientReasonById(nextMap);
-      } catch {
-        if (!cancelled) {
-          setPatientReasonById({});
-        }
-      }
-    }
-
-    void loadExplainability();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [ward.wardId, ward.id]);
 
   const resolvedWardId = ward.wardId || ward.id;
   const wardAccessAllowed = canAccessWard(session, resolvedWardId);

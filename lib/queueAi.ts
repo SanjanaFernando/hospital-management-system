@@ -109,7 +109,11 @@ export function reorderQueueWithAi(input: QueueAiInput): QueueAiResult {
     if (result.status === 0 && result.stdout) {
       try {
         const parsed = JSON.parse(result.stdout) as {
-          ranked_queue?: Array<{ patientId?: string; name?: string }>;
+          ranked_queue?: Array<{
+            patientId?: string;
+            name?: string;
+            reason?: string;
+          }>;
           explanation_text?: string;
         };
         const order = new Map(
@@ -118,11 +122,22 @@ export function reorderQueueWithAi(input: QueueAiInput): QueueAiResult {
             index,
           ])
         );
-        const orderedPatients = [...input.targetWardQueue].sort((a, b) => {
-          const aRank = order.get(a.id) ?? Number.MAX_SAFE_INTEGER;
-          const bRank = order.get(b.id) ?? Number.MAX_SAFE_INTEGER;
-          return aRank - bRank;
-        });
+        const reasonByPatientKey = new Map(
+          (parsed.ranked_queue || []).map((patient, index) => [
+            patient.patientId || patient.name || String(index),
+            patient.reason,
+          ])
+        );
+        const orderedPatients = [...input.targetWardQueue]
+          .sort((a, b) => {
+            const aRank = order.get(a.id) ?? Number.MAX_SAFE_INTEGER;
+            const bRank = order.get(b.id) ?? Number.MAX_SAFE_INTEGER;
+            return aRank - bRank;
+          })
+          .map((patient) => ({
+            ...patient,
+            queueReason: reasonByPatientKey.get(patient.id),
+          }));
 
         return {
           orderedPatients,

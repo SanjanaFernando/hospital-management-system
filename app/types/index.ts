@@ -36,6 +36,7 @@ export interface Patient {
   assignedFromWardId?: string | null;
   status?: "queued" | "admitted" | "discharged";
   triageRequested?: boolean;
+  queueReason?: string; // MAPPO explanation for this patient's queue rank, set by reorderQueueWithAi
 }
 
 export interface Bed {
