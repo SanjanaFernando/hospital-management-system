@@ -16,6 +16,7 @@ interface PatientQueueProps {
   onPatientAssigned?: () => void;
   queueOrderStrategy?: "ai" | "priority";
   queueOrderMessage?: string;
+  patientReasonById?: Record<string, string>;
   canAssign?: boolean;
   listMaxHeight?: number;
 }
@@ -76,6 +77,7 @@ export default function PatientQueue({
   onPatientAssigned,
   queueOrderStrategy = "priority",
   queueOrderMessage = "",
+  patientReasonById = {},
   canAssign = true,
   listMaxHeight,
 }: PatientQueueProps) {
@@ -246,6 +248,13 @@ export default function PatientQueue({
           }
         >
           {displayPatients.map((patient, index) => (
+            (() => {
+              const patientReason =
+                patientReasonById[patient._id || patient.id] ||
+                patientReasonById[patient.id] ||
+                patientReasonById[patient._id || ""];
+
+              return (
             <div
               key={patient.id}
               onClick={() => handlePatientClick(patient)}
@@ -277,6 +286,11 @@ export default function PatientQueue({
                       </span>
                     )}
                   </p>
+                  {patientReason && (
+                    <p className="mt-2 text-xs leading-5 text-gray-500">
+                      {patientReason}
+                    </p>
+                  )}
                 </div>
                 <span className="text-xs font-bold">{patient.priority}</span>
               </div>
@@ -342,6 +356,8 @@ export default function PatientQueue({
                   </p>
                 )}
             </div>
+              );
+            })()
           ))}
         </div>
       </div>

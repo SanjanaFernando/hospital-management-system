@@ -24,17 +24,6 @@ interface QueueAiResult {
   orderedPatients: Patient[];
   strategy: "ai" | "priority";
   message: string;
-  action?: number;
-}
-
-interface QueueScriptResult {
-  orderedPatientIds: string[];
-  meta?: {
-    action?: number;
-    weights?: number[];
-    wardBoost?: number;
-    modelApplied?: boolean;
-  };
 }
 
 const priorityOrder = {
@@ -79,44 +68,55 @@ export function reorderQueueWithAi(input: QueueAiInput): QueueAiResult {
   const modelPath = path.join(
     process.cwd(),
     "model",
-    "best_ddqn_hospital_fair.pth"
+    "best_mappo_hospital.pth"
   );
   const scriptPath = path.join(
     process.cwd(),
+    "xai",
     "scripts",
-    "queue_reorder_infer.py"
+    "explain.py"
   );
 
   if (!existsSync(modelPath) || !existsSync(scriptPath)) {
     return {
       orderedPatients: fallbackPrioritySort(input.targetWardQueue),
       strategy: "priority",
-      message: "AI model/script missing. Using priority ordering.",
+      message: "MAPPO model/script missing. Using priority ordering.",
     };
   }
 
+  const now = new Date();
+  const wardSnapshot = {
+    totalBeds: input.targetWardTotalBeds ?? 0,
+    occupiedBeds: input.targetWardOccupiedBeds ?? 0,
+    queue: input.targetWardQueue.map((patient) => ({
+      patientId: patient.id,
+      name: patient.name,
+      triageLevel: priorityToTriageLevel(patient.priority),
+      waitMinutes: getWaitMinutes(patient, now),
+    })),
+  };
+
   const payload = JSON.stringify({
-    modelPath,
-    // Disable action hysteresis so each ward can immediately switch to the
-    // best-scoring action for its current queue state.
-    actionSwitchMargin: 0,
-    actionMaxHoldMinutes: 0,
-    ...input,
+    ...wardSnapshot,
   });
 
-  const attempts = [
-    ["python", scriptPath],
-    ["py", "-3", scriptPath],
-  ];
+  const attempts: string[][] = [["python", scriptPath], ["py", "-3", scriptPath]];
 
   for (const cmd of attempts) {
-    const result = runPythonCommand(cmd, payload);
+    const result = runPythonCommand([...cmd, "--checkpoint", modelPath], payload);
 
     if (result.status === 0 && result.stdout) {
       try {
-        const parsed = JSON.parse(result.stdout) as QueueScriptResult;
+        const parsed = JSON.parse(result.stdout) as {
+          ranked_queue?: Array<{ patientId?: string; name?: string }>;
+          explanation_text?: string;
+        };
         const order = new Map(
-          parsed.orderedPatientIds.map((id, idx) => [id, idx])
+          (parsed.ranked_queue || []).map((patient, index) => [
+            patient.patientId || patient.name || String(index),
+            index,
+          ])
         );
         const orderedPatients = [...input.targetWardQueue].sort((a, b) => {
           const aRank = order.get(a.id) ?? Number.MAX_SAFE_INTEGER;
@@ -127,8 +127,9 @@ export function reorderQueueWithAi(input: QueueAiInput): QueueAiResult {
         return {
           orderedPatients,
           strategy: "ai",
-          message: `Mixed-priority AI reordered queue (action ${parsed.meta?.action ?? "n/a"}).`,
-          action: parsed.meta?.action,
+          message: orderedPatients[0]
+            ? `MAPPO reordered queue. Top patient: ${orderedPatients[0].name}.`
+            : `MAPPO reordered queue for ${input.targetWardName}.`,
         };
       } catch {
         // Try next executable or fallback if none succeeds.
@@ -139,6 +140,37 @@ export function reorderQueueWithAi(input: QueueAiInput): QueueAiResult {
   return {
     orderedPatients: fallbackPrioritySort(input.targetWardQueue),
     strategy: "priority",
-    message: "AI inference unavailable. Using priority ordering.",
+    message: "MAPPO inference unavailable. Using priority ordering.",
   };
+}
+
+function priorityToTriageLevel(priority: string): number {
+  const normalized = String(priority).trim();
+
+  if (normalized in priorityOrder) {
+    return priorityOrder[normalized as keyof typeof priorityOrder] + 1;
+  }
+
+  if (normalized === "Critical") return 1;
+  if (normalized === "Urgent") return 3;
+  if (normalized === "Non-urgent") return 5;
+
+  const match = normalized.match(/\d+/);
+  return match ? Math.min(5, Math.max(1, Number.parseInt(match[0], 10))) : 5;
+}
+
+function getWaitMinutes(patient: Patient, now: Date): number {
+  if (
+    typeof patient.queueWaitTime === "number" &&
+    Number.isFinite(patient.queueWaitTime)
+  ) {
+    return Math.max(0, Math.floor(patient.queueWaitTime));
+  }
+
+  if (!patient.admissionTime) return 0;
+
+  const arrivalMs = new Date(patient.admissionTime).getTime();
+  if (Number.isNaN(arrivalMs)) return 0;
+
+  return Math.max(0, Math.floor((now.getTime() - arrivalMs) / 60_000));
 }

@@ -1,14 +1,8 @@
 // lib/mongodb.ts
 import { MongoClient, Db } from "mongodb";
 
-const MONGODB_URI = process.env.MONGODB_URI as string;
+const MONGODB_URI = process.env.MONGODB_URI || "";
 const MONGODB_DB = process.env.MONGODB_DB || "hospital-management";
-
-if (!MONGODB_URI) {
-  throw new Error(
-    'Invalid/Missing environment variable: "MONGODB_URI". Please check your .env.local file.'
-  );
-}
 
 interface MongoGlobalCache {
   client: MongoClient | null;
@@ -32,6 +26,12 @@ export async function connectToDatabase(): Promise<{
   client: MongoClient;
   db: Db;
 }> {
+  if (!MONGODB_URI) {
+    throw new Error(
+      'Invalid/Missing environment variable: "MONGODB_URI". Please check your .env.local file.'
+    );
+  }
+
   if (mongoConnection.client && mongoConnection.db) {
     return { client: mongoConnection.client, db: mongoConnection.db };
   }
