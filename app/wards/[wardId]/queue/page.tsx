@@ -29,9 +29,6 @@ export default function WardQueuePage() {
   const [wards, setWards] = useState<Ward[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
-  const [rankedQueueByPatientId, setRankedQueueByPatientId] = useState<
-    Record<string, string>
-  >({});
 
   const loadWard = useCallback(async () => {
     if (!wardId) return;
@@ -101,49 +98,6 @@ export default function WardQueuePage() {
     void loadWard();
     void loadWards();
   }, [loadWard, loadWards]);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function loadExplainability() {
-      if (!wardId) return;
-
-      try {
-        const response = await fetch(
-          `/api/explain?wardId=${encodeURIComponent(wardId)}`,
-          { cache: "no-store" }
-        );
-        const payload = await response.json();
-
-        if (cancelled || !response.ok || payload?.error) {
-          return;
-        }
-
-        const rankedQueue = Array.isArray(payload?.ranked_queue)
-          ? payload.ranked_queue
-          : [];
-
-        const nextMap: Record<string, string> = {};
-        for (const entry of rankedQueue) {
-          if (entry?.patientId && entry?.reason) {
-            nextMap[String(entry.patientId)] = String(entry.reason);
-          }
-        }
-
-        setRankedQueueByPatientId(nextMap);
-      } catch {
-        if (!cancelled) {
-          setRankedQueueByPatientId({});
-        }
-      }
-    }
-
-    void loadExplainability();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [wardId]);
 
   const handlePatientAssigned = () => {
     void loadWard();
@@ -234,7 +188,6 @@ export default function WardQueuePage() {
             queueOrderStrategy={ward.queueOrderStrategy}
             queueOrderMessage={ward.queueOrderMessage}
             canAssign={canAssignPatients}
-            patientReasonById={rankedQueueByPatientId}
           />
         </div>
       </div>
