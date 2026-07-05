@@ -12,6 +12,7 @@ import {
   Gauge,
   LogOut,
   Menu,
+  ScrollText,
   X,
   TriangleAlert,
   UserRound,
@@ -30,6 +31,7 @@ interface SidebarItem {
   label: string;
   href: string;
   icon: React.ComponentType<{ className?: string }>;
+  adminOnly?: boolean;
 }
 
 function formatShiftCountdown(date = new Date()): string {
@@ -138,6 +140,7 @@ function AppShellContent({ children }: PropsWithChildren) {
       icon: Activity,
     },
     { label: "Reports", href: "/reports", icon: ClipboardSignature },
+    { label: "User Logs", href: "/admin/logs", icon: ScrollText, adminOnly: true },
   ];
 
   const isActive = (href: string) => {
@@ -188,6 +191,21 @@ function AppShellContent({ children }: PropsWithChildren) {
     navItems.map((item) => {
       const Icon = item.icon;
       const active = isActive(item.href);
+      const disabled = item.adminOnly && session.role !== "admin";
+
+      if (disabled) {
+        return (
+          <span
+            key={item.label}
+            className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium cursor-not-allowed opacity-40 select-none ${
+              compact ? "min-w-fit whitespace-nowrap" : ""
+            } text-slate-400`}
+          >
+            <Icon className="h-4 w-4" />
+            <span>{item.label}</span>
+          </span>
+        );
+      }
 
       return (
         <Link
@@ -281,6 +299,7 @@ function AppShellContent({ children }: PropsWithChildren) {
               <nav className="mt-3 grid gap-2">
                 {renderNavLinks(false, () => setMobileMenuOpen(false))}
               </nav>
+
 
               {alerts.length > 0 && (
                 <div className="mt-3 rounded-2xl border border-orange-300/30 bg-orange-500/10 p-3">
@@ -407,6 +426,19 @@ function AppShellContent({ children }: PropsWithChildren) {
             {navItems.map((item) => {
               const Icon = item.icon;
               const active = isActive(item.href);
+              const disabled = item.adminOnly && session.role !== "admin";
+
+              if (disabled) {
+                return (
+                  <span
+                    key={item.label}
+                    className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium cursor-not-allowed opacity-40 select-none text-slate-400"
+                  >
+                    <Icon className="h-4 w-4" />
+                    <span>{item.label}</span>
+                  </span>
+                );
+              }
 
               return (
                 <Link

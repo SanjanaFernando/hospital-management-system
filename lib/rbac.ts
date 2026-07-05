@@ -95,6 +95,10 @@ export function canManageStaff(session: UserSession): boolean {
   return session.role === "admin";
 }
 
+export function canViewLogs(session: UserSession): boolean {
+  return session.role === "admin";
+}
+
 export function canManageWardActions(
   session: UserSession,
   wardId: string
