@@ -13,11 +13,21 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const wardId = searchParams.get("wardId");
 
-    const query: Record<string, string> = {};
-    if (session.role !== "admin") {
-      query.wardId = session.wardId || "";
-    } else if (wardId) {
-      query.wardId = wardId;
+    const query: Record<string, any> = {};
+    if (wardId) {
+      if (canAccessWard(session, wardId)) {
+        query.wardId = wardId;
+      } else {
+        return NextResponse.json(
+          { error: "Access denied to requested ward" },
+          { status: 403 }
+        );
+      }
+    } else if (session.role !== "admin") {
+      const assigned = session.wardIds && session.wardIds.length > 0
+        ? session.wardIds
+        : (session.wardId ? [session.wardId] : []);
+      query.wardId = { $in: assigned };
     }
 
     const beds = await db.collection("beds").find(query).toArray();

@@ -1,7 +1,11 @@
 import { normalizeSession } from "@/lib/rbac";
 import { UserSession } from "@/app/types";
 
+/** @deprecated Use AUTH_COOKIE_NAME from userActions instead */
 export const SESSION_COOKIE_NAME = "hospital-rbac-session";
+
+/** New auth cookie name — JWT-based */
+export const AUTH_COOKIE_NAME = "hospital-auth-token";
 
 export function parseSessionCookie(raw?: string | null): UserSession {
   if (!raw) {
