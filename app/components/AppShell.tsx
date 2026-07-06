@@ -12,6 +12,7 @@ import {
   Gauge,
   LogOut,
   Menu,
+  ScrollText,
   X,
   TriangleAlert,
   UserRound,
@@ -20,7 +21,6 @@ import {
 } from "lucide-react";
 import { AuthSessionProvider } from "@/app/context/AuthSessionContext";
 import { useAuthSession } from "@/app/context/AuthSessionContext";
-import RoleSwitcher from "@/app/components/RoleSwitcher";
 import { getWardsWithPatients } from "@/app/actions/wardActions";
 import { Ward } from "@/app/types";
 import { ROLE_LABELS } from "@/lib/rbac";
@@ -30,6 +30,7 @@ interface SidebarItem {
   label: string;
   href: string;
   icon: React.ComponentType<{ className?: string }>;
+  adminOnly?: boolean;
 }
 
 function formatShiftCountdown(date = new Date()): string {
@@ -61,12 +62,17 @@ function formatShiftCountdown(date = new Date()): string {
 
 function AppShellContent({ children }: PropsWithChildren) {
   const pathname = usePathname();
-  const { session, setSession } = useAuthSession();
+  const { session, setSession, logout } = useAuthSession();
   const [wards, setWards] = useState<Ward[]>([]);
   const [shiftCountdown, setShiftCountdown] = useState("");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
+  // Auth pages render without the shell
+  const isAuthPage =
+    pathname === "/login" || pathname === "/change-password";
+
   useEffect(() => {
+    if (isAuthPage) return;
     const loadSidebarData = async () => {
       const wardsData = await getWardsWithPatients();
       setWards(wardsData || []);
@@ -93,8 +99,14 @@ function AppShellContent({ children }: PropsWithChildren) {
     if (session.role === "admin") {
       return wards;
     }
-    return wards.filter((ward) => (ward.wardId || ward.id) === activeWardId);
-  }, [activeWardId, session.role, wards]);
+    const assignedIds = session.wardIds && session.wardIds.length > 0 
+      ? session.wardIds 
+      : [activeWardId];
+    return wards.filter((ward) => {
+      const id = ward.wardId || ward.id;
+      return assignedIds.includes(id);
+    });
+  }, [activeWardId, session.role, session.wardIds, wards]);
 
   const availableBeds = scopedWards.reduce(
     (sum, ward) => sum + ward.availableBeds,
@@ -138,6 +150,8 @@ function AppShellContent({ children }: PropsWithChildren) {
       icon: Activity,
     },
     { label: "Reports", href: "/reports", icon: ClipboardSignature },
+    { label: "User Management", href: "/admin/users", icon: Users, adminOnly: true },
+    { label: "User Logs", href: "/admin/logs", icon: ScrollText, adminOnly: true },
   ];
 
   const isActive = (href: string) => {
@@ -159,9 +173,9 @@ function AppShellContent({ children }: PropsWithChildren) {
     return pathname.startsWith(href);
   };
 
-  const handleSignOut = () => {
-    setSession({ role: "admin", displayName: "System Admin" });
+  const handleSignOut = async () => {
     setMobileMenuOpen(false);
+    await logout();
   };
 
   const quickLinks = [
@@ -188,6 +202,21 @@ function AppShellContent({ children }: PropsWithChildren) {
     navItems.map((item) => {
       const Icon = item.icon;
       const active = isActive(item.href);
+      const disabled = item.adminOnly && session.role !== "admin";
+
+      if (disabled) {
+        return (
+          <span
+            key={item.label}
+            className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium cursor-not-allowed opacity-40 select-none ${
+              compact ? "min-w-fit whitespace-nowrap" : ""
+            } text-slate-400`}
+          >
+            <Icon className="h-4 w-4" />
+            <span>{item.label}</span>
+          </span>
+        );
+      }
 
       return (
         <Link
@@ -207,6 +236,11 @@ function AppShellContent({ children }: PropsWithChildren) {
         </Link>
       );
     });
+
+  // Auth pages render without the shell chrome
+  if (isAuthPage) {
+    return <>{children}</>;
+  }
 
   return (
     <div className="min-h-screen bg-linear-to-br from-slate-100 via-teal-50 to-cyan-100">
@@ -281,6 +315,7 @@ function AppShellContent({ children }: PropsWithChildren) {
               <nav className="mt-3 grid gap-2">
                 {renderNavLinks(false, () => setMobileMenuOpen(false))}
               </nav>
+
 
               {alerts.length > 0 && (
                 <div className="mt-3 rounded-2xl border border-orange-300/30 bg-orange-500/10 p-3">
@@ -407,6 +442,19 @@ function AppShellContent({ children }: PropsWithChildren) {
             {navItems.map((item) => {
               const Icon = item.icon;
               const active = isActive(item.href);
+              const disabled = item.adminOnly && session.role !== "admin";
+
+              if (disabled) {
+                return (
+                  <span
+                    key={item.label}
+                    className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium cursor-not-allowed opacity-40 select-none text-slate-400"
+                  >
+                    <Icon className="h-4 w-4" />
+                    <span>{item.label}</span>
+                  </span>
+                );
+              }
 
               return (
                 <Link
@@ -477,9 +525,6 @@ function AppShellContent({ children }: PropsWithChildren) {
         </aside>
 
         <main className="min-w-0 flex-1">
-          <div className="mb-4 rounded-2xl border border-teal-200 bg-white/90 p-3 shadow-sm">
-            <RoleSwitcher />
-          </div>
           {children}
         </main>
       </div>

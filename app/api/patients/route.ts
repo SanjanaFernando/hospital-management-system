@@ -16,11 +16,21 @@ export async function GET(request: NextRequest) {
     const wardId = searchParams.get("wardId");
     const searchTerm = searchParams.get("q")?.trim() || "";
 
-    const query: Record<string, unknown> = {};
-    if (session.role !== "admin") {
-      query.wardId = session.wardId || "";
-    } else if (wardId) {
-      query.wardId = wardId;
+    const query: Record<string, any> = {};
+    if (wardId) {
+      if (canAccessWard(session, wardId)) {
+        query.wardId = wardId;
+      } else {
+        return NextResponse.json(
+          { error: "Access denied to requested ward" },
+          { status: 403 }
+        );
+      }
+    } else if (session.role !== "admin") {
+      const assigned = session.wardIds && session.wardIds.length > 0
+        ? session.wardIds
+        : (session.wardId ? [session.wardId] : []);
+      query.wardId = { $in: assigned };
     }
 
     if (searchTerm) {
@@ -121,6 +131,23 @@ export async function POST(request: NextRequest) {
     revalidatePath("/");
     revalidatePath(`/wards/${body.wardId}`);
     revalidatePath(`/wards/${body.wardId}/patients`);
+
+    // Audit log for patient registration
+    try {
+      await db.collection("user_logs").insertOne({
+        id: `log-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+        action: "patient_registered",
+        actorName: session.displayName || "Unknown",
+        actorRole: session.role,
+        wardId: body.wardId,
+        targetId: body.id || result.insertedId.toString(),
+        targetName: body.name,
+        details: `Registered patient in ${body.wardId} (${body.priority || "Triage 5"})`,
+        timestamp: new Date(),
+      });
+    } catch {
+      // Audit logging should never break main operations
+    }
 
     return NextResponse.json(
       { success: true, insertedId: result.insertedId },

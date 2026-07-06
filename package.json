@@ -9,6 +9,7 @@
     "lint": "eslint",
     "db:reset": "node scripts/seedDatabase.mjs",
     "db:indexes": "node scripts/createIndexes.mjs",
+    "db:seed-admin": "node scripts/seedAdmin.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "mlops:collect": "python mlops/scripts/collect_data.py --days 30 --output mlops/data/raw",
@@ -25,6 +26,7 @@
     "lucide-react": "^0.572.0",
     "mongodb": "^7.1.0",
     "next": "16.1.6",
+    "nodemailer": "^9.0.3",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "recharts": "^3.9.2",
@@ -33,6 +35,7 @@
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
+    "@types/nodemailer": "^8.0.1",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",

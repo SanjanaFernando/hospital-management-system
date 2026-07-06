@@ -3,6 +3,7 @@ import { Poppins, Inter } from "next/font/google";
 import "./globals.css";
 import AppShell from "@/app/components/AppShell";
 import { getServerSession } from "@/lib/session.server";
+import { AuthSessionProvider } from "@/app/context/AuthSessionContext";
 
 const poppins = Poppins({
   variable: "--font-poppins",

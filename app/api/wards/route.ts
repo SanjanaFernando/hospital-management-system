@@ -1,19 +1,17 @@
 import { connectToDatabase } from "@/lib/mongodb";
 import { getWardsWithPatientsData } from "@/lib/hospital-data";
 import { NextResponse, NextRequest } from "next/server";
-import { canManageStaff, getSessionFromHeaders } from "@/lib/rbac";
+import { canManageStaff, getSessionFromHeaders, canAccessWard } from "@/lib/rbac";
 
 export async function GET(request: NextRequest) {
   try {
     const session = getSessionFromHeaders(request.headers);
     const wardsWithPatients = await getWardsWithPatientsData();
 
-    if (session.role !== "admin") {
-      return NextResponse.json(
-        wardsWithPatients.filter((ward) => ward.wardId === session.wardId),
-        { status: 200 }
-      );
-    }
+    const filtered = wardsWithPatients.filter((ward) =>
+      Boolean(ward.wardId) && canAccessWard(session, ward.wardId!)
+    );
+    return NextResponse.json(filtered, { status: 200 });
 
     return NextResponse.json(wardsWithPatients, { status: 200 });
   } catch (error) {
