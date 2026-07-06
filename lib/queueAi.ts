@@ -65,19 +65,14 @@ function runPythonCommand(command: string[], input: string) {
 }
 
 export function reorderQueueWithAi(input: QueueAiInput): QueueAiResult {
-  // Prefer the new 99-action model trained with the improved training code.
-  // Falls back to the legacy 64-action model if the new one is not available yet.
-  const newModelPath = path.join(
-    process.cwd(),
-    "model",
-    "best_ddqn_hospital_improved.pth"
-  );
-  const legacyModelPath = path.join(
+  // xai/scripts/explain.py's load_mappo() only understands MAPPO checkpoints
+  // (keys actor_0..actor_4). Do not point this at a DDQN checkpoint -- it has
+  // a different architecture and load_mappo() will KeyError on it.
+  const modelPath = path.join(
     process.cwd(),
     "model",
     "best_mappo_hospital.pth"
   );
-  const modelPath = existsSync(newModelPath) ? newModelPath : legacyModelPath;
   const scriptPath = path.join(
     process.cwd(),
     "xai",

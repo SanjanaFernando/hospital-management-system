@@ -28,20 +28,20 @@ export async function PUT(
     }
 
     const wardId = (patient.wardId as string) || "";
+    const isTriageOnlyUpdate =
+      Object.prototype.hasOwnProperty.call(body, "priority") ||
+      Object.prototype.hasOwnProperty.call(body, "triageRequested");
 
-    if (!canAssignOrDischargePatient(session, wardId)) {
+    if (isTriageOnlyUpdate) {
+      if (!canSetTriage(session, wardId)) {
+        return NextResponse.json(
+          { error: "Only Consultant Doctor can set triage level" },
+          { status: 403 }
+        );
+      }
+    } else if (!canAssignOrDischargePatient(session, wardId)) {
       return NextResponse.json(
         { error: "You do not have permission to update this patient" },
-        { status: 403 }
-      );
-    }
-
-    if (
-      Object.prototype.hasOwnProperty.call(body, "priority") &&
-      !canSetTriage(session, wardId)
-    ) {
-      return NextResponse.json(
-        { error: "Only Consultant Doctor can set triage level" },
         { status: 403 }
       );
     }

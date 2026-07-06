@@ -94,6 +94,8 @@ export default function PatientQueue({
   const [triageError, setTriageError] = useState("");
   const [isOpen, setIsOpen] = useState(false);
 
+  const getPatientKey = (patient: Patient): string => patient._id || patient.id;
+
   useEffect(() => {
     const intervalId = window.setInterval(() => {
       setNow(Date.now());
@@ -136,10 +138,15 @@ export default function PatientQueue({
     setSelectedPatient(null);
   };
 
+  const handleTriageUpdated = () => {
+    onPatientAssigned?.();
+  };
+
   const triageEditable = Boolean(wardId) && canSetTriage(session, wardId);
 
   const resolveTriageDraft = (patient: Patient): Patient["priority"] => {
-    return triageDraftByPatient[patient.id] || patient.priority;
+    const patientKey = getPatientKey(patient);
+    return triageDraftByPatient[patientKey] || patient.priority;
   };
 
   const handleTriageDraftChange = (
@@ -153,18 +160,23 @@ export default function PatientQueue({
   };
 
   const handleSaveTriage = async (patient: Patient) => {
+    const patientKey = getPatientKey(patient);
     const nextPriority = resolveTriageDraft(patient);
-    const targetPatientId = patient._id || patient.id;
 
     setTriageError("");
-    setIsUpdatingTriageId(patient.id);
+    setIsUpdatingTriageId(patientKey);
 
     try {
       await updatePatient(
-        targetPatientId,
+        patientKey,
         { priority: nextPriority, triageRequested: false },
         session
       );
+      setTriageDraftByPatient((prev) => {
+        const nextDraft = { ...prev };
+        delete nextDraft[patientKey];
+        return nextDraft;
+      });
       onPatientAssigned?.();
     } catch (error) {
       setTriageError(
@@ -324,10 +336,12 @@ export default function PatientQueue({
                     <button
                       type="button"
                       onClick={() => handleSaveTriage(patient)}
-                      disabled={isUpdatingTriageId === patient.id}
+                      disabled={isUpdatingTriageId === getPatientKey(patient)}
                       className="rounded bg-amber-600 px-2 py-1 text-xs font-semibold text-white hover:bg-amber-700 disabled:bg-amber-300"
                     >
-                      {isUpdatingTriageId === patient.id ? "Saving..." : "Save"}
+                      {isUpdatingTriageId === getPatientKey(patient)
+                        ? "Saving..."
+                        : "Save"}
                     </button>
                   </div>
                 </div>
@@ -375,6 +389,7 @@ export default function PatientQueue({
           beds={beds}
           wards={wards}
           onAssigned={handleAssignSuccess}
+          onTriageUpdated={handleTriageUpdated}
           onClose={handleModalClose}
         />
       )}
