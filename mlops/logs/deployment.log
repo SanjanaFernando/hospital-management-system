@@ -1,0 +1,19 @@
+2026-06-28 13:31:20,398 - INFO - Activating version v1...
+2026-06-28 13:31:20,417 - INFO -   Trained at: 2026-06-28T13:22:23.394228
+2026-06-28 13:31:20,418 - INFO -   Epochs: 18
+2026-06-28 13:31:20,438 - INFO -   Fairness Score: 0.9997250872990059
+2026-06-28 13:31:20,438 - INFO -   Efficiency Score: -6.196598100440179
+2026-06-28 13:31:20,439 - INFO -   Avg Latency: 0.2465224266052246ms
+2026-06-28 13:32:02,953 - INFO - Deploying v1 to scripts/best_ddqn_hospital_fair.pth...
+2026-06-28 13:33:06,980 - INFO - Deploying v1 to scripts/best_ddqn_hospital_fair.pth...
+2026-06-28 13:33:07,066 - INFO - Backed up existing model to scripts\best_ddqn_hospital_fair.pth.backup_20260628_133306
+2026-06-28 13:39:20,145 - INFO - Activating version v1...
+2026-06-28 13:39:20,145 - INFO -   Trained at: 2026-06-28T13:22:23.394228
+2026-06-28 13:39:20,145 - INFO -   Epochs: 18
+2026-06-28 13:39:20,145 - INFO -   Fairness Score: 0.9997250872990059
+2026-06-28 13:39:20,145 - INFO -   Efficiency Score: -6.196598100440179
+2026-06-28 13:39:20,145 - INFO -   Avg Latency: 0.2465224266052246ms
+2026-06-28 13:39:20,145 - INFO - Version v1 is now active!
+2026-06-28 13:39:28,128 - INFO - Deploying v1 to scripts/best_ddqn_hospital_fair.pth...
+2026-06-28 13:39:28,150 - INFO - Backed up existing model to scripts\best_ddqn_hospital_fair.pth.backup_20260628_133928
+2026-06-28 13:39:28,156 - INFO - Model deployed to scripts\best_ddqn_hospital_fair.pth

@@ -1,0 +1,42 @@
+{
+  "connection": {
+    "type": "atlas_or_local",
+    "uri": "${MONGODB_URI}",
+    "timeout_ms": 30000,
+    "retry_writes": true
+  },
+  "database": {
+    "name": "hospital_db",
+    "collections": {
+      "patients": "patients",
+      "wards": "wards",
+      "beds": "beds",
+      "queue_history": "queue_history"
+    }
+  },
+  "data_collection": {
+    "batch_size": 1000,
+    "date_range_days": 30,
+    "fields_to_extract": {
+      "patients": [
+        "_id",
+        "wardId",
+        "name",
+        "age",
+        "ageGroup",
+        "priority",
+        "admissionTime",
+        "dischargeTime",
+        "queueWaitTime",
+        "specialRequirements"
+      ],
+      "wards": ["_id", "name", "totalBeds"],
+      "beds": ["_id", "wardId", "status", "patientId"]
+    }
+  },
+  "feature_engineering": {
+    "normalize_wait_time": true,
+    "calculate_fairness_metrics": true,
+    "include_temporal_features": true
+  }
+}

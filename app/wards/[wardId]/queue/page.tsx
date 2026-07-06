@@ -7,6 +7,7 @@ import { ChevronLeft } from "lucide-react";
 import { Ward } from "@/app/types";
 import PatientQueue from "@/app/components/PatientQueue";
 import MedicalCrossLoader from "@/app/components/MedicalCrossLoader";
+import ExplanationPanel from "@/components/ui/explanation-panel";
 import {
   getWardWithPatients,
   getWardsWithPatients,
@@ -169,7 +170,12 @@ export default function WardQueuePage() {
           </div>
         )}
 
-        <div className="bg-white rounded-lg shadow-md p-8">
+        <div className="space-y-6 rounded-lg bg-white p-6 shadow-md sm:p-8">
+          <ExplanationPanel
+            wardId={ward.wardId || ward.id}
+            wardName={ward.name}
+            queueCount={ward.patientQueue?.length || 0}
+          />
           <PatientQueue
             patients={ward.patientQueue || []}
             beds={ward.beds || []}

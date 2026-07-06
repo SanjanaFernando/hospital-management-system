@@ -1,0 +1,27 @@
+{
+  "evaluation_timestamp": "2026-06-28T13:30:34.682154",
+  "model_path": "mlops/models/v1/model.pth",
+  "metrics": {
+    "fairness_score": 0.9997250872990059,
+    "efficiency_score": -6.196598100440179,
+    "accuracy": 0.2,
+    "inference_latency": {
+      "mean_ms": 0.2465224266052246,
+      "median_ms": 0.0,
+      "std_ms": 1.0116376567913525,
+      "min_ms": 0.0,
+      "max_ms": 8.6212158203125
+    }
+  },
+  "test_dataset": {
+    "samples": 100,
+    "state_dim": 16,
+    "action_dim": 81
+  },
+  "performance_targets": {
+    "fairness_score": 0.85,
+    "efficiency_score": 0.9,
+    "inference_latency_ms": 100,
+    "accuracy": 0.85
+  }
+}

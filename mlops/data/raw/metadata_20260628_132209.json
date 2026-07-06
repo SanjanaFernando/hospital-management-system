@@ -1,0 +1,12 @@
+{
+  "timestamp": "2026-06-28T13:22:09.267793",
+  "patients_count": 3,
+  "wards_count": 2,
+  "beds_count": 2,
+  "date_range_days": 30,
+  "files": {
+    "patients": "mlops\\data\\raw\\patients_20260628_132209.csv",
+    "wards": "mlops\\data\\raw\\wards_20260628_132209.csv",
+    "beds": "mlops\\data\\raw\\beds_20260628_132209.csv"
+  }
+}

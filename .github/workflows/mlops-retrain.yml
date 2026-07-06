@@ -1,0 +1,114 @@
+name: MLOps - Weekly Model Retrain
+
+on:
+  schedule:
+    # Run every Sunday at 7 PM UTC
+    - cron: '0 19 * * 0'
+  workflow_dispatch:  # Allow manual trigger
+
+jobs:
+  retrain:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r mlops/requirements.txt
+      
+      - name: Collect data from past week
+        env:
+          MONGODB_URI: ${{ secrets.MONGODB_URI }}
+        run: |
+          python mlops/scripts/collect_data.py \
+            --days 7 \
+            --output mlops/data/raw
+      
+      - name: Train new model
+        run: |
+          python mlops/scripts/train_model.py \
+            --data mlops/data/processed \
+            --config mlops/config/training_config.json \
+            --output mlops/models/v_weekly_$(date +%Y%m%d)
+      
+      - name: Evaluate model
+        run: |
+          MODEL_DIR=$(ls -td mlops/models/v_weekly_* | head -1)
+          python mlops/scripts/evaluate_model.py \
+            --model $MODEL_DIR/model.pth \
+            --data mlops/data/test_sets \
+            --output $MODEL_DIR/performance.json
+      
+      - name: Check if improvement and deploy
+        run: |
+          # Get latest model performance
+          LATEST_MODEL=$(ls -td mlops/models/v_weekly_* | head -1)
+          LATEST_FAIRNESS=$(jq '.metrics.fairness_score' $LATEST_MODEL/performance.json)
+          
+          # Get current active model performance
+          ACTIVE_MODEL=$(jq -r '.model_path' mlops/models/active_version.json)
+          ACTIVE_DIR=$(dirname $ACTIVE_MODEL)
+          ACTIVE_FAIRNESS=$(jq '.metrics.fairness_score' $ACTIVE_DIR/performance.json 2>/dev/null || echo "0")
+          
+          # Compare and deploy if improved
+          if (( $(echo "$LATEST_FAIRNESS > $ACTIVE_FAIRNESS" | bc -l) )); then
+            echo "Model improved! Fairness: $ACTIVE_FAIRNESS → $LATEST_FAIRNESS"
+            python mlops/scripts/deploy_model.py --activate $(basename $LATEST_MODEL)
+            python mlops/scripts/deploy_model.py \
+              --version $(basename $LATEST_MODEL) \
+              --copy-to model/best_ddqn_hospital_fair.pth
+          else
+            echo "No improvement. Fairness: $LATEST_FAIRNESS vs Active: $ACTIVE_FAIRNESS"
+          fi
+      
+      - name: Commit changes
+        run: |
+          git config --global user.email "actions@github.com"
+          git config --global user.name "GitHub Actions"
+          git add -A
+          git commit -m "MLOps: Weekly model update" || true
+          git push || true
+      
+      - name: Send email notification on failure
+        if: failure()
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          username: ${{ secrets.GMAIL_USER }}
+          password: ${{ secrets.GMAIL_APP_PASSWORD }}
+          subject: " MLOps Weekly Retraining Failed"
+          body: |
+            MLOps weekly retraining has failed.
+            
+            Run URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+            
+            Please check the logs to investigate the issue.
+          to: ${{ secrets.NOTIFICATION_EMAIL }}
+          from: ${{ secrets.GMAIL_USER }}
+      
+      - name: Send email notification on success
+        if: success()
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          username: ${{ secrets.GMAIL_USER }}
+          password: ${{ secrets.GMAIL_APP_PASSWORD }}
+          subject: " MLOps Weekly Retraining Completed"
+          body: |
+            MLOps weekly retraining has completed successfully.
+            
+            The model has been updated and deployed.
+            
+            Run URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          to: ${{ secrets.NOTIFICATION_EMAIL }}
+          from: ${{ secrets.GMAIL_USER }}
