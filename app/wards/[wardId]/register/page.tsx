@@ -32,7 +32,6 @@ export default function RegisterPatientPage() {
           className="mb-6 inline-flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
         >
           <ChevronLeft size={20} />
-          Back to Ward
         </Link>
 
         <div className=" flex justify-center">

@@ -162,7 +162,6 @@ export default function WardOverviewClient({
             className="inline-flex items-center gap-2 rounded-lg bg-gray-600 px-4 py-2 text-white transition-colors hover:bg-gray-700"
           >
             <ChevronLeft size={20} />
-            Back to Dashboard
           </Link>
           <div className="text-right">
             <p className="text-sm text-gray-500">Ward</p>
@@ -267,7 +266,7 @@ export default function WardOverviewClient({
                     router.push(`/wards/${resolvedWardId}/register`)
                   }
                   disabled={!canRegisterInWard}
-                  className="rounded-lg bg-green-600 px-3 py-1 text-sm text-white transition-colors hover:bg-green-700 disabled:cursor-not-allowed disabled:bg-green-300"
+                  className="rounded-lg bg-green-600 px-3 py-1 text-sm lg:text-[12px] xl:text-sm text-white transition-colors hover:bg-green-700 disabled:cursor-not-allowed disabled:bg-green-300"
                 >
                   {canRegisterInWard
                     ? "+ Register Patient"
@@ -275,7 +274,7 @@ export default function WardOverviewClient({
                 </button>
                 <Link
                   href={`/wards/${resolvedWardId}/patients`}
-                  className="rounded-lg bg-blue-600 px-3 py-1 text-sm text-white transition-colors hover:bg-blue-700"
+                  className="rounded-lg bg-blue-600 px-3 py-1 text-sm lg:text-[12px] xl:text-sm text-white transition-colors hover:bg-blue-700"
                 >
                   View all patients
                 </Link>

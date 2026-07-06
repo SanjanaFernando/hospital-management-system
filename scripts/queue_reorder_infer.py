@@ -205,15 +205,82 @@ def build_richer_state(payload: dict[str, Any], state_dim: int = 16) -> np.ndarr
     return np.clip(state, 0.0, 1.0)
 
 
+def build_training_state(payload: dict[str, Any], state_dim: int = 10) -> np.ndarray:
+    """Build state vector matching the training _state() method exactly.
+
+    10 features: [occ, q_len, triage_dist(5), longest_wait, 0.0, 0.0]
+    - occ = occupied_beds / total_beds
+    - q_len = min(len(queue) / 30.0, 1.0)
+    - triage_dist = normalized count per triage level
+    - longest_wait = min(max_wait_hours / 48.0, 1.0)
+    """
+    queue = payload.get("targetWardQueue", [])
+    total_beds = max(
+        1,
+        int(
+            payload.get(
+                "targetWardTotalBeds",
+                payload.get("totalBeds", 37),
+            )
+        ),
+    )
+    occupied_beds = int(
+        payload.get("targetWardOccupiedBeds", payload.get("occupiedBeds", 0))
+    )
+    now = datetime.now(timezone.utc)
+
+    occ = occupied_beds / total_beds
+    q_len = min(len(queue) / 30.0, 1.0)
+
+    triage_dist = np.zeros(5)
+    longest_wait = 0.0
+
+    if queue:
+        waits = []
+        for patient in queue:
+            triage_index = priority_to_triage_level(patient.get("priority")) - 1
+            triage_index = max(0, min(4, triage_index))
+            triage_dist[triage_index] += 1
+            wait_hours = normalized_wait_hours(patient, now)
+            waits.append(wait_hours)
+        triage_dist /= len(queue)
+        longest_wait = min(max(waits) / 48.0, 1.0)
+
+    state = np.array(
+        [occ, q_len, *triage_dist, longest_wait, 0.0, 0.0],
+        dtype=np.float32,
+    )
+
+    if len(state) < state_dim:
+        state = np.pad(state, (0, state_dim - len(state)), "constant")
+
+    return state[:state_dim]
+
+
 def build_state(payload: dict[str, Any], state_dim: int, action_dim: int) -> np.ndarray:
+    if action_dim == 99:
+        return build_training_state(payload, state_dim=state_dim)
+
     if action_dim == 64 and state_dim <= 12:
         return build_legacy_state(payload, state_dim=state_dim)
 
     return build_richer_state(payload, state_dim=state_dim)
 
 
+# Action decoding tables matching the training code exactly.
+_W_T_LIST = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]  # 11 values
+_W_W_LIST = [0.0, 0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7]             # 9 values
+
+
 def action_to_weights(action: int, action_dim: int) -> list[float]:
-    if action_dim == 81:
+    if action_dim == 99:
+        # Training code: 11 triage weights × 9 wait weights = 99 actions.
+        # w_t = w_t_list[action // len(w_w_list)]  →  action // 9
+        # w_w = w_w_list[action % len(w_w_list)]   →  action % 9
+        w_triage = _W_T_LIST[action // 9]
+        w_wait = _W_W_LIST[action % 9]
+        return [w_triage, w_wait]
+    elif action_dim == 81:
         w_triage = [0.3, 0.5, 0.7][action // 27]
         w_wait = [0.2, 0.4, 0.6][(action // 9) % 3]
         w_age = [0.1, 0.2, 0.3][(action // 3) % 3]
@@ -269,18 +336,31 @@ def infer_model_layout(state_dict: dict[str, torch.Tensor]) -> tuple[int, tuple[
     return in_dim, hidden, out_dim
 
 
-def patient_score(patient: dict[str, Any], now: datetime, weights: list[float]) -> float:
+def patient_score(
+    patient: dict[str, Any],
+    now: datetime,
+    weights: list[float],
+    action_dim: int = 81,
+) -> float:
     triage_level = priority_to_triage_level(patient.get("priority"))
-    triage_score = (6 - triage_level) / 5.0
+    wait_hours = normalized_wait_hours(patient, now)
+
+    if action_dim == 99:
+        # Match training scoring exactly: raw values, NO normalization.
+        # Training: score = w_t * (6 - triage_level) + w_w * wait_hours
+        w_t, w_w = weights
+        return w_t * (6 - triage_level) + w_w * wait_hours
 
     if len(weights) == 2:
         w_triage, w_wait = weights
         # Keep legacy (64-action) ranking consistent with legacy state features.
-        wait_score = min(normalized_wait_hours(patient, now) / 24.0, 1.0)
+        triage_score = (6 - triage_level) / 5.0
+        wait_score = min(wait_hours / 24.0, 1.0)
         return (w_triage * triage_score) + (w_wait * wait_score)
 
     w_triage, w_wait, w_age, w_gender = weights
-    wait_score = min(normalized_wait_hours(patient, now) / 48.0, 1.0)
+    triage_score = (6 - triage_level) / 5.0
+    wait_score = min(wait_hours / 48.0, 1.0)
     age_score = min(float(patient.get("age", 0)) / 85.0, 1.0)
     female_score = gender_score(patient)
 
@@ -433,7 +513,8 @@ def main() -> int:
         q_values = model(torch.FloatTensor(state).unsqueeze(0)).squeeze(0).numpy()
 
     disallowed_actions: set[int] = set()
-    if action_dim == 64:
+    if action_dim in (64, 99):
+        # Action 0 gives w_t=0, w_w=0 → score=0 for all patients (no differentiation).
         disallowed_actions.add(0)
 
     selection_q_values = q_values.copy()
@@ -456,7 +537,7 @@ def main() -> int:
 
     sorted_queue = sorted(
         queue,
-        key=lambda p: patient_score(p, now, weights),
+        key=lambda p: patient_score(p, now, weights, action_dim),
         reverse=True,
     )
 

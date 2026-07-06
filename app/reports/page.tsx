@@ -36,7 +36,6 @@ export default async function ReportsPage() {
             className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800"
           >
             <ArrowLeft className="h-4 w-4" />
-            Back to dashboard
           </Link>
         </div>
 

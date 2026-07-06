@@ -37,10 +37,9 @@ export default function WardPatientsClient({
   };
 
   const handleDischargePatient = async (patientId: string) => {
-    const patient = [
-      ...ward.patients,
-      ...ward.patientQueue,
-    ].find((entry) => entry.id === patientId || entry._id === patientId);
+    const patient = [...ward.patients, ...ward.patientQueue].find(
+      (entry) => entry.id === patientId || entry._id === patientId
+    );
 
     const patientName = patient?.name || "this patient";
     const shouldDischarge = window.confirm(
@@ -73,21 +72,20 @@ export default function WardPatientsClient({
   return (
     <div className="min-h-screen bg-linear-to-br from-blue-50 to-indigo-100 p-8">
       <div className="mx-auto max-w-6xl">
-        <div className="mb-6 flex items-center justify-between">
+        <div className="mb-6 flex gap-8 items-center justify-between">
           <Link
             href={`/wards/${resolvedWardId}`}
             className="inline-flex items-center gap-2 rounded-lg bg-gray-600 px-4 py-2 text-white transition-colors hover:bg-gray-700"
           >
             <ChevronLeft size={20} />
-            Back to Ward
           </Link>
-          <h1 className="text-2xl font-bold text-gray-800">
+          <h1 className="text-xl text-end font-bold text-gray-800">
             {ward.name} - Patients
           </h1>
         </div>
 
         <div className="mb-6 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-gray-800">
+          <h2 className="text-md sm:text-lg font-semibold text-gray-800">
             Manage Patients
           </h2>
           <button

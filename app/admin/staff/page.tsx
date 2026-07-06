@@ -68,7 +68,11 @@ export default function AdminStaffPage() {
     }
 
     setMessage("Staff member registered successfully.");
-    setFormData({ name: "", role: "consultant_doctor", wardId: wardOptions[0].id });
+    setFormData({
+      name: "",
+      role: "consultant_doctor",
+      wardId: wardOptions[0].id,
+    });
     await loadStaff();
   };
 
@@ -93,7 +97,6 @@ export default function AdminStaffPage() {
           className="mb-6 inline-flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
         >
           <ChevronLeft size={20} />
-          Back to Dashboard
         </Link>
 
         <div className="bg-white rounded-lg shadow-md p-6 mb-6">
