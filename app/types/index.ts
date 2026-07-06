@@ -9,14 +9,32 @@ export type Priority =
 export type Gender = "Male" | "Female";
 export type StaffRole =
   | "admin"
+  | "sub_admin"
   | "consultant_doctor"
   | "main_sister"
   | "main_attendant";
 
 export interface UserSession {
+  userId?: string;
   role: StaffRole;
   wardId?: string;
+  wardIds?: string[];
   displayName?: string;
+}
+
+export interface AuthUser {
+  userId: string;
+  email: string;
+  passwordHash: string;
+  salt: string;
+  role: StaffRole;
+  wardId?: string;
+  wardIds?: string[];
+  displayName: string;
+  mustChangePassword: boolean;
+  isActive: boolean;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 export interface Patient {
@@ -65,7 +83,7 @@ export interface Ward {
 export interface StaffMember {
   id: string;
   name: string;
-  role: Exclude<StaffRole, "admin">;
+  role: Exclude<StaffRole, "admin" | "sub_admin">;
   wardId: string;
   createdAt: Date;
 }
