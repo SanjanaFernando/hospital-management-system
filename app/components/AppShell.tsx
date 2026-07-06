@@ -66,20 +66,25 @@ function AppShellContent({ children }: PropsWithChildren) {
   const [wards, setWards] = useState<Ward[]>([]);
   const [shiftCountdown, setShiftCountdown] = useState("");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-
-  // Auth pages render without the shell
-  const isAuthPage =
-    pathname === "/login" || pathname === "/change-password";
+  const [isMounted, setIsMounted] = useState(false);
 
   useEffect(() => {
-    if (isAuthPage) return;
+    setIsMounted(true);
+  }, []);
+
+  // Keep the first server/client render identical, then switch to the auth-page branch after mount.
+  const isAuthPage =
+    isMounted && (pathname === "/login" || pathname === "/change-password");
+
+  useEffect(() => {
+    if (!isMounted || isAuthPage) return;
     const loadSidebarData = async () => {
       const wardsData = await getWardsWithPatients();
       setWards(wardsData || []);
     };
 
     void loadSidebarData();
-  }, []);
+  }, [isAuthPage, isMounted]);
 
   useEffect(() => {
     const updateShiftCountdown = () => {
@@ -177,6 +182,10 @@ function AppShellContent({ children }: PropsWithChildren) {
     setMobileMenuOpen(false);
     await logout();
   };
+
+  if (!isMounted) {
+    return <>{children}</>;
+  }
 
   const quickLinks = [
     {
