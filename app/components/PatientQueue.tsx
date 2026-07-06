@@ -1,11 +1,29 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Sparkles } from "lucide-react";
 import { Patient, Bed, Ward } from "@/app/types";
 import AssignFromQueueModal from "./AssignFromQueueModal";
 import { updatePatient } from "@/app/utils/api";
 import { useAuthSession } from "@/app/context/AuthSessionContext";
 import { canSetTriage } from "@/lib/rbac";
+
+const REASON_SPLIT_PATTERN = /(#\d+|\d+(?:\.\d+)?%|\d+(?:\.\d+)?h\b)/g;
+const REASON_TOKEN_PATTERN = /^(#\d+|\d+(?:\.\d+)?%|\d+(?:\.\d+)?h)$/;
+
+function renderReasonText(reason: string) {
+  return reason
+    .split(REASON_SPLIT_PATTERN)
+    .map((part, index) =>
+      REASON_TOKEN_PATTERN.test(part) ? (
+        <span key={index} className="font-semibold text-slate-800">
+          {part}
+        </span>
+      ) : (
+        <span key={index}>{part}</span>
+      )
+    );
+}
 
 interface PatientQueueProps {
   patients: Patient[];
@@ -284,7 +302,7 @@ export default function PatientQueue({
                   <p className="font-semibold">
                     {index + 1}. {patient.name}
                   </p>
-                  <p className="text-sm flex gap-2 mt-1">
+                  <p className="text-sm flex flex-wrap gap-2 mt-1">
                     <span
                       className={`px-2 py-1 rounded text-xs font-medium ${ageGroupBadgeColors[patient.ageGroup]}`}
                     >
@@ -300,9 +318,12 @@ export default function PatientQueue({
                     )}
                   </p>
                   {patientReason && (
-                    <p className="mt-2 text-xs leading-5 text-gray-500">
-                      {patientReason}
-                    </p>
+                    <div className="mt-2 flex w-full items-start gap-1.5 rounded-md bg-white/70 px-2.5 py-1.5 ring-1 ring-black/5">
+                      <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-indigo-500" />
+                      <p className="min-w-0 flex-1 break-words text-xs leading-relaxed text-slate-600">
+                        {renderReasonText(patientReason)}
+                      </p>
+                    </div>
                   )}
                 </div>
                 <span className="text-xs font-bold">{patient.priority}</span>
