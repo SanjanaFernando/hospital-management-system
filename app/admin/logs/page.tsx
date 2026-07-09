@@ -16,6 +16,7 @@ import {
   Users,
   ArrowLeftRight,
   Wrench,
+  Bell,
 } from "lucide-react";
 import { useAuthSession } from "@/app/context/AuthSessionContext";
 import { getUserLogs } from "@/app/actions/logActions";
@@ -73,6 +74,12 @@ const ACTION_CONFIG: Record<
     color: "text-teal-700",
     bgColor: "bg-teal-50 border-teal-200",
     icon: Wrench,
+  },
+  notification_created: {
+    label: "Notification Created",
+    color: "text-pink-700",
+    bgColor: "bg-pink-50 border-pink-200",
+    icon: Bell,
   },
 };
 

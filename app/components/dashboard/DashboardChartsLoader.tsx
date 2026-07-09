@@ -29,15 +29,21 @@ type LoaderProps = {
 export default function DashboardChartsLoader(props: LoaderProps) {
   const { session } = useAuthSession();
 
+  const isAdminRole = session.role === "admin" || session.role === "sub_admin";
+
   const effectiveShowOccupancy =
     typeof props.showOccupancy === "boolean"
       ? props.showOccupancy
-      : session.role === "admin";
+      : isAdminRole;
 
   let effectiveWards = props.wards ?? [];
-  if (session.role !== "admin" && session.wardId) {
-    const matched = effectiveWards.filter((w) => w.wardId === session.wardId);
-    effectiveWards = matched.length > 0 ? matched : effectiveWards.slice(0, 1);
+  if (!isAdminRole) {
+    const assignedWardIds = session.wardIds || (session.wardId ? [session.wardId] : []);
+    if (assignedWardIds.length > 0) {
+      effectiveWards = effectiveWards.filter((w) => assignedWardIds.includes(w.wardId));
+    } else {
+      effectiveWards = effectiveWards.slice(0, 1);
+    }
   }
 
   return (

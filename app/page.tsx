@@ -15,9 +15,12 @@ export const metadata: Metadata = {
 export default async function Home() {
   const session = await getServerSession();
   const isAdmin = session.role === "admin";
+  const isAdminRole = session.role === "admin" || session.role === "sub_admin";
+  const wardIdsKey = isAdminRole ? undefined : (session.wardIds || []).slice().sort().join(",");
+
   const [dashboardData, dailyPatientData] = await Promise.all([
     getDashboardData(),
-    getDailyPatientData(),
+    getDailyPatientData(wardIdsKey),
   ]);
 
   const visibleWards = dashboardData.wards.filter((ward) =>

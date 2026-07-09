@@ -25,6 +25,7 @@ import { getWardsWithPatients } from "@/app/actions/wardActions";
 import { Ward } from "@/app/types";
 import { ROLE_LABELS } from "@/lib/rbac";
 import { UserSession } from "@/app/types";
+import NotificationPanel from "./NotificationPanel";
 
 interface SidebarItem {
   label: string;
@@ -122,25 +123,7 @@ function AppShellContent({ children }: PropsWithChildren) {
     0
   );
 
-  const alerts = useMemo(() => {
-    const critical: string[] = [];
 
-    for (const ward of scopedWards) {
-      if (ward.availableBeds === 0 && ward.patientQueue.length > 0) {
-        critical.push(
-          `⚠️ ${ward.name} full - ${ward.patientQueue.length} waiting`
-        );
-      }
-      if (ward.patientQueue.length > 10) {
-        critical.push(`⚠️ ${ward.name} queue > 10`);
-      }
-      if (critical.length >= 2) {
-        break;
-      }
-    }
-
-    return critical.slice(0, 2);
-  }, [scopedWards]);
 
   const navItems: SidebarItem[] = [
     { label: "Dashboard", href: "/", icon: Gauge },
@@ -256,14 +239,17 @@ function AppShellContent({ children }: PropsWithChildren) {
       <div className="mx-auto flex max-w-412.5 flex-col gap-4 p-4 lg:flex-row lg:gap-6 lg:p-6">
         <header className="sticky top-0 z-20 -mx-4 -mt-4 border-b border-teal-900/10 bg-[#0b2b33]/96 px-4 py-3 text-slate-100 shadow-[0_20px_45px_rgba(3,17,26,0.18)] backdrop-blur lg:hidden">
           <div className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <h1 className="truncate text-base font-bold tracking-tight text-white">
                 Karapitiya Teaching Hospital
               </h1>
-              <p className="truncate text-[11px] font-medium uppercase tracking-[0.18em] text-teal-100/85">
-                {session.displayName || "Dr. Anusha Perera"}{" "}
-                {ROLE_LABELS[session.role]}
-              </p>
+              <div className="flex items-center gap-2 mt-0.5">
+                <p className="truncate text-[11px] font-medium uppercase tracking-[0.18em] text-teal-100/85">
+                  {session.displayName || "Dr. Anusha Perera"}{" "}
+                  {ROLE_LABELS[session.role]}
+                </p>
+                <NotificationPanel session={session} />
+              </div>
             </div>
 
             <div className="flex items-center gap-2">
@@ -326,24 +312,7 @@ function AppShellContent({ children }: PropsWithChildren) {
               </nav>
 
 
-              {alerts.length > 0 && (
-                <div className="mt-3 rounded-2xl border border-orange-300/30 bg-orange-500/10 p-3">
-                  <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-orange-200">
-                    Urgent Alerts
-                  </p>
-                  <div className="space-y-1.5">
-                    {alerts.map((alert) => (
-                      <p
-                        key={alert}
-                        className="flex items-start gap-2 text-xs font-medium text-orange-100"
-                      >
-                        <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0 text-orange-300" />
-                        {alert}
-                      </p>
-                    ))}
-                  </div>
-                </div>
-              )}
+
 
               <div className="mt-3 flex items-center justify-between gap-3 border-t border-white/10 pt-3">
                 <div className="flex items-center gap-2">
@@ -389,21 +358,24 @@ function AppShellContent({ children }: PropsWithChildren) {
             </p>
           </div>
 
-          <div className="mt-4 rounded-2xl bg-white/8 px-3 py-3">
-            <div className="flex items-center gap-2">
-              <UserRound className="h-4 w-4 text-teal-200" />
-              <p className="text-sm font-semibold text-white">
-                {session.displayName || "Dr. Anusha Perera"}
-              </p>
+          <div className="mt-4 rounded-2xl bg-white/8 px-3 py-3 flex items-center justify-between gap-2">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <UserRound className="h-4 w-4 text-teal-200 shrink-0" />
+                <p className="text-sm font-semibold text-white truncate">
+                  {session.displayName || "Dr. Anusha Perera"}
+                </p>
+              </div>
+              <div className="mt-2 flex items-center gap-2 text-xs flex-wrap">
+                <span className="rounded-full bg-teal-500/25 px-2 py-1 font-semibold text-teal-100">
+                  {ROLE_LABELS[session.role]}
+                </span>
+                <span className="text-teal-100/85 truncate">
+                  {shiftCountdown || "Shift details"}
+                </span>
+              </div>
             </div>
-            <div className="mt-2 flex items-center gap-2 text-xs">
-              <span className="rounded-full bg-teal-500/25 px-2 py-1 font-semibold text-teal-100">
-                {ROLE_LABELS[session.role]}
-              </span>
-              <span className="text-teal-100/85">
-                {shiftCountdown || "Shift details"}
-              </span>
-            </div>
+            <NotificationPanel session={session} />
           </div>
 
           <div className="mt-4 grid grid-cols-2 gap-3">
@@ -482,24 +454,7 @@ function AppShellContent({ children }: PropsWithChildren) {
             })}
           </nav>
 
-          {alerts.length > 0 && (
-            <div className="mt-5 rounded-2xl border border-orange-300/30 bg-orange-500/10 p-3">
-              <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-orange-200">
-                Urgent Alerts
-              </p>
-              <div className="space-y-1.5">
-                {alerts.map((alert) => (
-                  <p
-                    key={alert}
-                    className="flex items-start gap-2 text-sm font-medium text-orange-100"
-                  >
-                    <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0 text-orange-300" />
-                    {alert}
-                  </p>
-                ))}
-              </div>
-            </div>
-          )}
+
 
           <div className="mt-5 border-t border-white/15 pt-4">
             <div className="mb-3 flex items-center gap-2">
