@@ -21,12 +21,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { spawn } from "child_process";
 import path from "path";
 import fs from "fs/promises";
-import { existsSync } from "fs";
 import { connectToDatabase } from "@/lib/mongodb";
 import { resolveForecasterProfilePath, resolveMappoModelPath } from "@/lib/get-mappo-model";
+import { resolvePythonBin } from "@/lib/resolve-python-bin";
 
-const VENV_PYTHON = path.join(process.cwd(), ".venv", "Scripts", "python.exe");
-const PYTHON_BIN = process.env.PYTHON_BIN || (existsSync(VENV_PYTHON) ? VENV_PYTHON : "python");
+const PYTHON_BIN = resolvePythonBin();
 const CHECKPOINT_PATH =
   process.env.MAPPO_CHECKPOINT_PATH || resolveMappoModelPath(true) || "";
 const FORECASTER_PROFILE_PATH =
