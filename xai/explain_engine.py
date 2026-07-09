@@ -68,8 +68,8 @@ FEATURE_NAMES = [
     "triage4_proportion",       # triage_dist[3]
     "triage5_proportion",       # triage_dist[4]
     "longest_wait_norm",        # longest_wait
-    "pad_0",                    # unused, kept for architecture compatibility
-    "pad_1",                    # unused, kept for architecture compatibility
+    "predicted_arrival_load",   # pred_load from ArrivalForecaster
+    "predicted_critical_share", # pred_crit from ArrivalForecaster
 ]
 assert len(FEATURE_NAMES) == STATE_DIM
 
@@ -181,7 +181,7 @@ def resolve_wait_minutes(patient):
 #    plain dict you build from your Ward/Patient Mongo documents instead of
 #    the offline training CSV.
 # ============================================================
-def build_state_vector(ward_snapshot):
+def build_state_vector(ward_snapshot, forecaster=None, use_predictive=True):
     """
     ward_snapshot = {
         "totalBeds": int,
@@ -190,9 +190,11 @@ def build_state_vector(ward_snapshot):
             {"patientId": str, "name": str, "triageLevel": int (1-5),
              "waitMinutes": float},
             ...
-        ]
+        ],
+        "usePredictive": bool (optional),
+        "patientHistory": list (optional, for live forecaster training)
     }
-    Returns (state: np.ndarray[10], queue_with_wait_hours: list[dict])
+    Returns (state: np.ndarray[10], queue_with_wait_hours: list[dict], predictive_meta: dict)
     """
     total_beds = max(int(ward_snapshot["totalBeds"]), 1)
     occ = min(int(ward_snapshot["occupiedBeds"]) / total_beds, 1.0)
@@ -214,11 +216,42 @@ def build_state_vector(ward_snapshot):
         triage_dist /= len(queue)
         longest_wait = min(max(q["waitHours"] for q in enriched_queue) / 48.0, 1.0)
 
+    predictive_enabled = use_predictive and ward_snapshot.get("usePredictive", True)
+    pred_load, pred_crit = 0.0, 0.0
+    predictive_meta = {
+        "enabled": bool(predictive_enabled),
+        "pred_load": 0.0,
+        "pred_crit": 0.0,
+        "surge_predicted": False,
+    }
+
+    if predictive_enabled:
+        if forecaster is None:
+            from forecaster import load_forecaster
+
+            forecaster = load_forecaster(ward_snapshot)
+        pred_load, pred_crit = forecaster.predict()
+        thresholds = getattr(forecaster, "surge_thresholds", None)
+        if thresholds is None:
+            from forecaster import default_surge_thresholds
+
+            thresholds = default_surge_thresholds()
+        predictive_meta.update(
+            {
+                "pred_load": round(float(pred_load), 4),
+                "pred_crit": round(float(pred_crit), 4),
+                "surge_predicted": bool(
+                    pred_load > thresholds["load"] and pred_crit > thresholds["crit"]
+                ),
+                "surge_thresholds": thresholds,
+            }
+        )
+
     state = np.array(
-        [occ, q_len, *triage_dist, longest_wait, 0.0, 0.0], dtype=np.float32
+        [occ, q_len, *triage_dist, longest_wait, pred_load, pred_crit], dtype=np.float32
     )
     assert state.shape[0] == STATE_DIM
-    return state, enriched_queue
+    return state, enriched_queue, predictive_meta
 
 
 # ============================================================
@@ -363,7 +396,14 @@ def shap_explain_agents(actors, state, background_states=None, n_samples=100):
 # ============================================================
 # 7. LAYER 5 -- natural-language explanation (deterministic template)
 # ============================================================
-def build_nlg_explanation(combined_wt, combined_ww, per_agent, ranked_queue, confidences):
+def build_nlg_explanation(
+    combined_wt,
+    combined_ww,
+    per_agent,
+    ranked_queue,
+    confidences,
+    predictive_meta=None,
+):
     if not ranked_queue:
         return "The queue is currently empty, so no prioritization decision was made."
 
@@ -377,6 +417,20 @@ def build_nlg_explanation(combined_wt, combined_ww, per_agent, ranked_queue, con
     least_confident = min(confidences, key=lambda c: c["confidence_0to1"])
 
     lines = []
+    predictive_meta = predictive_meta or {}
+    if predictive_meta.get("enabled"):
+        surge_text = (
+            " A predicted critical-arrival surge was detected, so the policy is biased toward "
+            "preserving bed capacity for incoming high-acuity patients."
+            if predictive_meta.get("surge_predicted")
+            else (
+                " Predictive analytics shows moderate incoming load "
+                f"(load {predictive_meta.get('pred_load', 0):.2f}, "
+                f"critical share {predictive_meta.get('pred_crit', 0):.2f})."
+            )
+        )
+        lines.append(surge_text.strip())
+
     lines.append(
         f"This ward is currently weighting {dominant_style} more heavily "
         f"(urgency weight {combined_wt:.2f} vs waiting-time weight {combined_ww:.2f}), "
@@ -402,10 +456,24 @@ def build_nlg_explanation(combined_wt, combined_ww, per_agent, ranked_queue, con
 # ============================================================
 # 8. TOP-LEVEL ENTRY POINT
 # ============================================================
-def explain_decision(ward_snapshot, checkpoint_path, device="cpu",
-                      with_shap=False, background_states=None, shap_samples=100):
+def explain_decision(
+    ward_snapshot,
+    checkpoint_path,
+    device="cpu",
+    with_shap=False,
+    background_states=None,
+    shap_samples=100,
+    forecaster_profile_path=None,
+):
+    from forecaster import load_forecaster
+
     actors, _critic = load_mappo(checkpoint_path, device=device)
-    state, enriched_queue = build_state_vector(ward_snapshot)
+    forecaster = load_forecaster(ward_snapshot, profile_path=forecaster_profile_path)
+    state, enriched_queue, predictive_meta = build_state_vector(
+        ward_snapshot,
+        forecaster=forecaster,
+        use_predictive=ward_snapshot.get("usePredictive", True),
+    )
     state_t = torch.tensor(state, dtype=torch.float32).unsqueeze(0).to(device)
 
     actions = []
@@ -420,11 +488,19 @@ def explain_decision(ward_snapshot, checkpoint_path, device="cpu",
 
     result = {
         "state_vector": {FEATURE_NAMES[i]: round(float(state[i]), 4) for i in range(STATE_DIM)},
+        "predictive_analytics": predictive_meta,
         "combined_weights": {"w_t_urgency": round(combined_wt, 4), "w_w_wait": round(combined_ww, 4)},
         "agent_votes": per_agent,
         "agent_confidence": confidences,
         "ranked_queue": ranked_queue,
-        "explanation_text": build_nlg_explanation(combined_wt, combined_ww, per_agent, ranked_queue, confidences),
+        "explanation_text": build_nlg_explanation(
+            combined_wt,
+            combined_ww,
+            per_agent,
+            ranked_queue,
+            confidences,
+            predictive_meta=predictive_meta,
+        ),
     }
 
     if with_shap:

@@ -2,6 +2,7 @@ import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { existsSync } from "node:fs";
 import { Patient } from "@/app/types";
+import { resolveForecasterProfilePath, resolveMappoModelPath } from "@/lib/get-mappo-model";
 
 interface WardSnapshot {
   wardId: string;
@@ -65,22 +66,11 @@ function runPythonCommand(command: string[], input: string) {
 }
 
 export function reorderQueueWithAi(input: QueueAiInput): QueueAiResult {
-  // xai/scripts/explain.py's load_mappo() only understands MAPPO checkpoints
-  // (keys actor_0..actor_4). Do not point this at a DDQN checkpoint -- it has
-  // a different architecture and load_mappo() will KeyError on it.
-  const modelPath = path.join(
-    process.cwd(),
-    "model",
-    "best_mappo_hospital.pth"
-  );
-  const scriptPath = path.join(
-    process.cwd(),
-    "xai",
-    "scripts",
-    "explain.py"
-  );
+  const modelPath = resolveMappoModelPath(true);
+  const forecasterProfilePath = resolveForecasterProfilePath();
+  const scriptPath = path.join(process.cwd(), "xai", "scripts", "explain.py");
 
-  if (!existsSync(modelPath) || !existsSync(scriptPath)) {
+  if (!modelPath || !existsSync(scriptPath)) {
     return {
       orderedPatients: fallbackPrioritySort(input.targetWardQueue),
       strategy: "priority",
@@ -88,10 +78,13 @@ export function reorderQueueWithAi(input: QueueAiInput): QueueAiResult {
     };
   }
 
+  const usingPredictiveModel = modelPath.includes("predictive");
   const now = new Date();
   const wardSnapshot = {
     totalBeds: input.targetWardTotalBeds ?? 0,
     occupiedBeds: input.targetWardOccupiedBeds ?? 0,
+    usePredictive: true,
+    forecasterProfilePath,
     queue: input.targetWardQueue.map((patient) => ({
       patientId: patient.id,
       name: patient.name,
@@ -100,14 +93,14 @@ export function reorderQueueWithAi(input: QueueAiInput): QueueAiResult {
     })),
   };
 
-  const payload = JSON.stringify({
-    ...wardSnapshot,
-  });
-
+  const payload = JSON.stringify(wardSnapshot);
   const attempts: string[][] = [["python", scriptPath], ["py", "-3", scriptPath]];
 
   for (const cmd of attempts) {
-    const result = runPythonCommand([...cmd, "--checkpoint", modelPath], payload);
+    const result = runPythonCommand(
+      [...cmd, "--checkpoint", modelPath, "--forecaster-profile", forecasterProfilePath],
+      payload
+    );
 
     if (result.status === 0 && result.stdout) {
       try {
@@ -118,6 +111,12 @@ export function reorderQueueWithAi(input: QueueAiInput): QueueAiResult {
             reason?: string;
           }>;
           explanation_text?: string;
+          predictive_analytics?: {
+            enabled?: boolean;
+            surge_predicted?: boolean;
+            pred_load?: number;
+            pred_crit?: number;
+          };
         };
         const order = new Map(
           (parsed.ranked_queue || []).map((patient, index) => [
@@ -142,12 +141,19 @@ export function reorderQueueWithAi(input: QueueAiInput): QueueAiResult {
             queueReason: reasonByPatientKey.get(patient.id),
           }));
 
+        const predictive = parsed.predictive_analytics;
+        const predictiveNote = predictive?.enabled
+          ? predictive.surge_predicted
+            ? " Predictive analytics detected a likely critical surge."
+            : ` Predictive load ${(predictive.pred_load ?? 0).toFixed(2)}.`
+          : "";
+
         return {
           orderedPatients,
           strategy: "ai",
           message: orderedPatients[0]
-            ? `MAPPO reordered queue. Top patient: ${orderedPatients[0].name}.`
-            : `MAPPO reordered queue for ${input.targetWardName}.`,
+            ? `MAPPO${usingPredictiveModel ? "+Predictive" : ""} reordered queue. Top patient: ${orderedPatients[0].name}.${predictiveNote}`
+            : `MAPPO${usingPredictiveModel ? "+Predictive" : ""} reordered queue for ${input.targetWardName}.${predictiveNote}`,
         };
       } catch {
         // Try next executable or fallback if none succeeds.

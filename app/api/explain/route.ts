@@ -23,12 +23,14 @@ import path from "path";
 import fs from "fs/promises";
 import { existsSync } from "fs";
 import { connectToDatabase } from "@/lib/mongodb";
+import { resolveForecasterProfilePath, resolveMappoModelPath } from "@/lib/get-mappo-model";
 
 const VENV_PYTHON = path.join(process.cwd(), ".venv", "Scripts", "python.exe");
 const PYTHON_BIN = process.env.PYTHON_BIN || (existsSync(VENV_PYTHON) ? VENV_PYTHON : "python");
 const CHECKPOINT_PATH =
-  process.env.MAPPO_CHECKPOINT_PATH ||
-  path.join(process.cwd(), "model", "best_mappo_hospital.pth");
+  process.env.MAPPO_CHECKPOINT_PATH || resolveMappoModelPath(true) || "";
+const FORECASTER_PROFILE_PATH =
+  process.env.FORECASTER_PROFILE_PATH || resolveForecasterProfilePath();
 const EXPLAIN_SCRIPT_PATH = path.join(process.cwd(), "xai", "scripts", "explain.py");
 const SHAP_CACHE_PATH = path.join(process.cwd(), "xai", "data", "shap_summary.json");
 
@@ -41,11 +43,19 @@ function toTriageInt(priority: string | number): number {
 interface WardSnapshot {
   totalBeds: number;
   occupiedBeds: number;
+  usePredictive: boolean;
+  forecasterProfilePath: string;
+  patientHistory?: Array<{
+    admissionTime?: string | Date;
+    priority?: string | number;
+    triageLevel?: number;
+  }>;
   queue: Array<{
     patientId: string;
     name: string;
     triageLevel: number;
     waitMinutes: number;
+    triageRequested?: boolean;
   }>;
 }
 
@@ -64,6 +74,12 @@ async function buildWardSnapshot(wardId: string): Promise<WardSnapshot> {
     .find({ wardId, status: "queued" })
     .toArray();
 
+  const historicalPatients = await db
+    .collection("patients")
+    .find({ wardId })
+    .project({ admissionTime: 1, priority: 1, triageLevel: 1 })
+    .toArray();
+
   const now = Date.now();
   const queue = queuedPatients.map((p: any) => ({
     patientId: String(p._id ?? p.id),
@@ -78,6 +94,13 @@ async function buildWardSnapshot(wardId: string): Promise<WardSnapshot> {
   return {
     totalBeds: beds.length,
     occupiedBeds: beds.filter((bed: any) => bed.status === "occupied").length,
+    usePredictive: true,
+    forecasterProfilePath: FORECASTER_PROFILE_PATH,
+    patientHistory: historicalPatients.map((p: any) => ({
+      admissionTime: p.admissionTime,
+      priority: p.priority,
+      triageLevel: p.triageLevel,
+    })),
     queue,
   };
 }
@@ -91,6 +114,8 @@ function runExplainSubprocess(
       EXPLAIN_SCRIPT_PATH,
       "--checkpoint",
       CHECKPOINT_PATH,
+      "--forecaster-profile",
+      FORECASTER_PROFILE_PATH,
     ];
     if (withShap) args.push("--with-shap", "--shap-samples", "60");
 
@@ -138,6 +163,13 @@ async function loadShapCache() {
 async function handle(wardId: string | null, withShap: boolean, persist: boolean) {
   if (!wardId) {
     return NextResponse.json({ error: "wardId is required" }, { status: 400 });
+  }
+
+  if (!CHECKPOINT_PATH) {
+    return NextResponse.json(
+      { error: "No MAPPO checkpoint found in model/ directory." },
+      { status: 500 }
+    );
   }
 
   const wardSnapshot = await buildWardSnapshot(wardId);
