@@ -97,7 +97,8 @@ export type LogAction =
   | "patient_moved_to_queue"
   | "staff_registered"
   | "role_switched"
-  | "bed_status_updated";
+  | "bed_status_updated"
+  | "notification_created";
 
 export interface UserLog {
   _id?: string;
@@ -110,4 +111,29 @@ export interface UserLog {
   targetName?: string;
   details?: string;
   timestamp: Date;
+}
+
+export type NotificationType =
+  | "ward_full"
+  | "queue_overflow"
+  | "patient_registered"
+  | "patient_discharged"
+  | "patient_assigned_bed"
+  | "bed_status_changed"
+  | "patient_critical";
+
+export interface Notification {
+  _id?: string;
+  id: string;
+  type: NotificationType;
+  title: string;
+  message: string;
+  wardId?: string;
+  severity: "info" | "warning" | "critical";
+  isRead: boolean;
+  readByUserIds?: string[];
+  targetUserId?: string;
+  targetRole?: StaffRole;
+  createdAt: Date;
+  expiresAt?: Date;
 }

@@ -41,6 +41,7 @@ export interface PatientsPageData {
 export interface DailyPatientDataPoint {
   day: string;
   patients: number;
+  [key: string]: any;
 }
 
 const WARD_SUMMARY_TAGS = ["dashboard", "wards", "patients", "beds"];
@@ -497,7 +498,7 @@ async function queryPatientsPageData({
   };
 }
 
-async function queryDailyPatientData(): Promise<DailyPatientDataPoint[]> {
+async function queryDailyPatientData(wardIds?: string[]): Promise<DailyPatientDataPoint[]> {
   const { db } = await connectToDatabase();
 
   const dayFormatter = new Intl.DateTimeFormat("en-US", {
@@ -522,17 +523,32 @@ async function queryDailyPatientData(): Promise<DailyPatientDataPoint[]> {
   const end = new Date(start);
   end.setDate(end.getDate() + 7);
 
+  // Fetch ward information to map wardId to name
+  const wardDocs = await db
+    .collection("wards")
+    .find({}, { projection: { wardId: 1, name: 1 } })
+    .toArray();
+  const wardNameMap = new Map<string, string>();
+  for (const doc of wardDocs) {
+    if (doc.wardId) {
+      wardNameMap.set(String(doc.wardId), String(doc.name || doc.wardId));
+    }
+  }
+
+  const query: any = {
+    admissionTime: {
+      $gte: start,
+      $lt: end,
+    },
+  };
+
+  if (wardIds && wardIds.length > 0) {
+    query.wardId = { $in: wardIds };
+  }
+
   const patientDocs = await db
     .collection("patients")
-    .find(
-      {
-        admissionTime: {
-          $gte: start,
-          $lt: end,
-        },
-      },
-      { projection: { admissionTime: 1 } }
-    )
+    .find(query, { projection: { admissionTime: 1, wardId: 1 } })
     .toArray();
 
   for (const doc of patientDocs as MongoDoc[]) {
@@ -551,6 +567,12 @@ async function queryDailyPatientData(): Promise<DailyPatientDataPoint[]> {
     const entry = days.get(key);
     if (entry) {
       entry.patients += 1;
+      const pWardId = String(doc.wardId || "");
+      if (pWardId) {
+        const wardName = wardNameMap.get(pWardId) || pWardId;
+        entry[pWardId] = (entry[pWardId] || 0) + 1;
+        entry[wardName] = (entry[wardName] || 0) + 1;
+      }
     }
   }
 
@@ -594,7 +616,10 @@ const cachedPatientsPage = unstable_cache(
 );
 
 const cachedDailyPatientData = unstable_cache(
-  queryDailyPatientData,
+  (wardIdsKey?: string) => {
+    const wardIds = wardIdsKey ? wardIdsKey.split(",") : undefined;
+    return queryDailyPatientData(wardIds);
+  },
   ["daily-patient-data"],
   {
     revalidate: PATIENTS_PAGE_REVALIDATE_SECONDS,
@@ -625,6 +650,6 @@ export async function getPatientsPageData(input: {
   return cachedPatientsPage(input);
 }
 
-export async function getDailyPatientData(): Promise<DailyPatientDataPoint[]> {
-  return cachedDailyPatientData();
+export async function getDailyPatientData(wardIdsKey?: string): Promise<DailyPatientDataPoint[]> {
+  return cachedDailyPatientData(wardIdsKey);
 }

@@ -12,6 +12,7 @@ import {
   normalizeWardId,
 } from "@/lib/rbac";
 import { createUserLog } from "@/app/actions/logActions";
+import { createNotification } from "@/app/actions/notificationActions";
 
 export async function dischargePatientById(
   patientId: string,
@@ -109,6 +110,14 @@ export async function dischargePatientById(
     targetId: resolvedPatientId,
     targetName: (patient.name as string) || resolvedPatientId,
     details: `Discharged patient from ${patientWardId}`,
+  });
+
+  await createNotification({
+    type: "patient_discharged",
+    title: "Patient Discharged",
+    message: `${(patient.name as string) || resolvedPatientId} has been discharged from ${patientWardId}`,
+    wardId: patientWardId,
+    severity: "info",
   });
 }
 
@@ -234,6 +243,14 @@ export async function assignPatientToBed(
     targetId: patientId,
     targetName: (patient.name as string) || patientId,
     details: `Assigned to bed ${bedId} in ${effectiveWardId}`,
+  });
+
+  await createNotification({
+    type: "patient_assigned_bed",
+    title: "Patient Assigned to Bed",
+    message: `${(patient.name as string) || patientId} assigned to bed ${bedId} in ${effectiveWardId}`,
+    wardId: effectiveWardId,
+    severity: "info",
   });
 }
 
@@ -471,5 +488,13 @@ export async function forceAssignPatientToBed(
     targetId: patientId,
     targetName: (newPatient.name as string) || patientId,
     details: `Force assigned to bed ${bedId} in ${effectiveWardId}`,
+  });
+
+  await createNotification({
+    type: "patient_assigned_bed",
+    title: "Patient Force-Assigned",
+    message: `${(newPatient.name as string) || patientId} force-assigned to bed ${bedId} in ${effectiveWardId}`,
+    wardId: effectiveWardId,
+    severity: "warning",
   });
 }

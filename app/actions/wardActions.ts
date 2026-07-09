@@ -14,6 +14,7 @@ import {
   canUpdateBedStatus,
   normalizeSession,
 } from "@/lib/rbac";
+import { createNotification } from "@/app/actions/notificationActions";
 
 // Helper function to recursively serialize MongoDB documents (convert ObjectIds to strings)
 function serializeDoc(doc: unknown): unknown {
@@ -126,6 +127,14 @@ export async function updateBedStatus(
     revalidateTag("wards", "max");
     revalidateTag("patients", "max");
     revalidateTag("dashboard", "max");
+
+    await createNotification({
+      type: "bed_status_changed",
+      title: "Bed Status Updated",
+      message: `Bed ${bed.bedId || bedId} in ${wardId || bed.wardId} is now ${newStatus}`,
+      wardId: wardId || bed.wardId,
+      severity: newStatus === "maintenance" ? "warning" : "info",
+    });
 
     console.log("✅ Bed status updated successfully");
     return { success: true };
