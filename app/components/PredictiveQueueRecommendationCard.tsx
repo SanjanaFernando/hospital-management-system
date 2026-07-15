@@ -139,8 +139,22 @@ function formatExpectedArrivals(count?: number) {
   return `About ${rounded} ${rounded === 1 ? "patient" : "patients"}`;
 }
 
-function formatCriticalArrivals(value?: number, surgePredicted = false) {
-  if (typeof value === "number") return `${Math.round(value * 100)}% of arrivals`;
+function formatCriticalArrivals(
+  criticalShare?: number,
+  expectedArrivals?: number,
+  surgePredicted = false
+) {
+  if (typeof criticalShare === "number") {
+    const percentage = `${Math.round(criticalShare * 100)}% of arrivals`;
+
+    if (typeof expectedArrivals === "number" && Number.isFinite(expectedArrivals)) {
+      const estimatedCount = Math.round(expectedArrivals * criticalShare);
+      return `${percentage} (${formatExpectedArrivals(estimatedCount).toLowerCase()})`;
+    }
+
+    return percentage;
+  }
+
   return surgePredicted ? "High risk" : "Tracking";
 }
 
@@ -225,6 +239,7 @@ export default function PredictiveQueueRecommendationCard({
               <p className="mt-1 text-sm font-bold text-slate-900">
                 {formatCriticalArrivals(
                   prediction.criticalShare,
+                  prediction.expectedArrivals,
                   prediction.surgePredicted
                 )}
               </p>
