@@ -52,7 +52,8 @@ export function normalizeSession(
   input?: Partial<UserSession> | null
 ): UserSession {
   if (!input?.role) {
-    return { role: "admin", displayName: "System Admin" };
+    // No role supplied — fail closed to the least-privileged role, not admin.
+    return { role: "main_attendant", displayName: "Guest" };
   }
 
   const role = input.role;
