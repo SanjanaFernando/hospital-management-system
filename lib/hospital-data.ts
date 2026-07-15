@@ -411,12 +411,18 @@ async function queryWardWithPatients(wardId: string): Promise<Ward | null> {
       targetWardOccupiedBeds: beds.filter((bed) => bed.status === "occupied")
         .length,
       targetWardTotalBeds: beds.length,
-      wards: [], // Not needed for single ward queue reordering
+      wards: [],
+      patientHistory: (patientDocs as MongoDoc[]).map((patientDoc) => ({
+        admissionTime: patientDoc.admissionTime as string | Date | undefined,
+        priority: patientDoc.priority as string | number | undefined,
+        triageLevel: patientDoc.triageLevel as number | undefined,
+      })),
     });
     queueResult = {
       orderedPatients: aiResult.orderedPatients,
       strategy: aiResult.strategy,
       message: aiResult.message,
+      queuePrediction: aiResult.queuePrediction,
     };
   }
 
@@ -434,6 +440,7 @@ async function queryWardWithPatients(wardId: string): Promise<Ward | null> {
     maintenanceBeds: beds.filter((bed) => bed.status === "maintenance").length,
     queueOrderStrategy: queueResult.strategy,
     queueOrderMessage: queueResult.message,
+    queuePrediction: queueResult.queuePrediction,
   } satisfies Ward;
 }
 

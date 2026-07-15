@@ -1,7 +1,9 @@
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { existsSync } from "node:fs";
-import { Patient } from "@/app/types";
+import type { Patient, QueuePrediction } from "@/app/types";
+import { resolveForecasterProfilePath, resolveMappoModelPath } from "@/lib/get-mappo-model";
+import { pythonCommandCandidates } from "@/lib/resolve-python-bin";
 
 interface WardSnapshot {
   wardId: string;
@@ -11,6 +13,12 @@ interface WardSnapshot {
   queueLength: number;
 }
 
+interface PatientHistoryEntry {
+  admissionTime?: string | Date;
+  priority?: string | number;
+  triageLevel?: number;
+}
+
 interface QueueAiInput {
   targetWardId: string;
   targetWardName: string;
@@ -18,13 +26,17 @@ interface QueueAiInput {
   targetWardOccupiedBeds?: number;
   targetWardTotalBeds?: number;
   wards: WardSnapshot[];
+  patientHistory?: PatientHistoryEntry[];
 }
 
 interface QueueAiResult {
   orderedPatients: Patient[];
   strategy: "ai" | "priority";
   message: string;
+  queuePrediction?: QueuePrediction;
 }
+
+const INFERENCE_TIMEOUT_MS = 45_000;
 
 const priorityOrder = {
   "Triage 1": 0,
@@ -54,33 +66,38 @@ function fallbackPrioritySort(queue: Patient[]): Patient[] {
   );
 }
 
+function parseExplainJson(stdout: string): unknown {
+  const trimmed = stdout.trim();
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    const start = trimmed.lastIndexOf("{");
+    const end = trimmed.lastIndexOf("}");
+    if (start >= 0 && end > start) {
+      return JSON.parse(trimmed.slice(start, end + 1));
+    }
+    throw new Error("explain.py stdout was not valid JSON");
+  }
+}
+
 function runPythonCommand(command: string[], input: string) {
   const [exe, ...args] = command;
   return spawnSync(exe, args, {
     input,
     encoding: "utf-8",
-    timeout: 6000,
+    cwd: process.cwd(),
+    timeout: INFERENCE_TIMEOUT_MS,
+    maxBuffer: 10 * 1024 * 1024,
     windowsHide: true,
   });
 }
 
 export function reorderQueueWithAi(input: QueueAiInput): QueueAiResult {
-  // xai/scripts/explain.py's load_mappo() only understands MAPPO checkpoints
-  // (keys actor_0..actor_4). Do not point this at a DDQN checkpoint -- it has
-  // a different architecture and load_mappo() will KeyError on it.
-  const modelPath = path.join(
-    process.cwd(),
-    "model",
-    "best_mappo_hospital.pth"
-  );
-  const scriptPath = path.join(
-    process.cwd(),
-    "xai",
-    "scripts",
-    "explain.py"
-  );
+  const modelPath = resolveMappoModelPath(true);
+  const forecasterProfilePath = resolveForecasterProfilePath();
+  const scriptPath = path.join(process.cwd(), "xai", "scripts", "explain.py");
 
-  if (!existsSync(modelPath) || !existsSync(scriptPath)) {
+  if (!modelPath || !existsSync(scriptPath)) {
     return {
       orderedPatients: fallbackPrioritySort(input.targetWardQueue),
       strategy: "priority",
@@ -88,72 +105,154 @@ export function reorderQueueWithAi(input: QueueAiInput): QueueAiResult {
     };
   }
 
+  const usingPredictiveModel = modelPath.includes("predictive");
   const now = new Date();
   const wardSnapshot = {
     totalBeds: input.targetWardTotalBeds ?? 0,
     occupiedBeds: input.targetWardOccupiedBeds ?? 0,
+    usePredictive: true,
+    forecasterProfilePath,
+    patientHistory: input.patientHistory,
     queue: input.targetWardQueue.map((patient) => ({
       patientId: patient.id,
       name: patient.name,
       triageLevel: priorityToTriageLevel(patient.priority),
       waitMinutes: getWaitMinutes(patient, now),
+      triageRequested: Boolean(patient.triageRequested),
     })),
   };
 
-  const payload = JSON.stringify({
-    ...wardSnapshot,
-  });
+  const payload = JSON.stringify(wardSnapshot);
+  const attempts = pythonCommandCandidates().map((cmd) => [
+    ...cmd,
+    scriptPath,
+    "--checkpoint",
+    modelPath,
+    "--forecaster-profile",
+    forecasterProfilePath,
+  ]);
 
-  const attempts: string[][] = [["python", scriptPath], ["py", "-3", scriptPath]];
+  let lastError = "unknown error";
 
   for (const cmd of attempts) {
-    const result = runPythonCommand([...cmd, "--checkpoint", modelPath], payload);
+    const result = runPythonCommand(cmd, payload);
 
-    if (result.status === 0 && result.stdout) {
-      try {
-        const parsed = JSON.parse(result.stdout) as {
-          ranked_queue?: Array<{
-            patientId?: string;
-            name?: string;
-            reason?: string;
-          }>;
-          explanation_text?: string;
-        };
-        const order = new Map(
-          (parsed.ranked_queue || []).map((patient, index) => [
-            patient.patientId || patient.name || String(index),
-            index,
-          ])
-        );
-        const reasonByPatientKey = new Map(
-          (parsed.ranked_queue || []).map((patient, index) => [
-            patient.patientId || patient.name || String(index),
-            patient.reason,
-          ])
-        );
-        const orderedPatients = [...input.targetWardQueue]
-          .sort((a, b) => {
-            const aRank = order.get(a.id) ?? Number.MAX_SAFE_INTEGER;
-            const bRank = order.get(b.id) ?? Number.MAX_SAFE_INTEGER;
-            return aRank - bRank;
-          })
-          .map((patient) => ({
-            ...patient,
-            queueReason: reasonByPatientKey.get(patient.id),
-          }));
+    if (result.error) {
+      lastError = result.error.message;
+      continue;
+    }
 
-        return {
-          orderedPatients,
-          strategy: "ai",
-          message: orderedPatients[0]
-            ? `MAPPO reordered queue. Top patient: ${orderedPatients[0].name}.`
-            : `MAPPO reordered queue for ${input.targetWardName}.`,
+    if (result.signal) {
+      lastError = `process killed (${result.signal})`;
+      continue;
+    }
+
+    if (result.status !== 0) {
+      lastError = result.stderr?.trim() || `exit code ${result.status}`;
+      continue;
+    }
+
+    if (!result.stdout?.trim()) {
+      lastError = result.stderr?.trim() || "empty stdout";
+      continue;
+    }
+
+    try {
+      const parsed = parseExplainJson(result.stdout) as {
+        error?: string;
+        ranked_queue?: Array<{
+          patientId?: string;
+          name?: string;
+          reason?: string;
+        }>;
+        predictive_analytics?: {
+          enabled?: boolean;
+          surge_predicted?: boolean;
+          pred_load?: number;
+          pred_crit?: number;
+          expected_arrivals?: number;
+          horizon_hours?: number;
         };
-      } catch {
-        // Try next executable or fallback if none succeeds.
+      };
+
+      if (parsed.error) {
+        lastError = parsed.error;
+        continue;
       }
+
+      const order = new Map(
+        (parsed.ranked_queue || []).map((patient, index) => [
+          patient.patientId || patient.name || String(index),
+          index,
+        ])
+      );
+      const reasonByPatientKey = new Map(
+        (parsed.ranked_queue || []).map((patient, index) => [
+          patient.patientId || patient.name || String(index),
+          patient.reason,
+        ])
+      );
+      const orderedPatients = [...input.targetWardQueue]
+        .sort((a, b) => {
+          const aRank = order.get(a.id) ?? Number.MAX_SAFE_INTEGER;
+          const bRank = order.get(b.id) ?? Number.MAX_SAFE_INTEGER;
+          return aRank - bRank;
+        })
+        .map((patient) => ({
+          ...patient,
+          queueReason: reasonByPatientKey.get(patient.id),
+        }));
+
+      const predictive = parsed.predictive_analytics;
+      const queuePrediction: QueuePrediction | undefined = predictive?.enabled
+        ? {
+            enabled: true,
+            load:
+              typeof predictive.pred_load === "number" &&
+              Number.isFinite(predictive.pred_load)
+                ? predictive.pred_load
+                : undefined,
+            criticalShare:
+              typeof predictive.pred_crit === "number" &&
+              Number.isFinite(predictive.pred_crit)
+                ? predictive.pred_crit
+                : undefined,
+            expectedArrivals:
+              typeof predictive.expected_arrivals === "number" &&
+              Number.isFinite(predictive.expected_arrivals)
+                ? predictive.expected_arrivals
+                : undefined,
+            horizonHours:
+              typeof predictive.horizon_hours === "number" &&
+              Number.isFinite(predictive.horizon_hours)
+                ? predictive.horizon_hours
+                : undefined,
+            surgePredicted: Boolean(predictive.surge_predicted),
+          }
+        : undefined;
+      const predictiveNote = queuePrediction
+        ? queuePrediction.surgePredicted
+          ? " Predictive analytics expects heavier critical arrivals; keep the front of the queue ready."
+          : " Predictive analytics updated the queue recommendation."
+        : "";
+
+      return {
+        orderedPatients,
+        strategy: "ai",
+        message: orderedPatients[0]
+          ? `MAPPO${usingPredictiveModel ? "+Predictive" : ""} reordered queue. Top patient: ${orderedPatients[0].name}.${predictiveNote}`
+          : `MAPPO${usingPredictiveModel ? "+Predictive" : ""} reordered queue for ${input.targetWardName}.${predictiveNote}`,
+        queuePrediction,
+      };
+    } catch (error) {
+      lastError =
+        error instanceof Error
+          ? error.message
+          : result.stderr?.trim() || "failed to parse explain.py output";
     }
   }
+
+  console.error("[queueAi] MAPPO inference failed:", lastError);
 
   return {
     orderedPatients: fallbackPrioritySort(input.targetWardQueue),

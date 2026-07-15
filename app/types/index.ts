@@ -57,6 +57,15 @@ export interface Patient {
   queueReason?: string; // MAPPO explanation for this patient's queue rank, set by reorderQueueWithAi
 }
 
+export interface QueuePrediction {
+  enabled: boolean;
+  load?: number;
+  criticalShare?: number;
+  expectedArrivals?: number;
+  horizonHours?: number;
+  surgePredicted?: boolean;
+}
+
 export interface Bed {
   id: string;
   bedNumber: number;
@@ -79,6 +88,7 @@ export interface Ward {
   maintenanceBeds: number;
   queueOrderStrategy?: "ai" | "priority";
   queueOrderMessage?: string;
+  queuePrediction?: QueuePrediction;
 }
 
 export interface StaffMember {

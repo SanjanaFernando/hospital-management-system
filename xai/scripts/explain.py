@@ -35,8 +35,13 @@ from explain_engine import explain_decision  # noqa: E402
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Explain a MAPPO queue-prioritization decision.")
-    parser.add_argument("--checkpoint", required=True, help="Path to best_mappo_hospital.pth")
+    parser.add_argument("--checkpoint", required=True, help="Path to MAPPO checkpoint (.pth)")
     parser.add_argument("--ward-json", default=None, help="Inline JSON ward snapshot (optional)")
+    parser.add_argument(
+        "--forecaster-profile",
+        default=None,
+        help="Path to xai/config/forecaster_profile.json (optional)",
+    )
     parser.add_argument("--with-shap", action="store_true", help="Also compute SHAP attributions (slow)")
     parser.add_argument("--shap-samples", type=int, default=60, help="SHAP KernelExplainer nsamples")
     parser.add_argument("--device", default="cpu")
@@ -63,6 +68,7 @@ def main():
             device=args.device,
             with_shap=args.with_shap,
             shap_samples=args.shap_samples,
+            forecaster_profile_path=args.forecaster_profile,
         )
         print(json.dumps(result))
         sys.exit(0)

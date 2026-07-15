@@ -7,6 +7,7 @@ import { ChevronLeft } from "lucide-react";
 import { Bed, Patient, Ward } from "@/app/types";
 import BedGrid from "@/app/components/BedGrid";
 import PatientQueue from "@/app/components/PatientQueue";
+import PredictiveQueueRecommendationCard from "@/app/components/PredictiveQueueRecommendationCard";
 import { addBedToWard, getWardWithPatients } from "@/app/actions/wardActions";
 import { useAuthSession } from "@/app/context/AuthSessionContext";
 import {
@@ -203,6 +204,14 @@ export default function WardOverviewClient({
           </div>
         </div>
 
+        <PredictiveQueueRecommendationCard
+          queueLength={ward.patientQueue.length}
+          availableBeds={ward.availableBeds}
+          queueOrderMessage={ward.queueOrderMessage}
+          queuePrediction={ward.queuePrediction}
+          className="mb-8"
+        />
+
         {/* Main Content */}
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
           {/* Beds Column */}
@@ -291,7 +300,6 @@ export default function WardOverviewClient({
                   wardName={ward.name}
                   onPatientAssigned={refreshWard}
                   queueOrderStrategy={ward.queueOrderStrategy}
-                  queueOrderMessage={ward.queueOrderMessage}
                   canAssign={canAssignPatients}
                   listMaxHeight={
                     isLargeScreen && bedGridHeight
