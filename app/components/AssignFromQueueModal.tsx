@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { Bed, Patient, Ward } from "@/app/types";
 import {
@@ -38,6 +39,7 @@ export default function AssignFromQueueModal({
 }: AssignFromQueueModalProps) {
   const router = useRouter();
   const { session } = useAuthSession();
+  const [isMounted, setIsMounted] = useState(false);
 
   const targetWardOptions = useMemo(
     () =>
@@ -78,6 +80,10 @@ export default function AssignFromQueueModal({
   );
   const [isUpdatingTriage, setIsUpdatingTriage] = useState(false);
   const [triageError, setTriageError] = useState("");
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   useEffect(() => {
     setCurrentPriority(patient.priority);
@@ -209,9 +215,11 @@ export default function AssignFromQueueModal({
 
   const selectedBed = selectedBeds.find((b) => b.id === selectedBedId);
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-2xl rounded bg-white p-6 shadow max-h-[90vh] overflow-y-auto">
+  if (!isMounted) return null;
+
+  return createPortal(
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 p-4">
+      <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded bg-white p-6 shadow-xl">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-bold text-black">
             Assign Patient to Bed
@@ -415,6 +423,7 @@ export default function AssignFromQueueModal({
           {isLoading ? "Discharging..." : "Discharge Patient"}
         </button>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
