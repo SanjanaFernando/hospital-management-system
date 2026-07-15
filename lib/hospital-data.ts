@@ -422,6 +422,7 @@ async function queryWardWithPatients(wardId: string): Promise<Ward | null> {
       orderedPatients: aiResult.orderedPatients,
       strategy: aiResult.strategy,
       message: aiResult.message,
+      queuePrediction: aiResult.queuePrediction,
     };
   }
 
@@ -439,6 +440,7 @@ async function queryWardWithPatients(wardId: string): Promise<Ward | null> {
     maintenanceBeds: beds.filter((bed) => bed.status === "maintenance").length,
     queueOrderStrategy: queueResult.strategy,
     queueOrderMessage: queueResult.message,
+    queuePrediction: queueResult.queuePrediction,
   } satisfies Ward;
 }
 

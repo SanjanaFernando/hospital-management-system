@@ -1,7 +1,7 @@
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { existsSync } from "node:fs";
-import { Patient } from "@/app/types";
+import type { Patient, QueuePrediction } from "@/app/types";
 import { resolveForecasterProfilePath, resolveMappoModelPath } from "@/lib/get-mappo-model";
 import { pythonCommandCandidates } from "@/lib/resolve-python-bin";
 
@@ -33,6 +33,7 @@ interface QueueAiResult {
   orderedPatients: Patient[];
   strategy: "ai" | "priority";
   message: string;
+  queuePrediction?: QueuePrediction;
 }
 
 const INFERENCE_TIMEOUT_MS = 45_000;
@@ -201,10 +202,26 @@ export function reorderQueueWithAi(input: QueueAiInput): QueueAiResult {
         }));
 
       const predictive = parsed.predictive_analytics;
-      const predictiveNote = predictive?.enabled
-        ? predictive.surge_predicted
-          ? " Predictive analytics detected a likely critical surge."
-          : ` Predictive load ${(predictive.pred_load ?? 0).toFixed(2)}.`
+      const queuePrediction: QueuePrediction | undefined = predictive?.enabled
+        ? {
+            enabled: true,
+            load:
+              typeof predictive.pred_load === "number" &&
+              Number.isFinite(predictive.pred_load)
+                ? predictive.pred_load
+                : undefined,
+            criticalShare:
+              typeof predictive.pred_crit === "number" &&
+              Number.isFinite(predictive.pred_crit)
+                ? predictive.pred_crit
+                : undefined,
+            surgePredicted: Boolean(predictive.surge_predicted),
+          }
+        : undefined;
+      const predictiveNote = queuePrediction
+        ? queuePrediction.surgePredicted
+          ? " Predictive analytics expects heavier critical arrivals; keep the front of the queue ready."
+          : " Predictive analytics updated the queue recommendation."
         : "";
 
       return {
@@ -213,6 +230,7 @@ export function reorderQueueWithAi(input: QueueAiInput): QueueAiResult {
         message: orderedPatients[0]
           ? `MAPPO${usingPredictiveModel ? "+Predictive" : ""} reordered queue. Top patient: ${orderedPatients[0].name}.${predictiveNote}`
           : `MAPPO${usingPredictiveModel ? "+Predictive" : ""} reordered queue for ${input.targetWardName}.${predictiveNote}`,
+        queuePrediction,
       };
     } catch (error) {
       lastError =

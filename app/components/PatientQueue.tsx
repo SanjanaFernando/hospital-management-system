@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Sparkles } from "lucide-react";
-import { Patient, Bed, Ward } from "@/app/types";
+import type { Bed, Patient, Ward } from "@/app/types";
 import AssignFromQueueModal from "./AssignFromQueueModal";
 import { updatePatient } from "@/app/utils/api";
 import { useAuthSession } from "@/app/context/AuthSessionContext";
@@ -33,7 +33,6 @@ interface PatientQueueProps {
   wardName?: string;
   onPatientAssigned?: () => void;
   queueOrderStrategy?: "ai" | "priority";
-  queueOrderMessage?: string;
   patientReasonById?: Record<string, string>;
   canAssign?: boolean;
   listMaxHeight?: number;
@@ -94,7 +93,6 @@ export default function PatientQueue({
   wardName = "",
   onPatientAssigned,
   queueOrderStrategy = "priority",
-  queueOrderMessage = "",
   patientReasonById = {},
   canAssign = true,
   listMaxHeight,
@@ -258,10 +256,6 @@ export default function PatientQueue({
               ? "AI-reordered queue using model and live ward data. Click a patient to assign to a bed."
               : "Priority-ordered queue. Click a patient to assign to a bed."}
         </p>
-      )}
-
-      {queueOrderMessage && (
-        <p className="text-xs text-blue-700 mb-3">{queueOrderMessage}</p>
       )}
 
       {/* Collapsible Queue Container */}

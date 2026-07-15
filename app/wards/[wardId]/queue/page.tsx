@@ -7,6 +7,7 @@ import { ChevronLeft } from "lucide-react";
 import { Ward } from "@/app/types";
 import PatientQueue from "@/app/components/PatientQueue";
 import MedicalCrossLoader from "@/app/components/MedicalCrossLoader";
+import PredictiveQueueRecommendationCard from "@/app/components/PredictiveQueueRecommendationCard";
 import ExplanationPanel from "@/components/ui/explanation-panel";
 import {
   getWardWithPatients,
@@ -176,6 +177,14 @@ export default function WardQueuePage() {
             wardName={ward.name}
             queueCount={ward.patientQueue?.length || 0}
           />
+          <PredictiveQueueRecommendationCard
+            queueLength={ward.patientQueue?.length || 0}
+            availableBeds={
+              ward.beds?.filter((bed) => bed.status === "available").length || 0
+            }
+            queueOrderMessage={ward.queueOrderMessage}
+            queuePrediction={ward.queuePrediction}
+          />
           <PatientQueue
             patients={ward.patientQueue || []}
             beds={ward.beds || []}
@@ -184,7 +193,6 @@ export default function WardQueuePage() {
             wardName={ward.name}
             onPatientAssigned={handlePatientAssigned}
             queueOrderStrategy={ward.queueOrderStrategy}
-            queueOrderMessage={ward.queueOrderMessage}
             canAssign={canAssignPatients}
           />
         </div>
