@@ -8,13 +8,15 @@ export async function getServerSession(): Promise<UserSession> {
   const token = cookieStore.get(AUTH_COOKIE_NAME)?.value;
 
   if (!token) {
-    // Not authenticated — return a minimal unauthenticated session
-    return { role: "admin", displayName: "Guest" };
+    // Not authenticated — fail closed to the least-privileged role, not admin.
+    // proxy.ts should already redirect unauthenticated page loads to /login
+    // before this is reached; this is a defense-in-depth fallback only.
+    return { role: "main_attendant", displayName: "Guest" };
   }
 
   const payload = verifySessionToken(token);
   if (!payload) {
-    return { role: "admin", displayName: "Guest" };
+    return { role: "main_attendant", displayName: "Guest" };
   }
 
   const wardIds = Array.isArray(payload.wardIds) 
