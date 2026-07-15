@@ -50,10 +50,17 @@ export async function getCurrentUser(): Promise<UserSession | null> {
     return null;
   }
 
+  const wardIds = Array.isArray(payload.wardIds)
+    ? (payload.wardIds as string[])
+    : payload.wardId
+      ? [payload.wardId as string]
+      : [];
+
   return {
     userId: payload.userId,
     role: payload.role as StaffRole,
     wardId: payload.wardId,
+    wardIds,
     displayName: payload.displayName,
   };
 }
@@ -284,7 +291,15 @@ interface CreateUserResult {
 export async function createUser(
   input: CreateUserInput
 ): Promise<CreateUserResult> {
-  const { displayName, email, role, wardId, wardIds, actor } = input;
+  const { displayName, email, role, wardId, wardIds } = input;
+
+  // Identity/permission decisions must come from the verified session cookie,
+  // never from the caller-supplied `input.actor` (server actions are callable
+  // directly with a forged payload, so that value cannot be trusted).
+  const actor = await getCurrentUser();
+  if (!actor) {
+    return { success: false, error: "Not authenticated." };
+  }
 
   if (!displayName?.trim() || !email?.trim() || !role) {
     return {
@@ -423,7 +438,13 @@ export interface UserListItem {
   createdAt: string;
 }
 
-export async function getUsers(actor: UserSession): Promise<UserListItem[]> {
+export async function getUsers(
+  _clientActor: UserSession
+): Promise<UserListItem[]> {
+  const actor = await getCurrentUser();
+  if (!actor) {
+    throw new Error("Not authenticated.");
+  }
   const session = normalizeSession(actor);
   assertPermission(canManageStaff(session), "Only admin can view users.");
 
@@ -453,8 +474,12 @@ export async function getUsers(actor: UserSession): Promise<UserListItem[]> {
 
 export async function resetUserPassword(
   targetUserId: string,
-  actor: UserSession
+  _clientActor: UserSession
 ): Promise<{ success: boolean; error?: string }> {
+  const actor = await getCurrentUser();
+  if (!actor) {
+    return { success: false, error: "Not authenticated." };
+  }
   const session = normalizeSession(actor);
   assertPermission(
     canManageStaff(session),
@@ -517,8 +542,12 @@ export async function resetUserPassword(
 
 export async function toggleUserActive(
   targetUserId: string,
-  actor: UserSession
+  _clientActor: UserSession
 ): Promise<{ success: boolean; error?: string }> {
+  const actor = await getCurrentUser();
+  if (!actor) {
+    return { success: false, error: "Not authenticated." };
+  }
   const session = normalizeSession(actor);
   assertPermission(
     canManageStaff(session),
@@ -594,8 +623,12 @@ interface UpdateUserInput {
 export async function updateUser(
   targetUserId: string,
   input: UpdateUserInput,
-  actor: UserSession
+  _clientActor: UserSession
 ): Promise<{ success: boolean; error?: string }> {
+  const actor = await getCurrentUser();
+  if (!actor) {
+    return { success: false, error: "Not authenticated." };
+  }
   const session = normalizeSession(actor);
   assertPermission(canManageStaff(session), "Only admin can update users.");
 
@@ -722,8 +755,12 @@ export async function updateUser(
 
 export async function deleteUser(
   targetUserId: string,
-  actor: UserSession
+  _clientActor: UserSession
 ): Promise<{ success: boolean; error?: string }> {
+  const actor = await getCurrentUser();
+  if (!actor) {
+    return { success: false, error: "Not authenticated." };
+  }
   const session = normalizeSession(actor);
   assertPermission(canManageStaff(session), "Only admin can delete users.");
 
