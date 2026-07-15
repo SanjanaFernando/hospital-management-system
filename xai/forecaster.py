@@ -132,7 +132,7 @@ class ArrivalForecaster:
         forecaster.profile_path = str(path)
         return forecaster
 
-    def predict(self, current_time: datetime | None = None) -> tuple[float, float]:
+    def predict_details(self, current_time: datetime | None = None) -> dict[str, Any]:
         now = current_time or datetime.now(timezone.utc)
         if now.tzinfo is None:
             now = now.replace(tzinfo=timezone.utc)
@@ -146,7 +146,16 @@ class ArrivalForecaster:
 
         pred_load = min(expected_arrivals / self.max_expected, 1.0)
         pred_crit = float(np.mean(crit_shares)) if crit_shares else 0.0
-        return pred_load, pred_crit
+        return {
+            "pred_load": pred_load,
+            "pred_crit": pred_crit,
+            "expected_arrivals": expected_arrivals,
+            "horizon_hours": self.horizon,
+        }
+
+    def predict(self, current_time: datetime | None = None) -> tuple[float, float]:
+        details = self.predict_details(current_time)
+        return details["pred_load"], details["pred_crit"]
 
     def is_surge(
         self,
@@ -158,11 +167,12 @@ class ArrivalForecaster:
         return pred_load > load_thresh and pred_crit > crit_thresh
 
     def snapshot(self, current_time: datetime | None = None) -> dict[str, Any]:
-        pred_load, pred_crit = self.predict(current_time)
+        details = self.predict_details(current_time)
         return {
-            "pred_load": round(pred_load, 4),
-            "pred_crit": round(pred_crit, 4),
-            "horizon_hours": self.horizon,
+            "pred_load": round(float(details["pred_load"]), 4),
+            "pred_crit": round(float(details["pred_crit"]), 4),
+            "expected_arrivals": round(float(details["expected_arrivals"]), 2),
+            "horizon_hours": int(details["horizon_hours"]),
         }
 
 

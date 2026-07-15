@@ -222,6 +222,8 @@ def build_state_vector(ward_snapshot, forecaster=None, use_predictive=True):
         "enabled": bool(predictive_enabled),
         "pred_load": 0.0,
         "pred_crit": 0.0,
+        "expected_arrivals": 0.0,
+        "horizon_hours": 0,
         "surge_predicted": False,
     }
 
@@ -230,7 +232,9 @@ def build_state_vector(ward_snapshot, forecaster=None, use_predictive=True):
             from forecaster import load_forecaster
 
             forecaster = load_forecaster(ward_snapshot)
-        pred_load, pred_crit = forecaster.predict()
+        prediction_details = forecaster.predict_details()
+        pred_load = prediction_details["pred_load"]
+        pred_crit = prediction_details["pred_crit"]
         thresholds = getattr(forecaster, "surge_thresholds", None)
         if thresholds is None:
             from forecaster import default_surge_thresholds
@@ -240,6 +244,10 @@ def build_state_vector(ward_snapshot, forecaster=None, use_predictive=True):
             {
                 "pred_load": round(float(pred_load), 4),
                 "pred_crit": round(float(pred_crit), 4),
+                "expected_arrivals": round(
+                    float(prediction_details.get("expected_arrivals", 0.0)), 2
+                ),
+                "horizon_hours": int(prediction_details.get("horizon_hours", 0)),
                 "surge_predicted": bool(
                     pred_load > thresholds["load"] and pred_crit > thresholds["crit"]
                 ),
@@ -426,7 +434,7 @@ def build_nlg_explanation(
             else (
                 " Predictive analytics shows moderate incoming load "
                 f"(load {predictive_meta.get('pred_load', 0):.2f}, "
-                f"critical share {predictive_meta.get('pred_crit', 0):.2f})."
+                f"critical arrivals {predictive_meta.get('pred_crit', 0):.2f})."
             )
         )
         lines.append(surge_text.strip())

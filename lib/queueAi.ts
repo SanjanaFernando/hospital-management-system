@@ -170,6 +170,8 @@ export function reorderQueueWithAi(input: QueueAiInput): QueueAiResult {
           surge_predicted?: boolean;
           pred_load?: number;
           pred_crit?: number;
+          expected_arrivals?: number;
+          horizon_hours?: number;
         };
       };
 
@@ -214,6 +216,16 @@ export function reorderQueueWithAi(input: QueueAiInput): QueueAiResult {
               typeof predictive.pred_crit === "number" &&
               Number.isFinite(predictive.pred_crit)
                 ? predictive.pred_crit
+                : undefined,
+            expectedArrivals:
+              typeof predictive.expected_arrivals === "number" &&
+              Number.isFinite(predictive.expected_arrivals)
+                ? predictive.expected_arrivals
+                : undefined,
+            horizonHours:
+              typeof predictive.horizon_hours === "number" &&
+              Number.isFinite(predictive.horizon_hours)
+                ? predictive.horizon_hours
                 : undefined,
             surgePredicted: Boolean(predictive.surge_predicted),
           }

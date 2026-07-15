@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, TrendingUp, Users } from "lucide-react";
+import { AlertTriangle, Clock, Users } from "lucide-react";
 import type { QueuePrediction } from "@/app/types";
 
 const LEGACY_PREDICTIVE_LOAD_PATTERN = /Predictive load\s+(\d+(?:\.\d+)?)/i;
@@ -27,6 +27,16 @@ function resolveQueuePrediction(
       enabled: true,
       load: clampPredictionValue(prediction.load),
       criticalShare: clampPredictionValue(prediction.criticalShare),
+      expectedArrivals:
+        typeof prediction.expectedArrivals === "number" &&
+        Number.isFinite(prediction.expectedArrivals)
+          ? Math.max(0, prediction.expectedArrivals)
+          : undefined,
+      horizonHours:
+        typeof prediction.horizonHours === "number" &&
+        Number.isFinite(prediction.horizonHours)
+          ? Math.max(1, Math.round(prediction.horizonHours))
+          : undefined,
       surgePredicted: Boolean(prediction.surgePredicted),
     };
   }
@@ -64,7 +74,7 @@ function resolvePredictionTone(prediction: QueuePrediction) {
 
   if (load >= 0.65) {
     return {
-      label: "High load",
+      label: "High demand",
       cardClass:
         "border-orange-200 bg-linear-to-br from-orange-50 via-white to-amber-50",
       badgeClass: "bg-orange-100 text-orange-700",
@@ -76,7 +86,7 @@ function resolvePredictionTone(prediction: QueuePrediction) {
 
   if (load >= 0.35) {
     return {
-      label: "Moderate load",
+      label: "Moderate demand",
       cardClass:
         "border-blue-200 bg-linear-to-br from-blue-50 via-white to-indigo-50",
       badgeClass: "bg-blue-100 text-blue-700",
@@ -87,7 +97,7 @@ function resolvePredictionTone(prediction: QueuePrediction) {
   }
 
   return {
-    label: "Low load",
+    label: "Low demand",
     cardClass:
       "border-emerald-200 bg-linear-to-br from-emerald-50 via-white to-teal-50",
     badgeClass: "bg-emerald-100 text-emerald-700",
@@ -117,13 +127,21 @@ function resolveFrontQueueCount(
   return Math.min(queueLength, Math.max(1, surgeCount, bedReadyCount));
 }
 
-function formatPercent(value?: number) {
-  if (typeof value !== "number") return "Tracking";
-  return `${Math.round(value * 100)}%`;
-}
-
 function formatPatientCount(count: number) {
   return `${count} ${count === 1 ? "patient" : "patients"}`;
+}
+
+function formatExpectedArrivals(count?: number) {
+  if (typeof count !== "number") return "Tracking";
+  if (count > 0 && count < 1) return "<1 patient";
+
+  const rounded = Math.round(count);
+  return `About ${rounded} ${rounded === 1 ? "patient" : "patients"}`;
+}
+
+function formatCriticalArrivals(value?: number, surgePredicted = false) {
+  if (typeof value === "number") return `${Math.round(value * 100)}% of arrivals`;
+  return surgePredicted ? "High risk" : "Tracking";
 }
 
 export default function PredictiveQueueRecommendationCard({
@@ -153,6 +171,7 @@ export default function PredictiveQueueRecommendationCard({
     prediction,
     availableBeds
   );
+  const horizonHours = prediction.horizonHours ?? 6;
 
   return (
     <div
@@ -163,7 +182,7 @@ export default function PredictiveQueueRecommendationCard({
           {prediction.surgePredicted ? (
             <AlertTriangle className="h-4 w-4" />
           ) : (
-            <TrendingUp className="h-4 w-4" />
+            <Clock className="h-4 w-4" />
           )}
         </div>
 
@@ -179,19 +198,14 @@ export default function PredictiveQueueRecommendationCard({
             </span>
           </div>
 
-          <p className="mt-1 text-xs leading-relaxed text-slate-600">
-            Keep the first {formatPatientCount(frontQueueCount)} ready for bed
-            assignment. {tone.advice}
-          </p>
-
           <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
             <div className="rounded-xl bg-white/75 px-3 py-2 ring-1 ring-black/5">
               <div className="flex items-center gap-1.5 text-[11px] font-medium text-slate-500">
-                <TrendingUp className="h-3 w-3" />
-                Predicted load
+                <Clock className="h-3 w-3" />
+                Expected next {horizonHours}h
               </div>
               <p className="mt-1 text-sm font-bold text-slate-900">
-                {formatPercent(prediction.load)}
+                {formatExpectedArrivals(prediction.expectedArrivals)}
               </p>
             </div>
             <div className="rounded-xl bg-white/75 px-3 py-2 ring-1 ring-black/5">
@@ -206,21 +220,17 @@ export default function PredictiveQueueRecommendationCard({
             <div className="rounded-xl bg-white/75 px-3 py-2 ring-1 ring-black/5">
               <div className="flex items-center gap-1.5 text-[11px] font-medium text-slate-500">
                 <AlertTriangle className="h-3 w-3" />
-                Critical share
+                Critical next {horizonHours}h
               </div>
               <p className="mt-1 text-sm font-bold text-slate-900">
-                {prediction.surgePredicted
-                  ? "High"
-                  : formatPercent(prediction.criticalShare)}
+                {formatCriticalArrivals(
+                  prediction.criticalShare,
+                  prediction.surgePredicted
+                )}
               </p>
             </div>
           </div>
 
-          {queueOrderMessage && (
-            <p className="mt-3 text-[11px] leading-relaxed text-slate-500">
-              {queueOrderMessage}
-            </p>
-          )}
         </div>
       </div>
     </div>
