@@ -22,12 +22,13 @@ import { spawn } from "child_process";
 import path from "path";
 import fs from "fs/promises";
 import { connectToDatabase } from "@/lib/mongodb";
-import { resolveForecasterProfilePath, resolveMappoModelPath } from "@/lib/get-mappo-model";
+import { resolveForecasterProfilePath } from "@/lib/get-mappo-model";
 import { resolvePythonBin } from "@/lib/resolve-python-bin";
 
 const PYTHON_BIN = resolvePythonBin();
 const CHECKPOINT_PATH =
-  process.env.MAPPO_CHECKPOINT_PATH || resolveMappoModelPath(true) || "";
+  process.env.MAPPO_EXPLAIN_CHECKPOINT_PATH ||
+  path.join(process.cwd(), "model", "best_mappo_hospital.pth");
 const FORECASTER_PROFILE_PATH =
   process.env.FORECASTER_PROFILE_PATH || resolveForecasterProfilePath();
 const EXPLAIN_SCRIPT_PATH = path.join(process.cwd(), "xai", "scripts", "explain.py");
