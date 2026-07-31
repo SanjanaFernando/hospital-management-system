@@ -95,7 +95,10 @@ function runPythonCommand(command: string[], input: string) {
 export function reorderQueueWithAi(input: QueueAiInput): QueueAiResult {
   const modelPath = resolveMappoModelPath(true);
   const forecasterProfilePath = resolveForecasterProfilePath();
-  const scriptPath = path.join(process.cwd(), "xai", "scripts", "explain.py");
+  const usesSharedPredictiveModel = modelPath?.includes("best_mappo_shared_predictive") ?? false;
+  const scriptPath = usesSharedPredictiveModel
+    ? path.join(process.cwd(), "scripts", "queue_reorder_infer.py")
+    : path.join(process.cwd(), "xai", "scripts", "explain.py");
 
   if (!modelPath || !existsSync(scriptPath)) {
     return {
@@ -108,12 +111,15 @@ export function reorderQueueWithAi(input: QueueAiInput): QueueAiResult {
   const usingPredictiveModel = modelPath.includes("predictive");
   const now = new Date();
   const wardSnapshot = {
+    modelPath,
+    targetWardId: input.targetWardId,
     totalBeds: input.targetWardTotalBeds ?? 0,
     occupiedBeds: input.targetWardOccupiedBeds ?? 0,
     usePredictive: true,
     forecasterProfilePath,
     patientHistory: input.patientHistory,
     queue: input.targetWardQueue.map((patient) => ({
+      ...patient,
       patientId: patient.id,
       name: patient.name,
       triageLevel: priorityToTriageLevel(patient.priority),
@@ -126,10 +132,9 @@ export function reorderQueueWithAi(input: QueueAiInput): QueueAiResult {
   const attempts = pythonCommandCandidates().map((cmd) => [
     ...cmd,
     scriptPath,
-    "--checkpoint",
-    modelPath,
-    "--forecaster-profile",
-    forecasterProfilePath,
+    ...(usesSharedPredictiveModel
+      ? []
+      : ["--checkpoint", modelPath, "--forecaster-profile", forecasterProfilePath]),
   ]);
 
   let lastError = "unknown error";
@@ -160,6 +165,7 @@ export function reorderQueueWithAi(input: QueueAiInput): QueueAiResult {
     try {
       const parsed = parseExplainJson(result.stdout) as {
         error?: string;
+        orderedPatientIds?: string[];
         ranked_queue?: Array<{
           patientId?: string;
           name?: string;
@@ -171,6 +177,7 @@ export function reorderQueueWithAi(input: QueueAiInput): QueueAiResult {
           pred_load?: number;
           pred_crit?: number;
           expected_arrivals?: number;
+          expected_critical_patients?: number;
           horizon_hours?: number;
         };
       };
@@ -178,6 +185,41 @@ export function reorderQueueWithAi(input: QueueAiInput): QueueAiResult {
       if (parsed.error) {
         lastError = parsed.error;
         continue;
+      }
+
+      if (usesSharedPredictiveModel) {
+        const order = new Map(
+          (parsed.orderedPatientIds || []).map((patientId, index) => [patientId, index])
+        );
+        const orderedPatients = [...input.targetWardQueue].sort(
+          (a, b) =>
+            (order.get(a.id) ?? Number.MAX_SAFE_INTEGER) -
+            (order.get(b.id) ?? Number.MAX_SAFE_INTEGER)
+        );
+        const predictive = parsed.predictive_analytics;
+        const queuePrediction: QueuePrediction | undefined = predictive
+          ? {
+              enabled: predictive.enabled !== false,
+              load: predictive.pred_load,
+              criticalShare: predictive.pred_crit,
+              expectedArrivals: predictive.expected_arrivals,
+              expectedCriticalPatients: predictive.expected_critical_patients,
+              horizonHours: predictive.horizon_hours,
+              surgePredicted: Boolean(predictive.surge_predicted),
+            }
+          : undefined;
+        const forecastMessage = queuePrediction?.expectedArrivals !== undefined
+          ? ` Expected ${queuePrediction.expectedArrivals} patients in the next ${queuePrediction.horizonHours ?? 6} hours; approximately ${queuePrediction.expectedCriticalPatients ?? 0} critical.`
+          : "";
+
+        return {
+          orderedPatients,
+          strategy: "ai",
+          message: orderedPatients[0]
+            ? `MAPPO+Predictive reordered queue. Top patient: ${orderedPatients[0].name}.${forecastMessage}`
+            : `MAPPO+Predictive reordered queue for ${input.targetWardName}.${forecastMessage}`,
+          queuePrediction,
+        };
       }
 
       const order = new Map(

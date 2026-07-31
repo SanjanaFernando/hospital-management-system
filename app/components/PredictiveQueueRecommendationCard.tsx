@@ -32,6 +32,11 @@ function resolveQueuePrediction(
         Number.isFinite(prediction.expectedArrivals)
           ? Math.max(0, prediction.expectedArrivals)
           : undefined,
+      expectedCriticalPatients:
+        typeof prediction.expectedCriticalPatients === "number" &&
+        Number.isFinite(prediction.expectedCriticalPatients)
+          ? Math.max(0, prediction.expectedCriticalPatients)
+          : undefined,
       horizonHours:
         typeof prediction.horizonHours === "number" &&
         Number.isFinite(prediction.horizonHours)
@@ -142,8 +147,13 @@ function formatExpectedArrivals(count?: number) {
 function formatCriticalArrivals(
   criticalShare?: number,
   expectedArrivals?: number,
+  expectedCriticalPatients?: number,
   surgePredicted = false
 ) {
+  if (typeof expectedCriticalPatients === "number") {
+    return `Approximately ${formatExpectedArrivals(expectedCriticalPatients).toLowerCase()}`;
+  }
+
   if (typeof criticalShare === "number") {
     const percentage = `${Math.round(criticalShare * 100)}% of arrivals`;
 
@@ -240,6 +250,7 @@ export default function PredictiveQueueRecommendationCard({
                 {formatCriticalArrivals(
                   prediction.criticalShare,
                   prediction.expectedArrivals,
+                  prediction.expectedCriticalPatients,
                   prediction.surgePredicted
                 )}
               </p>

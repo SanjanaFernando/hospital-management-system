@@ -418,10 +418,15 @@ async function queryWardWithPatients(wardId: string): Promise<Ward | null> {
         triageLevel: patientDoc.triageLevel as number | undefined,
       })),
     });
+    const forecastMessage = aiResult.queuePrediction?.expectedArrivals !== undefined
+      ? ` Expected ${aiResult.queuePrediction.expectedArrivals} patients in the next ${aiResult.queuePrediction.horizonHours ?? 6} hours; approximately ${aiResult.queuePrediction.expectedCriticalPatients ?? 0} critical.`
+      : "";
     queueResult = {
       orderedPatients: aiResult.orderedPatients,
       strategy: aiResult.strategy,
-      message: aiResult.message,
+      message: aiResult.message.includes("Expected ")
+        ? aiResult.message
+        : `${aiResult.message}${forecastMessage}`,
       queuePrediction: aiResult.queuePrediction,
     };
   }

@@ -62,6 +62,7 @@ export interface QueuePrediction {
   load?: number;
   criticalShare?: number;
   expectedArrivals?: number;
+  expectedCriticalPatients?: number;
   horizonHours?: number;
   surgePredicted?: boolean;
 }
