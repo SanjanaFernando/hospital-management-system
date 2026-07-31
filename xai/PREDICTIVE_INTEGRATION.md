@@ -26,7 +26,7 @@ MongoDB ward + patients
 
 ## Setup checklist
 
-1. Copy Colab checkpoint to `model/best_mappo_predictive.pth`
+1. Copy Colab checkpoint to `model/best_mappo_shared_predictive.pth`
 2. (Optional) Regenerate forecaster profile from your data:
    ```bash
    python xai/scripts/build_forecaster_profile.py --csv mlops/data/raw/patients_*.csv
@@ -40,7 +40,7 @@ MongoDB ward + patients
 ## Environment variables (optional)
 
 ```env
-MAPPO_CHECKPOINT_PATH=D:\...\model\best_mappo_predictive.pth
+MAPPO_CHECKPOINT_PATH=D:\...\model\best_mappo_shared_predictive.pth
 FORECASTER_PROFILE_PATH=D:\...\xai\config\forecaster_profile.json
 PYTHON_BIN=python
 ```
