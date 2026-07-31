@@ -9,10 +9,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-XAI_DIR = Path(__file__).resolve().parents[1] / "xai"
-if str(XAI_DIR) not in sys.path:
-    sys.path.insert(0, str(XAI_DIR))
-from forecaster import load_forecaster  # noqa: E402
+from xai.forecaster import load_forecaster
 
 
 PRIORITY_TO_TRIAGE = {
