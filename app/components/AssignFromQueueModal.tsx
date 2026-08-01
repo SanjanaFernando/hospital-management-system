@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { Bed, Patient, Ward } from "@/app/types";
 import {
@@ -22,6 +23,7 @@ interface AssignFromQueueModalProps {
   beds: Bed[];
   wards?: Ward[];
   onAssigned: () => void;
+  onTriageUpdated?: () => void;
   onClose: () => void;
 }
 
@@ -32,10 +34,12 @@ export default function AssignFromQueueModal({
   beds,
   wards,
   onAssigned,
+  onTriageUpdated,
   onClose,
 }: AssignFromQueueModalProps) {
   const router = useRouter();
   const { session } = useAuthSession();
+  const [isMounted, setIsMounted] = useState(false);
 
   const targetWardOptions = useMemo(
     () =>
@@ -68,11 +72,25 @@ export default function AssignFromQueueModal({
   const [errorMessage, setErrorMessage] = useState("");
 
   const [isEditingTriage, setIsEditingTriage] = useState(false);
+  const [currentPriority, setCurrentPriority] = useState<Patient["priority"]>(
+    patient.priority
+  );
   const [triageDraft, setTriageDraft] = useState<Patient["priority"]>(
     patient.priority
   );
   const [isUpdatingTriage, setIsUpdatingTriage] = useState(false);
   const [triageError, setTriageError] = useState("");
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  useEffect(() => {
+    setCurrentPriority(patient.priority);
+    setTriageDraft(patient.priority);
+    setIsEditingTriage(false);
+    setTriageError("");
+  }, [patient.id, patient.priority]);
 
   const selectedWard =
     targetWardOptions.find((ward) => ward.wardId === selectedWardId) ||
@@ -126,8 +144,14 @@ export default function AssignFromQueueModal({
     setTriageError("");
     setIsUpdatingTriage(true);
     try {
-      await updatePatient(targetPatientId, { priority: triageDraft }, session);
+      await updatePatient(
+        targetPatientId,
+        { priority: triageDraft, triageRequested: false },
+        session
+      );
+      setCurrentPriority(triageDraft);
       setIsEditingTriage(false);
+      (onTriageUpdated || onAssigned)();
     } catch (err) {
       setTriageError(
         err instanceof Error ? err.message : "Failed to update triage"
@@ -191,9 +215,11 @@ export default function AssignFromQueueModal({
 
   const selectedBed = selectedBeds.find((b) => b.id === selectedBedId);
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-2xl rounded bg-white p-6 shadow max-h-[90vh] overflow-y-auto">
+  if (!isMounted) return null;
+
+  return createPortal(
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 p-4">
+      <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded bg-white p-6 shadow-xl">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-bold text-black">
             Assign Patient to Bed
@@ -223,7 +249,7 @@ export default function AssignFromQueueModal({
                   onClick={() => canEditTriage && setIsEditingTriage(true)}
                   className={`px-3 py-1 rounded text-sm bg-orange-200 text-black ${canEditTriage ? "cursor-pointer" : ""}`}
                 >
-                  {patient.priority}
+                  {currentPriority}
                 </button>
               ) : (
                 <div className="flex text-black items-center gap-2">
@@ -243,7 +269,7 @@ export default function AssignFromQueueModal({
                   <button
                     onClick={handleSaveTriage}
                     disabled={
-                      isUpdatingTriage || triageDraft === patient.priority
+                      isUpdatingTriage || triageDraft === currentPriority
                     }
                     className="bg-green-600 text-white px-3 py-1 rounded"
                   >
@@ -252,7 +278,7 @@ export default function AssignFromQueueModal({
                   <button
                     onClick={() => {
                       setIsEditingTriage(false);
-                      setTriageDraft(patient.priority);
+                      setTriageDraft(currentPriority);
                       setTriageError("");
                     }}
                     className="bg-gray-300 px-3 py-1 rounded"
@@ -397,6 +423,7 @@ export default function AssignFromQueueModal({
           {isLoading ? "Discharging..." : "Discharge Patient"}
         </button>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

@@ -329,6 +329,7 @@ export default function BedDetailPage() {
           bed={bed}
           queue={ward.patientQueue}
           onAssigned={handleAssignedSuccess}
+          onTriageUpdated={loadWard}
           onCancel={() => setShowAssignModal(false)}
         />
       )}

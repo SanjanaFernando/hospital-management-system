@@ -9,11 +9,12 @@ import {
 } from "react";
 import { UserSession } from "@/app/types";
 import { normalizeSession } from "@/lib/rbac";
-import { SESSION_COOKIE_NAME, stringifySessionCookie } from "@/lib/session";
+import { logoutUser } from "@/app/actions/userActions";
 
 interface AuthSessionContextValue {
   session: UserSession;
   setSession: (session: UserSession) => void;
+  logout: () => Promise<void>;
 }
 
 const AuthSessionContext = createContext<AuthSessionContextValue | undefined>(
@@ -31,10 +32,19 @@ export function AuthSessionProvider({
   const setSession = (nextSession: UserSession) => {
     const normalized = normalizeSession(nextSession);
     setSessionState(normalized);
-    document.cookie = `${SESSION_COOKIE_NAME}=${stringifySessionCookie(normalized)}; path=/; max-age=31536000; samesite=lax`;
   };
 
-  const value = useMemo(() => ({ session, setSession }), [session]);
+  const logout = async () => {
+    await logoutUser();
+    // Force full page reload to trigger middleware redirect to /login
+    window.location.href = "/login";
+  };
+
+  const value = useMemo(
+    () => ({ session, setSession, logout }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [session]
+  );
 
   return (
     <AuthSessionContext.Provider value={value}>

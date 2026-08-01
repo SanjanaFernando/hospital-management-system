@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Bed, Patient } from "@/app/types";
 import { assignPatientToBed } from "@/app/actions/patientActions";
 import { useAuthSession } from "@/app/context/AuthSessionContext";
@@ -12,6 +12,7 @@ interface AssignPatientModalProps {
   bed: Bed;
   queue: Patient[];
   onAssigned: () => void;
+  onTriageUpdated?: () => void;
   onCancel: () => void;
 }
 
@@ -20,6 +21,7 @@ export default function AssignPatientModal({
   bed,
   queue,
   onAssigned,
+  onTriageUpdated,
   onCancel,
 }: AssignPatientModalProps) {
   const { session } = useAuthSession();
@@ -38,9 +40,11 @@ export default function AssignPatientModal({
   const selectedPatient = queue.find((p) => p.id === selectedPatientId);
   const canEditTriage = Boolean(wardId) && canSetTriage(session, wardId);
 
-  if (!triageDraft && selectedPatient) {
-    setTriageDraft(selectedPatient.priority);
-  }
+  useEffect(() => {
+    setTriageDraft(selectedPatient?.priority || null);
+    setIsEditingTriage(false);
+    setTriageError("");
+  }, [selectedPatient?.id, selectedPatient?.priority]);
 
   const handleSaveTriage = async () => {
     if (!selectedPatient) return;
@@ -55,11 +59,13 @@ export default function AssignPatientModal({
         targetPatientId,
         {
           priority: triageDraft!,
+          triageRequested: false,
         },
         session
       );
 
       setIsEditingTriage(false);
+      (onTriageUpdated || onAssigned)();
     } catch (error) {
       setTriageError(
         error instanceof Error ? error.message : "Failed to update triage"

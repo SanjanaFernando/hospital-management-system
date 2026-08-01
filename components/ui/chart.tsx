@@ -175,11 +175,14 @@ function ChartLegendContent({
 
   return (
     <div className="mt-2 flex flex-wrap items-center justify-center gap-4 text-xs">
-      {payload.map((item) => {
+      {payload.map((item, index) => {
         const key = String(item.dataKey ?? item.value ?? "");
         const label = toChartNode(config[key]?.label ?? item.value ?? key);
         return (
-          <div key={key} className="flex items-center gap-2 text-gray-700">
+          <div
+            key={`${key}-${index}`}
+            className="flex items-center gap-2 text-gray-700"
+          >
             <span
               className="h-2.5 w-2.5 rounded-full"
               style={{ backgroundColor: item.color }}

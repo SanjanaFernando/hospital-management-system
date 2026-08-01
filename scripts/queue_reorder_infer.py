@@ -9,6 +9,8 @@ import numpy as np
 import torch
 import torch.nn as nn
 
+from xai.forecaster import load_forecaster
+
 
 PRIORITY_TO_TRIAGE = {
     "Triage 1": 1,
@@ -319,21 +321,17 @@ def extract_state_dict(checkpoint: Any) -> dict[str, torch.Tensor]:
 
 
 def infer_model_layout(state_dict: dict[str, torch.Tensor]) -> tuple[int, tuple[int, ...], int]:
-    if "net.0.weight" not in state_dict or "net.2.weight" not in state_dict:
-        raise ValueError("Unsupported checkpoint layout: missing net.0/net.2 weights")
-
-    in_dim = int(state_dict["net.0.weight"].shape[1])
-    first_hidden = int(state_dict["net.0.weight"].shape[0])
-
-    if "net.4.weight" in state_dict:
-        second_hidden = int(state_dict["net.2.weight"].shape[0])
-        out_dim = int(state_dict["net.4.weight"].shape[0])
-        hidden = (first_hidden, second_hidden)
-    else:
-        out_dim = int(state_dict["net.2.weight"].shape[0])
-        hidden = (first_hidden,)
-
-    return in_dim, hidden, out_dim
+    linear_weights = sorted(
+        (key, value) for key, value in state_dict.items()
+        if key.startswith("net.") and key.endswith(".weight")
+    )
+    if len(linear_weights) < 2:
+        raise ValueError("Unsupported checkpoint layout: expected at least two net weight layers")
+    return (
+        int(linear_weights[0][1].shape[1]),
+        tuple(int(value.shape[0]) for _, value in linear_weights[:-1]),
+        int(linear_weights[-1][1].shape[0]),
+    )
 
 
 def patient_score(
@@ -499,6 +497,25 @@ def main() -> int:
     payload = json.loads(raw)
     model_path = payload.get("modelPath")
 
+    forecaster = load_forecaster(
+        payload,
+        profile_path=payload.get("forecasterProfilePath"),
+    )
+    forecast = forecaster.predict_details(datetime.now(timezone.utc))
+    expected_arrivals = float(forecast.get("expected_arrivals", 0.0))
+    predicted_critical_share = float(forecast.get("pred_crit", 0.0))
+    predictive_analytics = {
+        "enabled": True,
+        "pred_load": round(float(forecast.get("pred_load", 0.0)), 4),
+        "pred_crit": round(predicted_critical_share, 4),
+        "expected_arrivals": round(expected_arrivals, 2),
+        "expected_critical_patients": round(
+            expected_arrivals * predicted_critical_share, 2
+        ),
+        "horizon_hours": int(forecast.get("horizon_hours", 6)),
+        "surge_predicted": forecaster.is_surge(datetime.now(timezone.utc)),
+    }
+
     checkpoint = torch.load(model_path, map_location="cpu")
     state_dict = extract_state_dict(checkpoint)
     state_dim, hidden_dims, action_dim = infer_model_layout(state_dict)
@@ -556,6 +573,7 @@ def main() -> int:
                     "actionStability": stability_meta,
                     "modelApplied": True,
                 },
+                "predictive_analytics": predictive_analytics,
             }
         )
     )

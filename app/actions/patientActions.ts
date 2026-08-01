@@ -11,6 +11,8 @@ import {
   normalizeSession,
   normalizeWardId,
 } from "@/lib/rbac";
+import { createUserLog } from "@/app/actions/logActions";
+import { createNotification } from "@/app/actions/notificationActions";
 
 export async function dischargePatientById(
   patientId: string,
@@ -100,6 +102,23 @@ export async function dischargePatientById(
   revalidateTag("beds", "max");
   revalidateTag("wards", "max");
   revalidateTag("dashboard", "max");
+
+  await createUserLog({
+    action: "patient_discharged",
+    actor,
+    wardId: patientWardId,
+    targetId: resolvedPatientId,
+    targetName: (patient.name as string) || resolvedPatientId,
+    details: `Discharged patient from ${patientWardId}`,
+  });
+
+  await createNotification({
+    type: "patient_discharged",
+    title: "Patient Discharged",
+    message: `${(patient.name as string) || resolvedPatientId} has been discharged from ${patientWardId}`,
+    wardId: patientWardId,
+    severity: "info",
+  });
 }
 
 interface AssignPatientInput {
@@ -216,6 +235,23 @@ export async function assignPatientToBed(
   revalidateTag("beds", "max");
   revalidateTag("wards", "max");
   revalidateTag("dashboard", "max");
+
+  await createUserLog({
+    action: "patient_assigned_bed",
+    actor: input.actor,
+    wardId: effectiveWardId,
+    targetId: patientId,
+    targetName: (patient.name as string) || patientId,
+    details: `Assigned to bed ${bedId} in ${effectiveWardId}`,
+  });
+
+  await createNotification({
+    type: "patient_assigned_bed",
+    title: "Patient Assigned to Bed",
+    message: `${(patient.name as string) || patientId} assigned to bed ${bedId} in ${effectiveWardId}`,
+    wardId: effectiveWardId,
+    severity: "info",
+  });
 }
 
 export async function movePatientToQueue(
@@ -302,6 +338,15 @@ export async function movePatientToQueue(
   revalidateTag("beds", "max");
   revalidateTag("wards", "max");
   revalidateTag("dashboard", "max");
+
+  await createUserLog({
+    action: "patient_moved_to_queue",
+    actor,
+    wardId: patientWardId,
+    targetId: resolvedPatientId,
+    targetName: (patient.name as string) || resolvedPatientId,
+    details: `Moved patient back to queue in ${patientWardId}`,
+  });
 }
 
 export async function forceAssignPatientToBed(
@@ -435,4 +480,21 @@ export async function forceAssignPatientToBed(
   revalidateTag("beds", "max");
   revalidateTag("wards", "max");
   revalidateTag("dashboard", "max");
+
+  await createUserLog({
+    action: "patient_force_assigned",
+    actor: input.actor,
+    wardId: effectiveWardId,
+    targetId: patientId,
+    targetName: (newPatient.name as string) || patientId,
+    details: `Force assigned to bed ${bedId} in ${effectiveWardId}`,
+  });
+
+  await createNotification({
+    type: "patient_assigned_bed",
+    title: "Patient Force-Assigned",
+    message: `${(newPatient.name as string) || patientId} force-assigned to bed ${bedId} in ${effectiveWardId}`,
+    wardId: effectiveWardId,
+    severity: "warning",
+  });
 }

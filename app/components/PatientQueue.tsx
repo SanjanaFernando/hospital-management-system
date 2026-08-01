@@ -1,11 +1,29 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Patient, Bed, Ward } from "@/app/types";
+import { Sparkles } from "lucide-react";
+import type { Bed, Patient, Ward } from "@/app/types";
 import AssignFromQueueModal from "./AssignFromQueueModal";
 import { updatePatient } from "@/app/utils/api";
 import { useAuthSession } from "@/app/context/AuthSessionContext";
 import { canSetTriage } from "@/lib/rbac";
+
+const REASON_SPLIT_PATTERN = /(#\d+|\d+(?:\.\d+)?%|\d+(?:\.\d+)?h\b)/g;
+const REASON_TOKEN_PATTERN = /^(#\d+|\d+(?:\.\d+)?%|\d+(?:\.\d+)?h)$/;
+
+function renderReasonText(reason: string) {
+  return reason
+    .split(REASON_SPLIT_PATTERN)
+    .map((part, index) =>
+      REASON_TOKEN_PATTERN.test(part) ? (
+        <span key={index} className="font-semibold text-slate-800">
+          {part}
+        </span>
+      ) : (
+        <span key={index}>{part}</span>
+      )
+    );
+}
 
 interface PatientQueueProps {
   patients: Patient[];
@@ -15,7 +33,7 @@ interface PatientQueueProps {
   wardName?: string;
   onPatientAssigned?: () => void;
   queueOrderStrategy?: "ai" | "priority";
-  queueOrderMessage?: string;
+  patientReasonById?: Record<string, string>;
   canAssign?: boolean;
   listMaxHeight?: number;
 }
@@ -75,7 +93,7 @@ export default function PatientQueue({
   wardName = "",
   onPatientAssigned,
   queueOrderStrategy = "priority",
-  queueOrderMessage = "",
+  patientReasonById = {},
   canAssign = true,
   listMaxHeight,
 }: PatientQueueProps) {
@@ -91,6 +109,8 @@ export default function PatientQueue({
   );
   const [triageError, setTriageError] = useState("");
   const [isOpen, setIsOpen] = useState(false);
+
+  const getPatientKey = (patient: Patient): string => patient._id || patient.id;
 
   useEffect(() => {
     const intervalId = window.setInterval(() => {
@@ -134,10 +154,15 @@ export default function PatientQueue({
     setSelectedPatient(null);
   };
 
+  const handleTriageUpdated = () => {
+    onPatientAssigned?.();
+  };
+
   const triageEditable = Boolean(wardId) && canSetTriage(session, wardId);
 
   const resolveTriageDraft = (patient: Patient): Patient["priority"] => {
-    return triageDraftByPatient[patient.id] || patient.priority;
+    const patientKey = getPatientKey(patient);
+    return triageDraftByPatient[patientKey] || patient.priority;
   };
 
   const handleTriageDraftChange = (
@@ -151,18 +176,23 @@ export default function PatientQueue({
   };
 
   const handleSaveTriage = async (patient: Patient) => {
+    const patientKey = getPatientKey(patient);
     const nextPriority = resolveTriageDraft(patient);
-    const targetPatientId = patient._id || patient.id;
 
     setTriageError("");
-    setIsUpdatingTriageId(patient.id);
+    setIsUpdatingTriageId(patientKey);
 
     try {
       await updatePatient(
-        targetPatientId,
+        patientKey,
         { priority: nextPriority, triageRequested: false },
         session
       );
+      setTriageDraftByPatient((prev) => {
+        const nextDraft = { ...prev };
+        delete nextDraft[patientKey];
+        return nextDraft;
+      });
       onPatientAssigned?.();
     } catch (error) {
       setTriageError(
@@ -228,10 +258,6 @@ export default function PatientQueue({
         </p>
       )}
 
-      {queueOrderMessage && (
-        <p className="text-xs text-blue-700 mb-3">{queueOrderMessage}</p>
-      )}
-
       {/* Collapsible Queue Container */}
       <div
         className={`
@@ -246,6 +272,14 @@ export default function PatientQueue({
           }
         >
           {displayPatients.map((patient, index) => (
+            (() => {
+              const patientReason =
+                patient.queueReason ||
+                patientReasonById[patient._id || patient.id] ||
+                patientReasonById[patient.id] ||
+                patientReasonById[patient._id || ""];
+
+              return (
             <div
               key={patient.id}
               onClick={() => handlePatientClick(patient)}
@@ -262,7 +296,7 @@ export default function PatientQueue({
                   <p className="font-semibold">
                     {index + 1}. {patient.name}
                   </p>
-                  <p className="text-sm flex gap-2 mt-1">
+                  <p className="text-sm flex flex-wrap gap-2 mt-1">
                     <span
                       className={`px-2 py-1 rounded text-xs font-medium ${ageGroupBadgeColors[patient.ageGroup]}`}
                     >
@@ -277,6 +311,14 @@ export default function PatientQueue({
                       </span>
                     )}
                   </p>
+                  {patientReason && (
+                    <div className="mt-2 flex w-full items-start gap-1.5 rounded-md bg-white/70 px-2.5 py-1.5 ring-1 ring-black/5">
+                      <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-indigo-500" />
+                      <p className="min-w-0 flex-1 break-words text-xs leading-relaxed text-slate-600">
+                        {renderReasonText(patientReason)}
+                      </p>
+                    </div>
+                  )}
                 </div>
                 <span className="text-xs font-bold">{patient.priority}</span>
               </div>
@@ -309,10 +351,12 @@ export default function PatientQueue({
                     <button
                       type="button"
                       onClick={() => handleSaveTriage(patient)}
-                      disabled={isUpdatingTriageId === patient.id}
+                      disabled={isUpdatingTriageId === getPatientKey(patient)}
                       className="rounded bg-amber-600 px-2 py-1 text-xs font-semibold text-white hover:bg-amber-700 disabled:bg-amber-300"
                     >
-                      {isUpdatingTriageId === patient.id ? "Saving..." : "Save"}
+                      {isUpdatingTriageId === getPatientKey(patient)
+                        ? "Saving..."
+                        : "Save"}
                     </button>
                   </div>
                 </div>
@@ -342,6 +386,8 @@ export default function PatientQueue({
                   </p>
                 )}
             </div>
+              );
+            })()
           ))}
         </div>
       </div>
@@ -358,6 +404,7 @@ export default function PatientQueue({
           beds={beds}
           wards={wards}
           onAssigned={handleAssignSuccess}
+          onTriageUpdated={handleTriageUpdated}
           onClose={handleModalClose}
         />
       )}

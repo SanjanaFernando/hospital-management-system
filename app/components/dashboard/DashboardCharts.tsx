@@ -22,6 +22,7 @@ import {
   DailyPatientDataPoint,
   DashboardWardSummary,
 } from "@/lib/hospital-data";
+import { useAuthSession } from "@/app/context/AuthSessionContext";
 
 type ChartMetric = "occupancy" | "queue" | "maintenance";
 
@@ -38,7 +39,19 @@ export default function DashboardCharts({
   dailyPatientData,
   showOccupancy = true,
 }: DashboardChartsProps) {
+  const { session } = useAuthSession();
+  const isAdminRole = session.role === "admin" || session.role === "sub_admin";
   const [chartMetric, setChartMetric] = useState<ChartMetric>("occupancy");
+
+  const [selectedWardFilter, setSelectedWardFilter] = useState<string>(() => {
+    if (isAdminRole) return "all";
+    return wards[0]?.wardId || "all";
+  });
+
+  const selectedWard = wards.find((w) => w.wardId === selectedWardFilter);
+  const selectedWardIndex = selectedWard ? wards.indexOf(selectedWard) : -1;
+  const barColor = selectedWardIndex !== -1 ? pieColors[selectedWardIndex % pieColors.length] : "var(--color-patients)";
+  const barDataKey = selectedWardFilter === "all" ? "patients" : (selectedWard?.name || "patients");
 
   const chartSets = useMemo(() => {
     return {
@@ -159,10 +172,28 @@ export default function DashboardCharts({
       )}
 
       <div className="w-full min-w-0 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-        <h3 className="text-lg w-fit font-semibold text-slate-900">
-          Daily Patients
-        </h3>
-        <p className="mb-4 text-sm text-slate-500">Last 7 days admissions</p>
+        <div className="mb-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div>
+            <h3 className="text-lg font-semibold text-slate-900">
+              Daily Patients
+            </h3>
+            <p className="text-sm text-slate-500">Last 7 days admissions</p>
+          </div>
+          {wards.length > 0 && (
+            <select
+              value={selectedWardFilter}
+              onChange={(event) => setSelectedWardFilter(event.target.value)}
+              className="rounded-xl border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700"
+            >
+              {isAdminRole && <option value="all">All Wards</option>}
+              {wards.map((ward) => (
+                <option key={ward.wardId} value={ward.wardId}>
+                  {ward.name}
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
         <ChartContainer
           config={{ patients: { label: "Patients", color: "#8b5cf6" } }}
           className="h-65 mt-[40px] ml-[-30px]  sm:mt-[60px] w-full min-w-0 xl:mt-0 xl:h-75"
@@ -173,8 +204,8 @@ export default function DashboardCharts({
             <YAxis allowDecimals={false} tickLine={false} axisLine={false} />
             <Tooltip content={<ChartTooltip />} />
             <Bar
-              dataKey="patients"
-              fill="var(--color-patients)"
+              dataKey={barDataKey}
+              fill={barColor}
               radius={[6, 6, 0, 0]}
             />
           </BarChart>

@@ -15,9 +15,12 @@ export const metadata: Metadata = {
 export default async function Home() {
   const session = await getServerSession();
   const isAdmin = session.role === "admin";
+  const isAdminRole = session.role === "admin" || session.role === "sub_admin";
+  const wardIdsKey = isAdminRole ? undefined : (session.wardIds || []).slice().sort().join(",");
+
   const [dashboardData, dailyPatientData] = await Promise.all([
     getDashboardData(),
-    getDailyPatientData(),
+    getDailyPatientData(wardIdsKey),
   ]);
 
   const visibleWards = dashboardData.wards.filter((ward) =>
@@ -25,7 +28,16 @@ export default async function Home() {
   );
 
   const wardsForCards = isAdmin ? dashboardData.wards : visibleWards;
-  const wardsByOccupancy = [...wardsForCards].sort((left, right) => {
+  
+  // Sort wards: Assigned wards first, then other wards, sorted by occupancy
+  const wardsSorted = [...wardsForCards].sort((left, right) => {
+    const leftAssigned = session.wardIds?.includes(left.wardId) ? 1 : 0;
+    const rightAssigned = session.wardIds?.includes(right.wardId) ? 1 : 0;
+
+    if (leftAssigned !== rightAssigned) {
+      return rightAssigned - leftAssigned; // Assigned first
+    }
+
     const occupancyA =
       left.totalBeds === 0 ? 0 : left.occupiedBeds / left.totalBeds;
     const occupancyB =
@@ -122,16 +134,23 @@ export default async function Home() {
             <h2 className="text-2xl font-bold text-gray-800">Wards</h2>
           </div>
           <div className="flex flex-col gap-6">
-            {wardsByOccupancy.map((ward) => (
+            {wardsSorted.map((ward) => (
               <div
                 key={ward.id}
                 className="rounded-2xl border border-slate-200 p-5 shadow-sm transition hover:shadow-md"
               >
                 <div className="mb-4 flex flex-col md:flex-row items-start md:items-center justify-between">
                   <div>
-                    <h3 className="text-xl font-bold text-slate-900">
-                      {ward.name}
-                    </h3>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h3 className="text-xl font-bold text-slate-900">
+                        {ward.name}
+                      </h3>
+                      {session.wardIds?.includes(ward.wardId) && (
+                        <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-800">
+                          Assigned Ward
+                        </span>
+                      )}
+                    </div>
                     <p className="text-sm text-slate-500">{ward.wardId}</p>
                   </div>
                   <div className="flex justify-center md:justify-end w-full md:w-auto">
