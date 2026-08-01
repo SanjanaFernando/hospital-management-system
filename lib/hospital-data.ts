@@ -118,6 +118,20 @@ function serializeDoc(value: unknown): unknown {
   return value;
 }
 
+export function toNumericPatientId(rawId?: any): string {
+  const s = String(rawId || "").trim();
+  if (/^\d+$/.test(s)) return s;
+  const digits = s.replace(/\D/g, "");
+  if (digits.length >= 4) return digits.slice(-6);
+  let hash = 0;
+  for (let i = 0; i < s.length; i++) {
+    hash = (hash << 5) - hash + s.charCodeAt(i);
+    hash |= 0;
+  }
+  const num = (Math.abs(hash) % 90000) + 10000;
+  return String(num);
+}
+
 function toId(doc: MongoDoc): string {
   return String(doc.id || doc.bedId || doc.wardId || doc._id || "");
 }
@@ -131,12 +145,17 @@ function normalizePatient(doc: MongoDoc): Patient {
 
   return {
     _id: serialized._id ? String(serialized._id) : undefined,
-    id: String(serialized.id || serialized._id || ""),
+    id: toNumericPatientId(serialized.id || serialized._id),
     name: String(serialized.name || ""),
     age: Number(serialized.age || 0),
     ageGroup: (serialized.ageGroup as Patient["ageGroup"]) || "Adult",
     gender: serialized.gender as Patient["gender"],
     disease: String(serialized.disease || ""),
+    previousDiseases: Array.isArray(serialized.previousDiseases)
+      ? (serialized.previousDiseases as string[])
+      : serialized.previousDiseases
+      ? [String(serialized.previousDiseases)]
+      : [],
     priority: (serialized.priority as Patient["priority"]) || "Triage 5",
     admissionTime: serialized.admissionTime
       ? new Date(String(serialized.admissionTime))

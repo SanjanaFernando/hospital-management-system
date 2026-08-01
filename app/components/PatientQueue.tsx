@@ -293,8 +293,11 @@ export default function PatientQueue({
             >
               <div className="flex justify-between items-start mb-2">
                 <div>
-                  <p className="font-semibold">
-                    {index + 1}. {patient.name}
+                  <p className="font-semibold flex items-center gap-1.5 flex-wrap">
+                    <span>{index + 1}. {patient.name}</span>
+                    <span className="text-xs font-mono font-semibold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">
+                      #{patient.id}
+                    </span>
                   </p>
                   <p className="text-sm flex flex-wrap gap-2 mt-1">
                     <span
@@ -305,6 +308,11 @@ export default function PatientQueue({
                     <span className="px-2 py-1 rounded text-xs font-medium bg-gray-200">
                       {patient.disease}
                     </span>
+                    {patient.previousDiseases && patient.previousDiseases.length > 0 && (
+                      <span className="px-2 py-1 rounded text-xs font-medium bg-purple-100 text-purple-800" title={`Previous history: ${patient.previousDiseases.join(", ")}`}>
+                        History: {patient.previousDiseases.slice(0, 2).join(", ")}{patient.previousDiseases.length > 2 ? "..." : ""}
+                      </span>
+                    )}
                     {patient.triageRequested && (
                       <span className="px-2 py-1 rounded text-xs font-semibold bg-amber-200 text-amber-900">
                         Pending Triage

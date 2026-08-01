@@ -12,6 +12,11 @@ interface PatientRegistrationFormProps {
   onCancel: () => void;
 }
 
+import {
+  searchExistingPatients,
+  ExistingPatientSearchResult,
+} from "@/app/actions/patientActions";
+
 const diseases = [
   "Hypertension",
   "Diabetes",
@@ -43,6 +48,19 @@ const specialRequirements = [
   "Isolation Required",
 ];
 
+const commonPreviousDiseases = [
+  "Hypertension",
+  "Diabetes",
+  "Asthma",
+  "Heart Disease",
+  "Kidney Disease",
+  "Stroke",
+  "Cancer",
+  "Thyroid Disorder",
+  "Arthritis",
+  "Tuberculosis",
+];
+
 export default function PatientRegistrationForm({
   wardId,
   onSuccess,
@@ -50,12 +68,21 @@ export default function PatientRegistrationForm({
 }: PatientRegistrationFormProps) {
   const { session } = useAuthSession();
   const [formData, setFormData] = useState({
+    patientId: String(Math.floor(10000 + Math.random() * 90000)),
     name: "",
     age: 0,
     disease: "Hypertension",
+    previousDiseases: [] as string[],
+    customPreviousDisease: "",
     priority: "Triage 5" as Priority,
     specialRequirements: [] as string[],
   });
+
+  const [searchResults, setSearchResults] = useState<ExistingPatientSearchResult[]>([]);
+  const [idSearchResults, setIdSearchResults] = useState<ExistingPatientSearchResult[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [selectedReturningPatient, setSelectedReturningPatient] =
+    useState<ExistingPatientSearchResult | null>(null);
 
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
@@ -64,13 +91,101 @@ export default function PatientRegistrationForm({
   const canRegister = canRegisterPatient(session, wardId);
   const triageEditable = canSetTriage(session, wardId);
 
+  const selectReturningPatient = (patient: ExistingPatientSearchResult) => {
+    setSelectedReturningPatient(patient);
+    const combinedDiseases = Array.from(
+      new Set(
+        [...patient.previousDiseases, patient.disease].filter(Boolean)
+      )
+    );
+
+    setFormData((prev) => ({
+      ...prev,
+      patientId: patient.id,
+      name: patient.name,
+      age: patient.age || prev.age,
+      previousDiseases: combinedDiseases,
+    }));
+    setSearchResults([]);
+    setIdSearchResults([]);
+  };
+
+  const handlePatientIdChange = async (idVal: string) => {
+    setFormData((prev) => ({ ...prev, patientId: idVal }));
+    const trimmed = idVal.trim();
+    if (trimmed.length >= 2) {
+      try {
+        const results = await searchExistingPatients(trimmed);
+        setIdSearchResults(results);
+        const exactMatch = results.find((p) => p.id === trimmed);
+        if (exactMatch) {
+          selectReturningPatient(exactMatch);
+        }
+      } catch {
+        // Ignore errors
+      }
+    } else {
+      setIdSearchResults([]);
+    }
+  };
+
+  const handlePatientIdBlur = async () => {
+    const trimmed = formData.patientId.trim();
+    if (trimmed.length >= 2 && !selectedReturningPatient) {
+      try {
+        const results = await searchExistingPatients(trimmed);
+        const exactMatch = results.find((p) => p.id === trimmed);
+        if (exactMatch) {
+          selectReturningPatient(exactMatch);
+        }
+      } catch {
+        // Ignore errors
+      }
+    }
+  };
+
+  const handleNameChange = async (nameVal: string) => {
+    setFormData((prev) => ({ ...prev, name: nameVal }));
+    setSelectedReturningPatient(null);
+    if (nameVal.trim().length >= 2) {
+      setIsSearching(true);
+      try {
+        const results = await searchExistingPatients(nameVal.trim());
+        setSearchResults(results);
+      } catch {
+        // Ignore errors
+      } finally {
+        setIsSearching(false);
+      }
+    } else {
+      setSearchResults([]);
+    }
+  };
+
   const handleInputChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
   ) => {
     const { name, value } = e.target;
+    if (name === "name") {
+      void handleNameChange(value);
+      return;
+    }
+    if (name === "patientId") {
+      void handlePatientIdChange(value);
+      return;
+    }
     setFormData((prev) => ({
       ...prev,
       [name]: name === "age" ? parseInt(value) || "" : value,
+    }));
+  };
+
+  const handlePreviousDiseaseToggle = (disease: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      previousDiseases: prev.previousDiseases.includes(disease)
+        ? prev.previousDiseases.filter((d) => d !== disease)
+        : [...prev.previousDiseases, disease],
     }));
   };
 
@@ -84,6 +199,10 @@ export default function PatientRegistrationForm({
   };
 
   const validateForm = (): boolean => {
+    if (!formData.patientId.trim() || !/^\d+$/.test(formData.patientId.trim())) {
+      setErrorMessage("Patient ID must be a numerical value (digits only, e.g. 10024)");
+      return false;
+    }
     if (!formData.name.trim()) {
       setErrorMessage("Patient name is required");
       return false;
@@ -116,12 +235,18 @@ export default function PatientRegistrationForm({
     setIsLoading(true);
 
     try {
+      const allPrevious = [...formData.previousDiseases];
+      if (formData.customPreviousDisease.trim()) {
+        allPrevious.push(formData.customPreviousDisease.trim());
+      }
+
       const patientData = {
-        id: `patient-${Date.now()}`,
+        id: formData.patientId.trim(),
         name: formData.name.trim(),
         age: formData.age,
         ageGroup: determineAgeGroup(formData.age),
         disease: formData.disease,
+        previousDiseases: allPrevious.length > 0 ? allPrevious : undefined,
         priority: triageEditable ? formData.priority : "Triage 5",
         triageRequested: !triageEditable,
         admissionTime: new Date(),
@@ -135,14 +260,17 @@ export default function PatientRegistrationForm({
 
       await createPatient(patientData, session);
       setSuccessMessage(
-        `${formData.name} has been registered successfully and added to the queue!`
+        `${formData.name} (ID: #${patientData.id}) has been registered successfully!`
       );
 
-      // Reset form
+      // Reset form with new auto-generated numeric ID
       setFormData({
+        patientId: String(Math.floor(10000 + Math.random() * 90000)),
         name: "",
         age: 0,
         disease: "Hypertension",
+        previousDiseases: [],
+        customPreviousDisease: "",
         priority: "Triage 5",
         specialRequirements: [],
       });
@@ -200,8 +328,58 @@ export default function PatientRegistrationForm({
       </h2>
 
       <form onSubmit={handleSubmit} className="space-y-6">
+        {/* Patient ID */}
+        <div className="relative">
+          <label className="block text-sm font-semibold text-gray-700 mb-2">
+            Patient ID (Numeric) *
+          </label>
+          <input
+            type="text"
+            name="patientId"
+            value={formData.patientId}
+            onChange={handleInputChange}
+            onBlur={() => void handlePatientIdBlur()}
+            placeholder="e.g. 10024 (type previous ID to auto-fill)"
+            pattern="\d+"
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg text-black focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono font-bold"
+            required
+            autoComplete="off"
+          />
+          <p className="mt-1 text-xs text-gray-500">
+            Type previous Patient ID to auto-fill returning patient details.
+          </p>
+
+          {/* Returning Patient Auto-complete Dropdown for ID */}
+          {idSearchResults.length > 0 && (
+            <div className="absolute left-0 right-0 top-full z-50 mt-1 bg-white border border-blue-300 rounded-lg shadow-xl max-h-56 overflow-y-auto">
+              <div className="bg-blue-50 px-3 py-1.5 border-b border-blue-200 text-xs font-semibold text-blue-900">
+                🔍 Matching Patient ID Records (Click to auto-fill details):
+              </div>
+              {idSearchResults.map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => selectReturningPatient(p)}
+                  className="w-full text-left px-4 py-2.5 hover:bg-blue-50 border-b border-gray-100 last:border-0 transition-colors flex items-center justify-between"
+                >
+                  <div>
+                    <span className="font-semibold text-sm text-gray-900">#{p.id} - {p.name}</span>
+                    <span className="ml-2 text-xs text-gray-500">({p.age} yrs)</span>
+                    <p className="text-xs text-purple-700 mt-0.5">
+                      Past Diagnoses: {p.previousDiseases.length > 0 ? p.previousDiseases.join(", ") : p.disease || "None"}
+                    </p>
+                  </div>
+                  <span className="bg-blue-100 text-blue-900 px-2 py-0.5 rounded text-xs font-bold shrink-0">
+                    Auto-Fill
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
         {/* Name */}
-        <div>
+        <div className="relative">
           <label className="block text-sm font-semibold text-gray-700 mb-2">
             Patient Name *
           </label>
@@ -210,10 +388,56 @@ export default function PatientRegistrationForm({
             name="name"
             value={formData.name}
             onChange={handleInputChange}
-            placeholder="Enter patient full name"
+            placeholder="Type patient full name (returning patients will auto-match)"
             className="w-full px-4 py-2 border border-gray-300 rounded-lg text-black focus:outline-none focus:ring-2 focus:ring-blue-500"
             required
+            autoComplete="off"
           />
+
+          {/* Returning Patient Auto-complete Dropdown */}
+          {searchResults.length > 0 && (
+            <div className="absolute left-0 right-0 top-full z-50 mt-1 bg-white border border-blue-300 rounded-lg shadow-xl max-h-56 overflow-y-auto">
+              <div className="bg-blue-50 px-3 py-1.5 border-b border-blue-200 text-xs font-semibold text-blue-900">
+                🔍 Matching Existing Patients (Click to reuse Patient ID & Medical History):
+              </div>
+              {searchResults.map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => selectReturningPatient(p)}
+                  className="w-full text-left px-4 py-2.5 hover:bg-blue-50 border-b border-gray-100 last:border-0 transition-colors flex items-center justify-between"
+                >
+                  <div>
+                    <span className="font-semibold text-sm text-gray-900">{p.name}</span>
+                    <span className="ml-2 text-xs text-gray-500">({p.age} yrs)</span>
+                    <p className="text-xs text-purple-700 mt-0.5">
+                      Past Diagnoses: {p.previousDiseases.length > 0 ? p.previousDiseases.join(", ") : p.disease || "None"}
+                    </p>
+                  </div>
+                  <span className="bg-purple-100 text-purple-900 px-2.5 py-1 rounded font-mono text-xs font-bold shrink-0">
+                    ID #{p.id}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Returning Patient Banner */}
+          {selectedReturningPatient && (
+            <div className="mt-2 flex items-center justify-between bg-purple-50 border border-purple-300 rounded-lg px-3 py-2 text-xs text-purple-900">
+              <div>
+                <span className="font-bold">🔄 Returning Patient Selected:</span> Reusing Patient ID{" "}
+                <span className="font-mono font-bold">#{selectedReturningPatient.id}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedReturningPatient(null)}
+                className="text-purple-700 hover:text-purple-900 font-bold ml-2 underline"
+              >
+                Clear
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Age */}
@@ -234,10 +458,10 @@ export default function PatientRegistrationForm({
           />
         </div>
 
-        {/* Disease */}
+        {/* Disease / Current Condition */}
         <div>
           <label className="block text-sm font-semibold text-gray-700 mb-2">
-            Disease/Condition *
+            Current Disease/Condition *
           </label>
           <select
             name="disease"
@@ -251,6 +475,43 @@ export default function PatientRegistrationForm({
               </option>
             ))}
           </select>
+        </div>
+
+        {/* Previous Diseases / Medical History */}
+        <div className="bg-purple-50/70 border border-purple-200 rounded-lg p-4">
+          <label className="block text-sm font-semibold text-purple-900 mb-1">
+            Previous Diseases / Medical History
+          </label>
+          <p className="text-xs text-purple-700 mb-3">
+            Select any prior medical conditions or diagnoses this patient has had:
+          </p>
+          <div className="grid grid-cols-2 gap-2.5 mb-3">
+            {commonPreviousDiseases.map((disease) => (
+              <label
+                key={disease}
+                className="flex items-center space-x-2 cursor-pointer select-none"
+              >
+                <input
+                  type="checkbox"
+                  checked={formData.previousDiseases.includes(disease)}
+                  onChange={() => handlePreviousDiseaseToggle(disease)}
+                  className="w-4 h-4 text-purple-600 rounded focus:ring-2 focus:ring-purple-500"
+                />
+                <span className="text-xs font-medium text-purple-900">{disease}</span>
+              </label>
+            ))}
+          </div>
+
+          <div className="mt-2">
+            <input
+              type="text"
+              name="customPreviousDisease"
+              value={formData.customPreviousDisease}
+              onChange={handleInputChange}
+              placeholder="Other previous disease / medical history (optional)"
+              className="w-full px-3 py-1.5 border border-purple-200 rounded text-xs text-black focus:outline-none focus:ring-2 focus:ring-purple-500 bg-white"
+            />
+          </div>
         </div>
 
         {/* Priority */}

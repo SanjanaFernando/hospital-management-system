@@ -18,6 +18,7 @@ import {
   UserRound,
   Users,
   Waves,
+  ShieldCheck,
 } from "lucide-react";
 import { AuthSessionProvider } from "@/app/context/AuthSessionContext";
 import { useAuthSession } from "@/app/context/AuthSessionContext";
@@ -140,6 +141,7 @@ function AppShellContent({ children }: PropsWithChildren) {
     },
     { label: "Reports", href: "/reports", icon: ClipboardSignature },
     { label: "User Management", href: "/admin/users", icon: Users, adminOnly: true },
+    { label: "Role Management", href: "/admin/roles", icon: ShieldCheck, adminOnly: true },
     { label: "User Logs", href: "/admin/logs", icon: ScrollText, adminOnly: true },
   ];
 
