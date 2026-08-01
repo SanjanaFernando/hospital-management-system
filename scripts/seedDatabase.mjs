@@ -146,6 +146,8 @@ function ageGroupFromAge(age) {
   return "Elderly";
 }
 
+let patientCounter = 10001;
+
 function generatePatient(patientId, wardId, status) {
   const firstName = randomItem(FIRST_NAMES);
   const lastName = randomItem(LAST_NAMES);
@@ -159,8 +161,15 @@ function generatePatient(patientId, wardId, status) {
     ? [randomItem(SPECIAL_REQUIREMENTS)]
     : undefined;
 
+  const hasPrevDiseases = Math.random() < 0.6;
+  const previousDiseases = hasPrevDiseases
+    ? [randomItem(DISEASES)]
+    : [];
+
+  const numericId = String(patientCounter++);
+
   return {
-    id: patientId,
+    id: numericId,
     wardId,
     status,
     name: `${firstName} ${lastName}`,
@@ -168,6 +177,7 @@ function generatePatient(patientId, wardId, status) {
     ageGroup: ageGroupFromAge(age),
     gender: Math.random() < 0.5 ? "Male" : "Female",
     disease: randomItem(DISEASES),
+    previousDiseases,
     priority: generatePriority(),
     admissionTime,
     queueWaitTime: randomInt(10, 480),

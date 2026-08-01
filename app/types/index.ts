@@ -39,12 +39,13 @@ export interface AuthUser {
 
 export interface Patient {
   _id?: string;
-  id: string;
+  id: string; // Numerical Patient ID
   name: string;
   age: number;
   ageGroup: AgeGroup;
   gender?: Gender;
   disease: string;
+  previousDiseases?: string[];
   priority: Priority;
   admissionTime: Date;
   dischargeTime?: Date;
@@ -195,3 +196,51 @@ export interface ChatUser {
   displayName: string;
   role: StaffRole;
 }
+
+// ---------------------------------------------------------------------------
+// Role Permissions
+// ---------------------------------------------------------------------------
+
+export type PermissionKey =
+  | "register_patient"
+  | "admit_patient"
+  | "discharge_patient"
+  | "set_triage"
+  | "move_patient_cross_ward"
+  | "update_bed_status"
+  | "assign_bed"
+  | "view_queue"
+  | "reorder_queue"
+  | "view_reports"
+  | "view_logs"
+  | "manage_users"
+  | "manage_roles"
+  | "send_broadcast";
+
+export type RolePermissionsMap = Record<PermissionKey, boolean>;
+
+export interface RolePermissionsConfig {
+  _id?: string;
+  role: StaffRole;
+  permissions: RolePermissionsMap;
+  updatedAt?: Date;
+  updatedBy?: string;
+}
+
+/** All roles permission snapshot — keyed by StaffRole */
+export type AllRolePermissions = Record<StaffRole, RolePermissionsMap>;
+
+// ---------------------------------------------------------------------------
+// Custom Roles (user-defined, stored in MongoDB)
+// ---------------------------------------------------------------------------
+
+export interface CustomRole {
+  /** URL-safe slug, e.g. "senior_nurse" */
+  id: string;
+  /** Human-readable label, e.g. "Senior Nurse" */
+  label: string;
+  createdAt: Date;
+  createdBy?: string;
+}
+
+

@@ -263,6 +263,24 @@ export default function PatientDetail({
         )}
       </div>
 
+      {patient.previousDiseases && patient.previousDiseases.length > 0 && (
+        <div className="bg-purple-50 border border-purple-200 rounded p-4 mb-4">
+          <p className="text-sm font-semibold text-purple-900 mb-2">
+            Previous Diseases / Medical History
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {patient.previousDiseases.map((prevDis, index) => (
+              <span
+                key={index}
+                className="bg-purple-200 text-purple-900 px-3 py-1 rounded-full text-xs font-semibold"
+              >
+                {prevDis}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
       {patient.specialRequirements &&
         patient.specialRequirements.length > 0 && (
           <div className="bg-yellow-50 border border-yellow-200 rounded p-4">
