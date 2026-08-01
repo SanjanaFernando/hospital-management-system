@@ -26,6 +26,7 @@ import { Ward } from "@/app/types";
 import { ROLE_LABELS } from "@/lib/rbac";
 import { UserSession } from "@/app/types";
 import NotificationPanel from "./NotificationPanel";
+import ChatWidget from "./ChatWidget";
 
 interface SidebarItem {
   label: string;
@@ -492,6 +493,9 @@ function AppShellContent({ children }: PropsWithChildren) {
           {children}
         </main>
       </div>
+
+      {/* Floating chat widget — always visible on authenticated pages */}
+      <ChatWidget session={session} />
     </div>
   );
 }
