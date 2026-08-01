@@ -1,10 +1,11 @@
-"use client";
-
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { createPatient } from "@/app/utils/api";
-import { Priority, AgeGroup } from "@/app/types";
+import { Priority, AgeGroup, WardFormField } from "@/app/types";
 import { useAuthSession } from "@/app/context/AuthSessionContext";
-import { canRegisterPatient, canSetTriage } from "@/lib/rbac";
+import { canRegisterPatient, canSetTriage, canManageStaff } from "@/lib/rbac";
+import { getWardFormConfig } from "@/app/actions/wardFormActions";
+import WardFormEditorModal from "@/app/components/WardFormEditorModal";
+import { Settings2, Edit3 } from "lucide-react";
 
 interface PatientRegistrationFormProps {
   wardId: string;
@@ -67,6 +68,8 @@ export default function PatientRegistrationForm({
   onCancel,
 }: PatientRegistrationFormProps) {
   const { session } = useAuthSession();
+  const isAdminOrSubAdmin = canManageStaff(session);
+
   const [formData, setFormData] = useState({
     patientId: String(Math.floor(10000 + Math.random() * 90000)),
     name: "",
@@ -77,6 +80,10 @@ export default function PatientRegistrationForm({
     priority: "Triage 5" as Priority,
     specialRequirements: [] as string[],
   });
+
+  const [wardFields, setWardFields] = useState<WardFormField[]>([]);
+  const [customFieldsData, setCustomFieldsData] = useState<Record<string, any>>({});
+  const [showEditorModal, setShowEditorModal] = useState(false);
 
   const [searchResults, setSearchResults] = useState<ExistingPatientSearchResult[]>([]);
   const [idSearchResults, setIdSearchResults] = useState<ExistingPatientSearchResult[]>([]);
@@ -90,6 +97,25 @@ export default function PatientRegistrationForm({
 
   const canRegister = canRegisterPatient(session, wardId);
   const triageEditable = canSetTriage(session, wardId);
+
+  const loadWardFields = () => {
+    if (wardId) {
+      getWardFormConfig(wardId).then((fields) => {
+        setWardFields(fields);
+      });
+    }
+  };
+
+  useEffect(() => {
+    loadWardFields();
+  }, [wardId]);
+
+  const handleCustomFieldChange = (fieldId: string, val: any) => {
+    setCustomFieldsData((prev) => ({
+      ...prev,
+      [fieldId]: val,
+    }));
+  };
 
   const selectReturningPatient = (patient: ExistingPatientSearchResult) => {
     setSelectedReturningPatient(patient);
@@ -211,6 +237,22 @@ export default function PatientRegistrationForm({
       setErrorMessage("Please enter a valid age (1-150)");
       return false;
     }
+
+    // Validate required custom fields
+    for (const field of wardFields) {
+      if (field.required) {
+        const val = customFieldsData[field.id];
+        if (
+          val === undefined ||
+          val === null ||
+          (typeof val === "string" && !val.trim())
+        ) {
+          setErrorMessage(`"${field.label}" is required for this ward.`);
+          return false;
+        }
+      }
+    }
+
     return true;
   };
 
@@ -254,6 +296,8 @@ export default function PatientRegistrationForm({
           formData.specialRequirements.length > 0
             ? formData.specialRequirements
             : undefined,
+        customFields:
+          Object.keys(customFieldsData).length > 0 ? customFieldsData : undefined,
         wardId,
         status: "queued",
       };
@@ -542,6 +586,111 @@ export default function PatientRegistrationForm({
           )}
         </div>
 
+        {/* Ward-Specific Custom Fields */}
+        {wardFields.length > 0 && (
+          <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 space-y-4">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-semibold text-slate-800">
+                Ward Specific Details ({wardId.toUpperCase()})
+              </p>
+              {isAdminOrSubAdmin && (
+                <button
+                  type="button"
+                  onClick={() => setShowEditorModal(true)}
+                  className="inline-flex items-center gap-1 text-[11px] font-semibold text-teal-700 hover:text-teal-900 bg-teal-50 border border-teal-200 px-2.5 py-1 rounded-md transition"
+                >
+                  <Edit3 className="w-3 h-3" />
+                  Edit Ward Form Fields
+                </button>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {wardFields.map((field) => (
+                <div
+                  key={field.id}
+                  className={field.type === "textarea" ? "sm:col-span-2" : ""}
+                >
+                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                    {field.label} {field.required && <span className="text-red-500">*</span>}
+                  </label>
+
+                  {field.type === "text" && (
+                    <input
+                      type="text"
+                      value={customFieldsData[field.id] || ""}
+                      onChange={(e) => handleCustomFieldChange(field.id, e.target.value)}
+                      placeholder={field.placeholder || `Enter ${field.label}`}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-black focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                      required={field.required}
+                    />
+                  )}
+
+                  {field.type === "number" && (
+                    <input
+                      type="number"
+                      value={customFieldsData[field.id] || ""}
+                      onChange={(e) => handleCustomFieldChange(field.id, e.target.value)}
+                      placeholder={field.placeholder || `Enter ${field.label}`}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-black focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-sm"
+                      required={field.required}
+                    />
+                  )}
+
+                  {field.type === "select" && (
+                    <select
+                      value={customFieldsData[field.id] || ""}
+                      onChange={(e) => handleCustomFieldChange(field.id, e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-black focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-sm"
+                      required={field.required}
+                    >
+                      <option value="">{field.placeholder || `-- Select ${field.label} --`}</option>
+                      {field.options?.map((opt) => (
+                        <option key={opt} value={opt}>
+                          {opt}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+
+                  {field.type === "checkbox" && (
+                    <label className="flex items-center gap-2 cursor-pointer pt-1">
+                      <input
+                        type="checkbox"
+                        checked={Boolean(customFieldsData[field.id])}
+                        onChange={(e) => handleCustomFieldChange(field.id, e.target.checked)}
+                        className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
+                      />
+                      <span className="text-xs text-slate-700 font-medium">Yes / Confirmed</span>
+                    </label>
+                  )}
+
+                  {field.type === "textarea" && (
+                    <textarea
+                      rows={3}
+                      value={customFieldsData[field.id] || ""}
+                      onChange={(e) => handleCustomFieldChange(field.id, e.target.value)}
+                      placeholder={field.placeholder || `Enter ${field.label}`}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-black focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-sm"
+                      required={field.required}
+                    />
+                  )}
+
+                  {field.type === "date" && (
+                    <input
+                      type="date"
+                      value={customFieldsData[field.id] || ""}
+                      onChange={(e) => handleCustomFieldChange(field.id, e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-black focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-sm"
+                      required={field.required}
+                    />
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Special Requirements */}
         <div>
           <label className="block text-sm font-semibold text-gray-700 mb-3">
@@ -564,6 +713,32 @@ export default function PatientRegistrationForm({
             ))}
           </div>
         </div>
+
+        {/* Ward Form Config Editor Trigger for Admins */}
+        {isAdminOrSubAdmin && (
+          <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+            <span>Admin Control: Edit fields for {wardId.toUpperCase()}</span>
+            <button
+              type="button"
+              onClick={() => setShowEditorModal(true)}
+              className="inline-flex items-center gap-1.5 font-semibold text-teal-700 hover:text-teal-900 underline"
+            >
+              <Settings2 className="w-3.5 h-3.5" />
+              Form Schema Editor
+            </button>
+          </div>
+        )}
+
+        {/* Ward Form Editor Modal */}
+        {showEditorModal && (
+          <WardFormEditorModal
+            wardId={wardId}
+            wardName={`Ward ${wardId}`}
+            isOpen={showEditorModal}
+            onClose={() => setShowEditorModal(false)}
+            onSaved={() => loadWardFields()}
+          />
+        )}
 
         {/* Error Message */}
         {errorMessage && (

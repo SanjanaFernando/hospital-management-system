@@ -236,3 +236,178 @@ export async function addBedToWard(
     };
   }
 }
+
+// ---------------------------------------------------------------------------
+// Ward CRUD Operations (Admins & Sub-Admins)
+// ---------------------------------------------------------------------------
+
+export async function createWardAction(
+  name: string,
+  wardIdInput?: string,
+  normalBedsCount: number = 20,
+  icuBedsCount: number = 4,
+  actor?: UserSession
+): Promise<{ success: boolean; wardId?: string; error?: string }> {
+  try {
+    const session = normalizeSession(actor || { role: "admin" });
+    if (session.role !== "admin" && session.role !== "sub_admin") {
+      return { success: false, error: "Only Admins and Sub-Admins can create wards." };
+    }
+
+    const trimmedName = name.trim();
+    if (!trimmedName) {
+      return { success: false, error: "Ward name is required." };
+    }
+
+    const { db } = await connectToDatabase();
+
+    // Determine wardId slug
+    let rawSlug = (wardIdInput || trimmedName)
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+
+    if (!rawSlug.startsWith("ward-") && !/^\d+$/.test(rawSlug)) {
+      rawSlug = `ward-${rawSlug}`;
+    }
+
+    // Check if wardId already exists
+    const existing = await db.collection("wards").findOne({ wardId: rawSlug });
+    if (existing) {
+      return { success: false, error: `A ward with ID "${rawSlug}" already exists.` };
+    }
+
+    const now = new Date();
+
+    // Insert ward document
+    await db.collection("wards").insertOne({
+      wardId: rawSlug,
+      name: trimmedName,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    // Create normal beds
+    const bedsToInsert: Array<Record<string, unknown>> = [];
+    for (let i = 1; i <= normalBedsCount; i++) {
+      bedsToInsert.push({
+        bedId: `${rawSlug}-normal-${i}`,
+        wardId: rawSlug,
+        bedNumber: i,
+        type: "NORMAL",
+        status: "available",
+        patientId: null,
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
+
+    // Create ICU beds
+    for (let i = 1; i <= icuBedsCount; i++) {
+      bedsToInsert.push({
+        bedId: `${rawSlug}-icu-${i}`,
+        wardId: rawSlug,
+        bedNumber: i,
+        type: "ICU",
+        status: "available",
+        patientId: null,
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
+
+    if (bedsToInsert.length > 0) {
+      await db.collection("beds").insertMany(bedsToInsert);
+    }
+
+    revalidateTag("wards", "max");
+    revalidateTag("beds", "max");
+    revalidateTag("dashboard", "max");
+
+    return { success: true, wardId: rawSlug };
+  } catch (error) {
+    console.error("❌ Error creating ward:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to create ward.",
+    };
+  }
+}
+
+export async function updateWardAction(
+  wardId: string,
+  input: { name?: string },
+  actor?: UserSession
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const session = normalizeSession(actor || { role: "admin" });
+    if (session.role !== "admin" && session.role !== "sub_admin") {
+      return { success: false, error: "Only Admins and Sub-Admins can edit wards." };
+    }
+
+    if (!wardId) return { success: false, error: "Ward ID is required." };
+
+    const { db } = await connectToDatabase();
+    const updateData: Record<string, unknown> = { updatedAt: new Date() };
+
+    if (input.name && input.name.trim()) {
+      updateData.name = input.name.trim();
+    }
+
+    const result = await db
+      .collection("wards")
+      .updateOne({ wardId }, { $set: updateData });
+
+    if (result.matchedCount === 0) {
+      return { success: false, error: "Ward not found." };
+    }
+
+    revalidateTag("wards", "max");
+    revalidateTag("dashboard", "max");
+
+    return { success: true };
+  } catch (error) {
+    console.error("❌ Error updating ward:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to update ward.",
+    };
+  }
+}
+
+export async function deleteWardAction(
+  wardId: string,
+  actor?: UserSession
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const session = normalizeSession(actor || { role: "admin" });
+    if (session.role !== "admin" && session.role !== "sub_admin") {
+      return { success: false, error: "Only Admins and Sub-Admins can delete wards." };
+    }
+
+    if (!wardId) return { success: false, error: "Ward ID is required." };
+
+    const { db } = await connectToDatabase();
+
+    // Delete ward, beds, and form configs
+    await Promise.all([
+      db.collection("wards").deleteOne({ wardId }),
+      db.collection("beds").deleteMany({ wardId }),
+      db.collection("ward_form_configs").deleteOne({ wardId }),
+    ]);
+
+    revalidateTag("wards", "max");
+    revalidateTag("beds", "max");
+    revalidateTag("dashboard", "max");
+
+    return { success: true };
+  } catch (error) {
+    console.error("❌ Error deleting ward:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to delete ward.",
+    };
+  }
+}
+

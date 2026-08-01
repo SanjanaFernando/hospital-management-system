@@ -170,6 +170,10 @@ function normalizePatient(doc: MongoDoc): Patient {
     specialRequirements: Array.isArray(serialized.specialRequirements)
       ? (serialized.specialRequirements as string[])
       : undefined,
+    customFields:
+      serialized.customFields && typeof serialized.customFields === "object"
+        ? (serialized.customFields as Record<string, any>)
+        : undefined,
     wardId: serialized.wardId ? String(serialized.wardId) : undefined,
     assignedFromWardId: serialized.assignedFromWardId
       ? String(serialized.assignedFromWardId)

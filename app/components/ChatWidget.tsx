@@ -867,20 +867,80 @@ export default function ChatWidget({ session }: ChatWidgetProps) {
   const [unread, setUnread] = useState(0);
   const [isMounted, setIsMounted] = useState(false);
   const [isPulsing, setIsPulsing] = useState(false);
+  const [newMsgNotice, setNewMsgNotice] = useState(false);
+
+  const widgetRef = useRef<HTMLDivElement>(null);
   const prevUnread = useRef(0);
+  const sessionRef = useRef(session);
+  const isOpenRef = useRef(isOpen);
+
+  sessionRef.current = session;
+  isOpenRef.current = isOpen;
 
   useEffect(() => {
     setIsMounted(true);
   }, []);
 
+  // Close chat when clicking anywhere outside the chat widget
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleClickOutside = (event: MouseEvent | TouchEvent) => {
+      if (
+        widgetRef.current &&
+        !widgetRef.current.contains(event.target as Node)
+      ) {
+        setIsOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("touchstart", handleClickOutside);
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("touchstart", handleClickOutside);
+    };
+  }, [isOpen]);
+
+  // Continuous background unread count poller every 3 seconds
+  useEffect(() => {
+    let isCancelled = false;
+
+    const pollUnread = async () => {
+      const currentSession = sessionRef.current;
+      if (!currentSession?.userId) return;
+
+      try {
+        const count = await getUnreadChatCount(currentSession);
+        if (isCancelled) return;
+
+        if (count > prevUnread.current && !isOpenRef.current) {
+          setIsPulsing(true);
+          setNewMsgNotice(true);
+          setTimeout(() => setIsPulsing(false), 3000);
+          setTimeout(() => setNewMsgNotice(false), 6000);
+        }
+        prevUnread.current = count;
+        setUnread(count);
+      } catch {
+        // Ignore background polling errors
+      }
+    };
+
+    void pollUnread();
+    const interval = setInterval(pollUnread, 3000);
+
+    return () => {
+      isCancelled = true;
+      clearInterval(interval);
+    };
+  }, []);
+
   const handleUnreadChange = useCallback((count: number) => {
-    if (count > prevUnread.current && !isOpen) {
-      setIsPulsing(true);
-      setTimeout(() => setIsPulsing(false), 1500);
-    }
     prevUnread.current = count;
     setUnread(count);
-  }, [isOpen]);
+  }, []);
 
   if (!isMounted) return null;
 
@@ -894,18 +954,21 @@ export default function ChatWidget({ session }: ChatWidgetProps) {
   }
 
   const widget = (
-    <>
+    <div ref={widgetRef}>
       {/* Floating button */}
       <button
         id="chat-widget-toggle"
         onClick={() => {
           setIsOpen((o) => !o);
           setIsPulsing(false);
+          setNewMsgNotice(false);
         }}
         aria-label={isOpen ? "Close chat" : "Open chat"}
         className={`fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full shadow-[0_8px_32px_rgba(0,0,0,0.45)] transition-all duration-300 focus:outline-none
           ${isOpen
             ? "bg-slate-700 hover:bg-slate-600 rotate-0 scale-95"
+            : unread > 0
+            ? "bg-teal-600 hover:bg-teal-500 ring-4 ring-teal-400/40 hover:scale-110"
             : "bg-teal-500 hover:bg-teal-400 hover:scale-110"
           }
           ${isPulsing ? "animate-bounce" : ""}
@@ -917,16 +980,16 @@ export default function ChatWidget({ session }: ChatWidgetProps) {
           <MessageCircle className="h-6 w-6 text-white" />
         )}
 
-        {/* Unread badge */}
+        {/* Unread badge with exact count number */}
         {!isOpen && unread > 0 && (
-          <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white ring-2 ring-white shadow-md">
-            {unread > 9 ? "9+" : unread}
+          <span className="absolute -top-1.5 -right-1.5 flex h-6 min-w-6 items-center justify-center rounded-full bg-red-600 text-xs font-black text-white ring-2 ring-white shadow-xl px-1.5 animate-in zoom-in-75 duration-200">
+            {unread > 99 ? "99+" : unread}
           </span>
         )}
 
         {/* Ripple effect when new message */}
-        {isPulsing && (
-          <span className="absolute inset-0 rounded-full bg-teal-400 animate-ping opacity-30" />
+        {(isPulsing || (!isOpen && unread > 0)) && (
+          <span className="absolute inset-0 rounded-full bg-teal-400 animate-ping opacity-20 pointer-events-none" />
         )}
       </button>
 
@@ -944,7 +1007,7 @@ export default function ChatWidget({ session }: ChatWidgetProps) {
           <ChatPanel session={session} onUnreadChange={handleUnreadChange} />
         </div>
       )}
-    </>
+    </div>
   );
 
   return createPortal(widget, document.body);

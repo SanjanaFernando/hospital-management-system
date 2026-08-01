@@ -327,26 +327,19 @@ export async function getUnreadChatCount(actor: UserSession): Promise<number> {
 
     const { db } = await connectToDatabase();
 
-    // Count DM conversations where user is in unreadBy
-    const dmCount = await db.collection("chat_conversations").countDocuments({
-      type: "dm",
-      participants: session.userId,
-      unreadBy: session.userId,
-    });
-
-    // Count broadcast messages (to all or to their role) that user hasn't read
-    const bcastCount = await db.collection("chat_messages").countDocuments({
-      recipientType: { $in: ["all", "role"] },
-      ...(session.role ? {} : {}),
-      readBy: { $ne: session.userId },
+    // Query all unread messages sent to this user or their role
+    const unreadCount = await db.collection("chat_messages").countDocuments({
       senderId: { $ne: session.userId },
+      readBy: { $ne: session.userId },
       $or: [
+        { recipientId: session.userId },
         { recipientType: "all" },
         { recipientType: "role", recipientRole: session.role },
+        { conversationId: { $regex: session.userId } },
       ],
     });
 
-    return dmCount + bcastCount;
+    return unreadCount;
   } catch (err) {
     console.error("getUnreadChatCount error:", err);
     return 0;

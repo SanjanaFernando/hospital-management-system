@@ -56,6 +56,32 @@ export interface Patient {
   status?: "queued" | "admitted" | "discharged";
   triageRequested?: boolean;
   queueReason?: string; // MAPPO explanation for this patient's queue rank, set by reorderQueueWithAi
+  customFields?: Record<string, any>; // Ward-specific custom fields data
+}
+
+// ---------------------------------------------------------------------------
+// Ward-Specific Dynamic Registration Form Configuration
+// ---------------------------------------------------------------------------
+
+export type WardFieldType = "text" | "number" | "select" | "checkbox" | "textarea" | "date";
+
+export interface WardFormField {
+  id: string;
+  label: string;
+  type: WardFieldType;
+  required?: boolean;
+  options?: string[]; // for "select" type
+  placeholder?: string;
+  defaultValue?: string;
+  category?: "general font" | "clinical font" | "custom font";
+}
+
+export interface WardFormConfig {
+  _id?: string;
+  wardId: string;
+  fields: WardFormField[];
+  updatedAt?: Date;
+  updatedBy?: string;
 }
 
 export interface QueuePrediction {
