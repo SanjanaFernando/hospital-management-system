@@ -148,3 +148,50 @@ export interface Notification {
   createdAt: Date;
   expiresAt?: Date;
 }
+
+// ---------------------------------------------------------------------------
+// Chat
+// ---------------------------------------------------------------------------
+
+export type ChatRecipientType = "user" | "all" | "role";
+
+export interface ChatMessage {
+  _id?: string;
+  id: string;
+  conversationId: string;
+  senderId: string;
+  senderName: string;
+  senderRole: StaffRole;
+  content: string;
+  recipientType: ChatRecipientType;
+  /** userId when recipientType==='user' */
+  recipientId?: string;
+  /** role name when recipientType==='role' */
+  recipientRole?: StaffRole;
+  readBy: string[];
+  createdAt: Date;
+  expiresAt?: Date;
+}
+
+export interface ChatConversation {
+  _id?: string;
+  id: string;
+  /** 'dm' for 1-on-1, 'broadcast' for group/role/all */
+  type: "dm" | "broadcast";
+  participants: string[];
+  participantNames: Record<string, string>;
+  lastMessage: string;
+  lastMessageAt: Date;
+  lastMessageBy: string;
+  recipientType?: ChatRecipientType;
+  recipientRole?: StaffRole;
+  unreadBy: string[];
+  createdAt: Date;
+}
+
+/** Lightweight user record used by the recipient picker */
+export interface ChatUser {
+  userId: string;
+  displayName: string;
+  role: StaffRole;
+}
