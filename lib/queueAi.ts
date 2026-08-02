@@ -92,7 +92,126 @@ function runPythonCommand(command: string[], input: string) {
   });
 }
 
-export function reorderQueueWithAi(input: QueueAiInput): QueueAiResult {
+// ---------------------------------------------------------------------------
+// HTTP inference path (used when QUEUE_AI_ENDPOINT env var is set)
+// This is the path used on Vercel / production deployments.
+// ---------------------------------------------------------------------------
+
+async function reorderViaHttp(input: QueueAiInput): Promise<QueueAiResult> {
+  const endpoint = process.env.QUEUE_AI_ENDPOINT!.replace(/\/$/, "");
+  const now = new Date();
+
+  const payload = {
+    targetWardId: input.targetWardId,
+    targetWardTotalBeds: input.targetWardTotalBeds ?? 0,
+    targetWardOccupiedBeds: input.targetWardOccupiedBeds ?? 0,
+    patientHistory: input.patientHistory,
+    // Use "targetWardQueue" key — matches what the FastAPI service expects
+    targetWardQueue: input.targetWardQueue.map((patient) => ({
+      ...patient,
+      patientId: patient.id,
+      id: patient.id,
+      name: patient.name,
+      triageLevel: priorityToTriageLevel(patient.priority),
+      waitMinutes: getWaitMinutes(patient, now),
+      triageRequested: Boolean(patient.triageRequested),
+    })),
+  };
+
+  let response: Response;
+  try {
+    response = await fetch(`${endpoint}/reorder`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(INFERENCE_TIMEOUT_MS),
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error("[queueAi] HTTP inference request failed:", message);
+    return {
+      orderedPatients: fallbackPrioritySort(input.targetWardQueue),
+      strategy: "priority",
+      message: "AI inference service unreachable. Using priority ordering.",
+    };
+  }
+
+  if (!response.ok) {
+    console.error("[queueAi] HTTP inference returned status", response.status);
+    return {
+      orderedPatients: fallbackPrioritySort(input.targetWardQueue),
+      strategy: "priority",
+      message: `AI inference service error (${response.status}). Using priority ordering.`,
+    };
+  }
+
+  let parsed: {
+    orderedPatientIds?: string[];
+    predictive_analytics?: {
+      enabled?: boolean;
+      surge_predicted?: boolean;
+      pred_load?: number;
+      pred_crit?: number;
+      expected_arrivals?: number;
+      expected_critical_patients?: number;
+      horizon_hours?: number;
+    };
+  };
+
+  try {
+    parsed = await response.json();
+  } catch {
+    console.error("[queueAi] Failed to parse HTTP inference response");
+    return {
+      orderedPatients: fallbackPrioritySort(input.targetWardQueue),
+      strategy: "priority",
+      message: "AI inference response invalid. Using priority ordering.",
+    };
+  }
+
+  const order = new Map(
+    (parsed.orderedPatientIds || []).map((patientId, index) => [patientId, index])
+  );
+  const orderedPatients = [...input.targetWardQueue].sort(
+    (a, b) =>
+      (order.get(a.id) ?? Number.MAX_SAFE_INTEGER) -
+      (order.get(b.id) ?? Number.MAX_SAFE_INTEGER)
+  );
+
+  const predictive = parsed.predictive_analytics;
+  const queuePrediction: QueuePrediction | undefined = predictive
+    ? {
+        enabled: predictive.enabled !== false,
+        load: predictive.pred_load,
+        criticalShare: predictive.pred_crit,
+        expectedArrivals: predictive.expected_arrivals,
+        expectedCriticalPatients: predictive.expected_critical_patients,
+        horizonHours: predictive.horizon_hours,
+        surgePredicted: Boolean(predictive.surge_predicted),
+      }
+    : undefined;
+
+  const forecastMessage =
+    queuePrediction?.expectedArrivals !== undefined
+      ? ` Expected ${queuePrediction.expectedArrivals} patients in the next ${queuePrediction.horizonHours ?? 6} hours; approximately ${queuePrediction.expectedCriticalPatients ?? 0} critical.`
+      : "";
+
+  return {
+    orderedPatients,
+    strategy: "ai",
+    message: orderedPatients[0]
+      ? `MAPPO+Predictive reordered queue. Top patient: ${orderedPatients[0].name}.${forecastMessage}`
+      : `MAPPO+Predictive reordered queue for ${input.targetWardName}.${forecastMessage}`,
+    queuePrediction,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Local subprocess inference path (used when QUEUE_AI_ENDPOINT is not set)
+// Works on your local machine where Python + model files exist.
+// ---------------------------------------------------------------------------
+
+function reorderViaSubprocess(input: QueueAiInput): QueueAiResult {
   const modelPath = resolveMappoModelPath(true);
   const forecasterProfilePath = resolveForecasterProfilePath();
   const usesSharedPredictiveModel = modelPath?.includes("best_mappo_shared_predictive") ?? false;
@@ -294,13 +413,38 @@ export function reorderQueueWithAi(input: QueueAiInput): QueueAiResult {
     }
   }
 
-  console.error("[queueAi] MAPPO inference failed:", lastError);
+  console.error("[queueAi] MAPPO subprocess inference failed:", lastError);
 
   return {
     orderedPatients: fallbackPrioritySort(input.targetWardQueue),
     strategy: "priority",
     message: "MAPPO inference unavailable. Using priority ordering.",
   };
+}
+
+// ---------------------------------------------------------------------------
+// Public entry point
+// ---------------------------------------------------------------------------
+
+/**
+ * Reorder the patient queue using AI inference.
+ *
+ * - When QUEUE_AI_ENDPOINT is set (Vercel / production): calls the Render
+ *   FastAPI service via HTTP.
+ * - When QUEUE_AI_ENDPOINT is not set (local dev): falls back to spawning
+ *   the Python subprocess directly (original behaviour).
+ *
+ * Always falls back to priority-based sorting if the AI path fails.
+ */
+export async function reorderQueueWithAi(input: QueueAiInput): Promise<QueueAiResult> {
+  const endpoint = process.env.QUEUE_AI_ENDPOINT;
+
+  if (endpoint) {
+    return reorderViaHttp(input);
+  }
+
+  // Local development — run Python subprocess synchronously
+  return reorderViaSubprocess(input);
 }
 
 function priorityToTriageLevel(priority: string): number {

@@ -1,0 +1,6 @@
+# HTTP framework
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.0
+
+# Scientific computing (torch installed separately via build command for CPU-only variant)
+numpy>=1.24.0

@@ -427,7 +427,7 @@ async function queryWardWithPatients(wardId: string): Promise<Ward | null> {
     };
   } else {
     // Use AI model to reorder the queue
-    const aiResult = reorderQueueWithAi({
+    const aiResult = await reorderQueueWithAi({
       targetWardId: effectiveWardId,
       targetWardName: String(ward.name || effectiveWardId),
       targetWardQueue: queuedPatients,
