@@ -3,7 +3,8 @@ FastAPI service for AI-driven patient queue reordering.
 Deployed on Render. Called by the Next.js app via HTTP instead of a local subprocess.
 
 Endpoints:
-  GET  /health   — liveness probe
+  GET  /health   — liveness / readiness probe
+  GET  /debug    — detailed diagnostics (file existence, model layout, env vars)
   POST /reorder  — run DDQN inference and return ordered patient IDs
 """
 from __future__ import annotations
@@ -11,6 +12,7 @@ from __future__ import annotations
 import os
 import logging
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request
@@ -42,11 +44,18 @@ _model_state: dict[str, Any] = {}
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Load the model on startup; release resources on shutdown."""
+    model_path = Path(MODEL_PATH)
     logger.info("Loading model from %s …", MODEL_PATH)
+    logger.info("Model file exists: %s", model_path.exists())
+
+    if model_path.exists():
+        logger.info("Model file size: %.1f KB", model_path.stat().st_size / 1024)
+
     try:
         model, meta = load_model(MODEL_PATH)
         _model_state["model"] = model
         _model_state["meta"] = meta
+        _model_state["load_error"] = None
         logger.info(
             "Model ready — state_dim=%d  action_dim=%d  hidden=%s",
             meta["state_dim"],
@@ -54,6 +63,7 @@ async def lifespan(app: FastAPI):
             meta["hidden_dims"],
         )
     except Exception as exc:
+        _model_state["load_error"] = str(exc)
         logger.error("Failed to load model: %s", exc)
         # Service starts but /reorder will return 503
 
@@ -76,7 +86,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],       # Vercel deployment + local dev
+    allow_origins=["*"],
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["Content-Type", "Authorization"],
 )
@@ -88,12 +98,53 @@ app.add_middleware(
 
 @app.get("/health")
 def health() -> dict[str, Any]:
-    """Liveness / readiness probe."""
+    """Liveness / readiness probe — quick model status check."""
+    model_path = Path(MODEL_PATH)
     model_loaded = "model" in _model_state
+
     return {
         "status": "ok" if model_loaded else "degraded",
         "model_loaded": model_loaded,
+        "model_file_exists": model_path.exists(),
+        "model_file_size_kb": round(model_path.stat().st_size / 1024, 1) if model_path.exists() else None,
         "model_path": MODEL_PATH,
+        "load_error": _model_state.get("load_error"),
+    }
+
+
+@app.get("/debug")
+def debug() -> dict[str, Any]:
+    """Detailed diagnostics — model layout, environment, working directory."""
+    model_path = Path(MODEL_PATH)
+    meta = _model_state.get("meta", {})
+
+    # List everything in the model directory
+    model_dir = model_path.parent
+    model_dir_contents = []
+    if model_dir.exists():
+        model_dir_contents = [
+            {"name": f.name, "size_kb": round(f.stat().st_size / 1024, 1)}
+            for f in sorted(model_dir.iterdir())
+        ]
+
+    return {
+        "cwd": os.getcwd(),
+        "model_path_configured": MODEL_PATH,
+        "model_file_exists": model_path.exists(),
+        "model_file_size_kb": round(model_path.stat().st_size / 1024, 1) if model_path.exists() else None,
+        "model_dir_contents": model_dir_contents,
+        "model_loaded": "model" in _model_state,
+        "load_error": _model_state.get("load_error"),
+        "model_layout": {
+            "state_dim": meta.get("state_dim"),
+            "action_dim": meta.get("action_dim"),
+            "hidden_dims": list(meta.get("hidden_dims", [])),
+        } if meta else None,
+        "env": {
+            "MODEL_PATH": os.environ.get("MODEL_PATH"),
+            "LOG_LEVEL": os.environ.get("LOG_LEVEL"),
+            "PORT": os.environ.get("PORT"),
+        },
     }
 
 
@@ -117,7 +168,11 @@ async def reorder(request: Request) -> JSONResponse:
     if "model" not in _model_state:
         raise HTTPException(
             status_code=503,
-            detail="Model not loaded. Check server logs for startup errors.",
+            detail={
+                "error": "Model not loaded.",
+                "load_error": _model_state.get("load_error"),
+                "hint": "Check /debug for file existence and directory listing.",
+            },
         )
 
     try:
@@ -137,3 +192,4 @@ async def reorder(request: Request) -> JSONResponse:
     except Exception as exc:
         logger.exception("Inference error: %s", exc)
         raise HTTPException(status_code=500, detail=str(exc))
+
