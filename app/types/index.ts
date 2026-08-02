@@ -207,6 +207,7 @@ export interface ChatConversation {
   type: "dm" | "broadcast";
   participants: string[];
   participantNames: Record<string, string>;
+  participantRoles?: Record<string, StaffRole>;
   lastMessage: string;
   lastMessageAt: Date;
   lastMessageBy: string;
