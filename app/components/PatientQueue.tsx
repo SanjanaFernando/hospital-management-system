@@ -38,12 +38,16 @@ interface PatientQueueProps {
   listMaxHeight?: number;
 }
 
-const priorityColors = {
+const priorityColors: Record<string, string> = {
   "Triage 1": "bg-red-100 border-red-500 text-red-800",
   "Triage 2": "bg-orange-100 border-orange-500 text-orange-800",
   "Triage 3": "bg-yellow-100 border-yellow-500 text-yellow-800",
   "Triage 4": "bg-lime-100 border-lime-500 text-lime-800",
   "Triage 5": "bg-blue-100 border-blue-500 text-blue-800",
+  // Legacy aliases — map to same color as their triage equivalent
+  "Critical":   "bg-red-100 border-red-500 text-red-800",
+  "Urgent":     "bg-yellow-100 border-yellow-500 text-yellow-800",
+  "Non-urgent": "bg-blue-100 border-blue-500 text-blue-800",
 };
 
 const ageGroupBadgeColors = {
@@ -75,12 +79,19 @@ function resolvePriorityRank(priority: string): number {
 }
 
 function resolvePriorityClass(priority: string): string {
-  const rank = resolvePriorityRank(priority);
-  if (rank === 0) return priorityColors["Triage 1"];
-  if (rank === 1) return priorityColors["Triage 2"];
-  if (rank === 2) return priorityColors["Triage 3"];
-  if (rank === 3) return priorityColors["Triage 4"];
-  if (rank === 4) return priorityColors["Triage 5"];
+  const normalized = String(priority).trim();
+
+  // Direct lookup first — covers all Triage N and legacy Critical/Urgent/Non-urgent
+  if (normalized in priorityColors) {
+    return priorityColors[normalized];
+  }
+
+  // Numeric triage level fallback (e.g. priority stored as "1" or 1 in DB)
+  const numMatch = normalized.match(/^(\d)$/);
+  if (numMatch) {
+    const level = `Triage ${numMatch[1]}`;
+    if (level in priorityColors) return priorityColors[level];
+  }
 
   return "bg-gray-100 border-gray-400 text-gray-700";
 }
