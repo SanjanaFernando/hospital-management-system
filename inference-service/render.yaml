@@ -7,7 +7,7 @@ services:
     # then install the remaining requirements.
     buildCommand: >
       pip install --no-cache-dir
-      torch==2.3.1+cpu
+      torch==2.13.0+cpu
       --index-url https://download.pytorch.org/whl/cpu
       &&
       pip install --no-cache-dir -r requirements.txt
