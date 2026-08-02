@@ -263,6 +263,42 @@ export default function PatientDetail({
         )}
       </div>
 
+      {patient.previousDiseases && patient.previousDiseases.length > 0 && (
+        <div className="bg-purple-50 border border-purple-200 rounded p-4 mb-4">
+          <p className="text-sm font-semibold text-purple-900 mb-2">
+            Previous Diseases / Medical History
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {patient.previousDiseases.map((prevDis, index) => (
+              <span
+                key={index}
+                className="bg-purple-200 text-purple-900 px-3 py-1 rounded-full text-xs font-semibold"
+              >
+                {prevDis}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {patient.customFields && Object.keys(patient.customFields).length > 0 && (
+        <div className="bg-slate-50 border border-slate-200 rounded p-4 mb-4">
+          <p className="text-sm font-semibold text-slate-800 mb-2">
+            Ward Specific Details
+          </p>
+          <div className="grid grid-cols-2 gap-2 text-xs">
+            {Object.entries(patient.customFields).map(([k, v]) => (
+              <div key={k} className="bg-white p-2 rounded border border-slate-200">
+                <span className="font-semibold text-slate-700 capitalize">
+                  {k.replace(/([A-Z])/g, " $1").replace(/_/g, " ")}:
+                </span>{" "}
+                <span className="text-slate-900">{typeof v === "boolean" ? (v ? "Yes" : "No") : String(v)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {patient.specialRequirements &&
         patient.specialRequirements.length > 0 && (
           <div className="bg-yellow-50 border border-yellow-200 rounded p-4">

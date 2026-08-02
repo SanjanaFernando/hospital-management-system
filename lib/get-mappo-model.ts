@@ -4,6 +4,7 @@ import path from "node:path";
 const MODEL_DIR = path.join(process.cwd(), "model");
 
 const PREDICTIVE_CANDIDATES = [
+  "best_mappo_shared_predictive.pth",
   "best_mappo_predictive.pth",
   "mappo_predictive.pth",
 ];

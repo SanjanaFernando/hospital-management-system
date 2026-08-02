@@ -121,13 +121,24 @@ export function generateMockPatient(patientId: string): Patient {
       )
     : undefined;
 
+  let numericId = patientId.replace(/\D/g, "");
+  if (!numericId || numericId.length < 4) {
+    numericId = String(Math.floor(10000 + Math.random() * 90000));
+  }
+
+  const hasPrevious = Math.random() < 0.5;
+  const prevDisease = hasPrevious
+    ? [diseases[Math.floor(Math.random() * diseases.length)]]
+    : [];
+
   return {
-    id: patientId,
+    id: numericId,
     name: `${firstName} ${lastName}`,
     age,
     ageGroup,
     gender,
     disease: diseases[Math.floor(Math.random() * diseases.length)],
+    previousDiseases: prevDisease,
     priority,
     admissionTime,
     dischargeTime,

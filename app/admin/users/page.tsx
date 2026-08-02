@@ -326,9 +326,27 @@ export default function AdminUsersPage() {
 
             {formData.role !== "admin" && formData.role !== "sub_admin" && (
               <div className="md:col-span-2 space-y-1.5">
-                <span className="block text-xs font-semibold text-slate-700">
-                  Assigned Wards
-                </span>
+                <div className="flex items-center justify-between">
+                  <span className="block text-xs font-semibold text-slate-700">
+                    Assigned Wards
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const allSelected = wardOptions.every((w) =>
+                        selectedWards.includes(w.id)
+                      );
+                      setSelectedWards(
+                        allSelected ? [wardOptions[0].id] : wardOptions.map((w) => w.id)
+                      );
+                    }}
+                    className="text-xs font-semibold text-teal-600 hover:text-teal-800 transition-colors underline underline-offset-2"
+                  >
+                    {wardOptions.every((w) => selectedWards.includes(w.id))
+                      ? "Deselect All"
+                      : "Select All"}
+                  </button>
+                </div>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-50 p-3 rounded-lg border border-slate-200">
                   {wardOptions.map((ward) => {
                     const checked = selectedWards.includes(ward.id);
@@ -360,6 +378,7 @@ export default function AdminUsersPage() {
                 </div>
               </div>
             )}
+
           </div>
 
           <div className="flex items-center gap-3">

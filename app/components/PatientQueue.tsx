@@ -38,12 +38,16 @@ interface PatientQueueProps {
   listMaxHeight?: number;
 }
 
-const priorityColors = {
+const priorityColors: Record<string, string> = {
   "Triage 1": "bg-red-100 border-red-500 text-red-800",
   "Triage 2": "bg-orange-100 border-orange-500 text-orange-800",
   "Triage 3": "bg-yellow-100 border-yellow-500 text-yellow-800",
   "Triage 4": "bg-lime-100 border-lime-500 text-lime-800",
   "Triage 5": "bg-blue-100 border-blue-500 text-blue-800",
+  // Legacy aliases — map to same color as their triage equivalent
+  "Critical":   "bg-red-100 border-red-500 text-red-800",
+  "Urgent":     "bg-yellow-100 border-yellow-500 text-yellow-800",
+  "Non-urgent": "bg-blue-100 border-blue-500 text-blue-800",
 };
 
 const ageGroupBadgeColors = {
@@ -75,12 +79,19 @@ function resolvePriorityRank(priority: string): number {
 }
 
 function resolvePriorityClass(priority: string): string {
-  const rank = resolvePriorityRank(priority);
-  if (rank === 0) return priorityColors["Triage 1"];
-  if (rank === 1) return priorityColors["Triage 2"];
-  if (rank === 2) return priorityColors["Triage 3"];
-  if (rank === 3) return priorityColors["Triage 4"];
-  if (rank === 4) return priorityColors["Triage 5"];
+  const normalized = String(priority).trim();
+
+  // Direct lookup first — covers all Triage N and legacy Critical/Urgent/Non-urgent
+  if (normalized in priorityColors) {
+    return priorityColors[normalized];
+  }
+
+  // Numeric triage level fallback (e.g. priority stored as "1" or 1 in DB)
+  const numMatch = normalized.match(/^(\d)$/);
+  if (numMatch) {
+    const level = `Triage ${numMatch[1]}`;
+    if (level in priorityColors) return priorityColors[level];
+  }
 
   return "bg-gray-100 border-gray-400 text-gray-700";
 }
@@ -293,8 +304,11 @@ export default function PatientQueue({
             >
               <div className="flex justify-between items-start mb-2">
                 <div>
-                  <p className="font-semibold">
-                    {index + 1}. {patient.name}
+                  <p className="font-semibold flex items-center gap-1.5 flex-wrap">
+                    <span>{index + 1}. {patient.name}</span>
+                    <span className="text-xs font-mono font-semibold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">
+                      #{patient.id}
+                    </span>
                   </p>
                   <p className="text-sm flex flex-wrap gap-2 mt-1">
                     <span
@@ -305,6 +319,11 @@ export default function PatientQueue({
                     <span className="px-2 py-1 rounded text-xs font-medium bg-gray-200">
                       {patient.disease}
                     </span>
+                    {patient.previousDiseases && patient.previousDiseases.length > 0 && (
+                      <span className="px-2 py-1 rounded text-xs font-medium bg-purple-100 text-purple-800" title={`Previous history: ${patient.previousDiseases.join(", ")}`}>
+                        History: {patient.previousDiseases.slice(0, 2).join(", ")}{patient.previousDiseases.length > 2 ? "..." : ""}
+                      </span>
+                    )}
                     {patient.triageRequested && (
                       <span className="px-2 py-1 rounded text-xs font-semibold bg-amber-200 text-amber-900">
                         Pending Triage
