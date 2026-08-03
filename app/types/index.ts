@@ -56,6 +56,7 @@ export interface Patient {
   status?: "queued" | "admitted" | "discharged";
   triageRequested?: boolean;
   queueReason?: string; // MAPPO explanation for this patient's queue rank, set by reorderQueueWithAi
+  queueRank?: number; // 1-indexed queue rank position
   customFields?: Record<string, any>; // Ward-specific custom fields data
 }
 
@@ -207,6 +208,7 @@ export interface ChatConversation {
   type: "dm" | "broadcast";
   participants: string[];
   participantNames: Record<string, string>;
+  participantRoles?: Record<string, StaffRole>;
   lastMessage: string;
   lastMessageAt: Date;
   lastMessageBy: string;

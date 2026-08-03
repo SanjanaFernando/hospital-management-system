@@ -52,23 +52,75 @@ export async function sendMessage(params: {
     let convType: "dm" | "broadcast";
     let participants: string[];
     let participantNames: Record<string, string>;
+    let participantRoles: Record<string, StaffRole>;
     let unreadBy: string[];
+
+    // Ensure sender display name is loaded from DB if missing or generic
+    let senderName = session.displayName;
+    if (!senderName || senderName === "Unknown") {
+      const senderUser = await db
+        .collection("users")
+        .findOne({ userId: session.userId }, { projection: { displayName: 1 } });
+      if (senderUser?.displayName) {
+        senderName = senderUser.displayName as string;
+      }
+    }
 
     if (params.recipientType === "user") {
       if (!params.recipientId) return { ok: false, error: "recipientId required" };
       conversationId = dmConvId(session.userId, params.recipientId);
       convType = "dm";
       participants = [session.userId, params.recipientId];
+
+      let recipientName = params.recipientName;
+      let recipientRole: StaffRole | undefined = params.recipientRole;
+
+      // Look up recipient details from users collection if missing or "Unknown"
+      if (!recipientName || recipientName === "Unknown" || !recipientRole) {
+        const recipientUser = await db
+          .collection("users")
+          .findOne(
+            { userId: params.recipientId },
+            { projection: { displayName: 1, role: 1 } }
+          );
+        if (recipientUser) {
+          if (!recipientName || recipientName === "Unknown") {
+            recipientName = recipientUser.displayName as string;
+          }
+          if (!recipientRole) {
+            recipientRole = recipientUser.role as StaffRole;
+          }
+        }
+      }
+
+      // Check existing conversation record if recipient name is still missing
+      if (!recipientName || recipientName === "Unknown") {
+        const existingConv = await db
+          .collection("chat_conversations")
+          .findOne({ id: conversationId });
+        if (
+          existingConv?.participantNames?.[params.recipientId] &&
+          existingConv.participantNames[params.recipientId] !== "Unknown"
+        ) {
+          recipientName = existingConv.participantNames[params.recipientId];
+        }
+      }
+
       participantNames = {
-        [session.userId]: session.displayName || "Unknown",
-        [params.recipientId]: params.recipientName || "Unknown",
+        [session.userId]: senderName || "Unknown",
+        [params.recipientId]: recipientName || "Unknown",
+      };
+      participantRoles = {
+        [session.userId]: session.role,
+        [params.recipientId]: recipientRole || "consultant_doctor",
       };
       unreadBy = [params.recipientId];
     } else {
       conversationId = genId("bcast");
       convType = "broadcast";
       participants = [session.userId];
-      participantNames = { [session.userId]: session.displayName || "Unknown" };
+      participantNames = { [session.userId]: senderName || "Unknown" };
+      participantRoles = { [session.userId]: session.role };
       unreadBy = []; // will be computed on read by checking role/all
     }
 
@@ -76,7 +128,7 @@ export async function sendMessage(params: {
       id: genId("msg"),
       conversationId,
       senderId: session.userId,
-      senderName: session.displayName || "Unknown",
+      senderName: senderName || "Unknown",
       senderRole: session.role,
       content: params.content.trim(),
       recipientType: params.recipientType,
@@ -98,6 +150,7 @@ export async function sendMessage(params: {
           type: convType,
           participants,
           participantNames,
+          participantRoles,
           lastMessage: params.content.trim().slice(0, 120),
           lastMessageAt: now,
           lastMessageBy: session.userId,
@@ -146,12 +199,37 @@ export async function getMessages(
       .limit(limit)
       .toArray();
 
+    // Resolve any "Unknown" sender names
+    const missingSenderIds = new Set<string>();
+    docs.forEach((d) => {
+      if (!d.senderName || d.senderName === "Unknown") {
+        if (d.senderId) missingSenderIds.add(d.senderId as string);
+      }
+    });
+
+    const senderNameMap: Record<string, string> = {};
+    if (missingSenderIds.size > 0) {
+      const usersList = await db
+        .collection("users")
+        .find(
+          { userId: { $in: Array.from(missingSenderIds) } },
+          { projection: { userId: 1, displayName: 1 } }
+        )
+        .toArray();
+      usersList.forEach((u) => {
+        senderNameMap[u.userId as string] = u.displayName as string;
+      });
+    }
+
     return docs.map((d) => ({
       _id: d._id?.toString(),
       id: d.id as string,
       conversationId: d.conversationId as string,
       senderId: d.senderId as string,
-      senderName: d.senderName as string,
+      senderName:
+        (!d.senderName || d.senderName === "Unknown")
+          ? senderNameMap[d.senderId as string] || (d.senderName as string) || "Unknown"
+          : (d.senderName as string),
       senderRole: d.senderRole as StaffRole,
       content: d.content as string,
       recipientType: d.recipientType as ChatRecipientType,
@@ -212,12 +290,37 @@ export async function getNewMessages(
       .limit(100)
       .toArray();
 
+    // Resolve any "Unknown" sender names
+    const missingSenderIds = new Set<string>();
+    docs.forEach((d) => {
+      if (!d.senderName || d.senderName === "Unknown") {
+        if (d.senderId) missingSenderIds.add(d.senderId as string);
+      }
+    });
+
+    const senderNameMap: Record<string, string> = {};
+    if (missingSenderIds.size > 0) {
+      const usersList = await db
+        .collection("users")
+        .find(
+          { userId: { $in: Array.from(missingSenderIds) } },
+          { projection: { userId: 1, displayName: 1 } }
+        )
+        .toArray();
+      usersList.forEach((u) => {
+        senderNameMap[u.userId as string] = u.displayName as string;
+      });
+    }
+
     return docs.map((d) => ({
       _id: d._id?.toString(),
       id: d.id as string,
       conversationId: d.conversationId as string,
       senderId: d.senderId as string,
-      senderName: d.senderName as string,
+      senderName:
+        (!d.senderName || d.senderName === "Unknown")
+          ? senderNameMap[d.senderId as string] || (d.senderName as string) || "Unknown"
+          : (d.senderName as string),
       senderRole: d.senderRole as StaffRole,
       content: d.content as string,
       recipientType: d.recipientType as ChatRecipientType,
@@ -265,20 +368,68 @@ export async function getConversations(
       .limit(50)
       .toArray();
 
-    return docs.map((d) => ({
-      _id: d._id?.toString(),
-      id: d.id as string,
-      type: d.type as "dm" | "broadcast",
-      participants: (d.participants as string[]) ?? [],
-      participantNames: (d.participantNames as Record<string, string>) ?? {},
-      lastMessage: d.lastMessage as string,
-      lastMessageAt: new Date(d.lastMessageAt as string | number | Date),
-      lastMessageBy: d.lastMessageBy as string,
-      recipientType: d.recipientType as ChatRecipientType | undefined,
-      recipientRole: d.recipientRole as StaffRole | undefined,
-      unreadBy: (d.unreadBy as string[]) ?? [],
-      createdAt: new Date(d.createdAt as string | number | Date),
-    }));
+    // Identify any participant IDs with missing or "Unknown" names or missing roles
+    const missingUserIds = new Set<string>();
+    docs.forEach((d) => {
+      if (d.type === "dm" && Array.isArray(d.participants)) {
+        const names = (d.participantNames as Record<string, string>) || {};
+        const roles = (d.participantRoles as Record<string, StaffRole>) || {};
+        d.participants.forEach((pId: string) => {
+          if (!names[pId] || names[pId] === "Unknown" || !roles[pId]) {
+            missingUserIds.add(pId);
+          }
+        });
+      }
+    });
+
+    const userMap: Record<string, { displayName: string; role: StaffRole }> = {};
+    if (missingUserIds.size > 0) {
+      const usersList = await db
+        .collection("users")
+        .find(
+          { userId: { $in: Array.from(missingUserIds) } },
+          { projection: { userId: 1, displayName: 1, role: 1 } }
+        )
+        .toArray();
+      usersList.forEach((u) => {
+        userMap[u.userId as string] = {
+          displayName: u.displayName as string,
+          role: u.role as StaffRole,
+        };
+      });
+    }
+
+    return docs.map((d) => {
+      const pNames = { ...((d.participantNames as Record<string, string>) ?? {}) };
+      const pRoles = { ...((d.participantRoles as Record<string, StaffRole>) ?? {}) };
+
+      if (d.type === "dm" && Array.isArray(d.participants)) {
+        d.participants.forEach((pId: string) => {
+          if ((!pNames[pId] || pNames[pId] === "Unknown") && userMap[pId]?.displayName) {
+            pNames[pId] = userMap[pId].displayName;
+          }
+          if (!pRoles[pId] && userMap[pId]?.role) {
+            pRoles[pId] = userMap[pId].role;
+          }
+        });
+      }
+
+      return {
+        _id: d._id?.toString(),
+        id: d.id as string,
+        type: d.type as "dm" | "broadcast",
+        participants: (d.participants as string[]) ?? [],
+        participantNames: pNames,
+        participantRoles: pRoles,
+        lastMessage: d.lastMessage as string,
+        lastMessageAt: new Date(d.lastMessageAt as string | number | Date),
+        lastMessageBy: d.lastMessageBy as string,
+        recipientType: d.recipientType as ChatRecipientType | undefined,
+        recipientRole: d.recipientRole as StaffRole | undefined,
+        unreadBy: (d.unreadBy as string[]) ?? [],
+        createdAt: new Date(d.createdAt as string | number | Date),
+      };
+    });
   } catch (err) {
     console.error("getConversations error:", err);
     return [];

@@ -15,6 +15,8 @@ import {
   ChartLegendContent,
   ChartTooltip,
 } from "@/components/ui/chart";
+import PatientFeatureContributionModal from "@/app/components/PatientFeatureContributionModal";
+import type { Patient } from "@/app/types";
 
 type RankedPatient = {
   patientId?: string;
@@ -107,6 +109,7 @@ export default function ExplanationPanel({
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
   const [showShap, setShowShap] = useState(false);
+  const [selectedPatientModal, setSelectedPatientModal] = useState<Patient | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -245,48 +248,6 @@ export default function ExplanationPanel({
           <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
             <div className="mb-3">
               <h3 className="text-base font-semibold text-slate-900">
-                Agent negotiation
-              </h3>
-              <p className="text-sm text-slate-500">
-                Each triage agent proposes urgency and wait weights; the fixed alpha values determine influence.
-              </p>
-            </div>
-
-            {agentChartData.length > 0 ? (
-              <ChartContainer
-                config={{
-                  urgency_weight: { label: "Urgency weight", color: "#2563eb" },
-                  wait_weight: { label: "Wait weight", color: "#0f766e" },
-                  influence_pct: { label: "Influence %", color: "#8b5cf6" },
-                }}
-                className="h-[320px] w-full"
-              >
-                <BarChart data={agentChartData}>
-                  <CartesianGrid vertical={false} strokeDasharray="3 3" />
-                  <XAxis dataKey="agent" tickLine={false} axisLine={false} />
-                  <YAxis yAxisId="left" domain={[0, 1]} tickLine={false} axisLine={false} />
-                  <YAxis
-                    yAxisId="right"
-                    orientation="right"
-                    domain={[0, 100]}
-                    tickLine={false}
-                    axisLine={false}
-                  />
-                  <Tooltip content={<ChartTooltip />} />
-                  <Legend content={<ChartLegendContent />} />
-                  <Bar yAxisId="left" dataKey="urgency_weight" radius={[6, 6, 0, 0]} fill="var(--color-urgency_weight)" />
-                  <Bar yAxisId="left" dataKey="wait_weight" radius={[6, 6, 0, 0]} fill="var(--color-wait_weight)" />
-                  <Bar yAxisId="right" dataKey="influence_pct" radius={[6, 6, 0, 0]} fill="var(--color-influence_pct)" />
-                </BarChart>
-              </ChartContainer>
-            ) : (
-              <p className="text-sm text-slate-500">No agent vote data returned.</p>
-            )}
-          </div>
-
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-            <div className="mb-3">
-              <h3 className="text-base font-semibold text-slate-900">
                 Priority decomposition
               </h3>
               <p className="text-sm text-slate-500">
@@ -304,6 +265,7 @@ export default function ExplanationPanel({
                     <th className="px-3 py-2">Score</th>
                     <th className="px-3 py-2">Urgency share</th>
                     <th className="px-3 py-2">Wait share</th>
+                    <th className="px-3 py-2 text-center">XAI Breakdown</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -317,69 +279,45 @@ export default function ExplanationPanel({
                       </td>
                       <td className="px-3 py-3">{formatNumber(patient.urgencyShare, 1)}%</td>
                       <td className="px-3 py-3">{formatNumber(patient.waitShare, 1)}%</td>
+                      <td className="px-3 py-3 text-center">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setSelectedPatientModal({
+                              id: patient.patientId || "",
+                              _id: patient.patientId,
+                              name: patient.name || "Unknown",
+                              priority: `Triage ${patient.triageLevel ?? 5}` as any,
+                              age: 0,
+                              ageGroup: "Adult",
+                              disease: "Emergency",
+                              admissionTime: new Date(Date.now() - (patient.waitHours || 0) * 3600000),
+                            })
+                          }
+                          className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-amber-500 text-[11px] font-black text-white hover:bg-amber-600 hover:scale-110 transition-all shadow-xs cursor-pointer"
+                          title="View XAI Feature Contribution Breakdown for this patient"
+                        >
+                          !
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
           </div>
-
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-            <button
-              type="button"
-              onClick={() => setShowShap((current) => !current)}
-              className="flex w-full items-center justify-between gap-3 text-left"
-            >
-              <div>
-                <h3 className="text-base font-semibold text-slate-900">
-                  Cached SHAP feature importance
-                </h3>
-                <p className="text-sm text-slate-500">
-                  Precomputed offline, never recomputed live on request.
-                </p>
-              </div>
-              <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
-                {showShap ? "Hide" : "Show"}
-              </span>
-            </button>
-
-            {showShap && (
-              <div className="mt-4 space-y-4">
-                {data?.shap_error && (
-                  <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-                    {data.shap_error}
-                  </div>
-                )}
-
-                {shapRows.length > 0 ? (
-                  shapRows.map((agentRow) => (
-                    <div key={agentRow.agentKey} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                      <p className="text-sm font-semibold text-slate-900">{agentRow.agentKey}</p>
-                      <div className="mt-3 space-y-3">
-                        {agentRow.features.map((feature) => (
-                          <div key={feature.feature}>
-                            <div className="mb-1 flex items-center justify-between gap-3 text-xs text-slate-600">
-                              <span className="font-medium text-slate-700">{feature.feature}</span>
-                              <span>{feature.value.toExponential(2)}</span>
-                            </div>
-                            <div className="h-2 overflow-hidden rounded-full bg-slate-200">
-                              <div
-                                className="h-full rounded-full bg-indigo-500"
-                                style={{ width: `${feature.width}%` }}
-                              />
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  <p className="text-sm text-slate-500">No cached SHAP summary found.</p>
-                )}
-              </div>
-            )}
-          </div>
         </div>
+      )}
+
+      {selectedPatientModal && (
+        <PatientFeatureContributionModal
+          patient={selectedPatientModal}
+          wardId={wardId}
+          wardName={wardName}
+          isOpen={Boolean(selectedPatientModal)}
+          onClose={() => setSelectedPatientModal(null)}
+          preloadedExplainData={data}
+        />
       )}
     </section>
   );

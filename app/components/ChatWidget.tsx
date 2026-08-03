@@ -123,6 +123,7 @@ function ConversationItem({
     : conv.participantNames[otherUserId] ?? "Unknown";
   const senderName = conv.participantNames[conv.lastMessageBy] ?? "Someone";
   const hasUnread = conv.unreadBy.includes(myUserId);
+  const otherUserRole = conv.participantRoles?.[otherUserId] ?? "consultant_doctor";
 
   return (
     <button
@@ -140,10 +141,8 @@ function ConversationItem({
       ) : (
         <div className="relative">
           <Avatar
-            name={conv.participantNames[otherUserId] ?? "?"}
-            role={
-              (Object.keys(ROLE_COLOR)[0] as StaffRole) ?? "consultant_doctor"
-            }
+            name={displayName}
+            role={otherUserRole}
             size="sm"
           />
           {hasUnread && (
@@ -513,6 +512,7 @@ function MessageThread({
             : "Unknown"
       }`
     : conv.participantNames[otherUserId] ?? "Unknown";
+  const otherUserRole = conv.participantRoles?.[otherUserId] ?? "consultant_doctor";
 
   // Initial load
   useEffect(() => {
@@ -576,6 +576,7 @@ function MessageThread({
       content: text,
       recipientType: conv.recipientType ?? "user",
       recipientId: isBroadcast ? undefined : otherUserId,
+      recipientName: isBroadcast ? undefined : conv.participantNames[otherUserId],
       recipientRole: conv.recipientRole,
     });
 
@@ -604,11 +605,7 @@ function MessageThread({
             <Radio className="h-4 w-4" />
           </div>
         ) : (
-          <div
-            className={`flex h-8 w-8 items-center justify-center rounded-full text-[11px] font-bold text-white ${ROLE_COLOR[session.role] ?? "bg-slate-500"}`}
-          >
-            {getInitials(conv.participantNames[otherUserId] ?? "?")}
-          </div>
+          <Avatar name={displayName} role={otherUserRole} size="sm" />
         )}
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold text-white">
@@ -616,7 +613,7 @@ function MessageThread({
           </p>
           {!isBroadcast && (
             <p className="text-[10px] text-slate-400">
-              {ROLE_LABELS[session.role]}
+              {ROLE_LABELS[otherUserRole] ?? otherUserRole}
             </p>
           )}
         </div>
@@ -740,6 +737,10 @@ function ChatPanel({
       participantNames: {
         [myId]: session.displayName ?? "Me",
         [user.userId]: user.displayName,
+      },
+      participantRoles: {
+        [myId]: session.role,
+        [user.userId]: user.role,
       },
       lastMessage: "",
       lastMessageAt: new Date(),
