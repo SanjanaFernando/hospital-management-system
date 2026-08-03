@@ -301,7 +301,7 @@ def decompose_queue(queue_with_wait_hours, combined_wt, combined_ww):
         total = urgency_term + wait_term
         urgency_pct = (urgency_term / total * 100.0) if total > 0 else 0.0
         wait_pct = 100.0 - urgency_pct if total > 0 else 0.0
-        ranked.append({
+        entry = {
             "patientId": p.get("patientId"),
             "name": p.get("name"),
             "triageLevel": triage,
@@ -319,7 +319,11 @@ def decompose_queue(queue_with_wait_hours, combined_wt, combined_ww):
                 else f"Ranked #{{rank}} mainly due to {wait_h:.1f}h waiting ({wait_pct:.0f}% of score), "
                 f"with Triage {triage} urgency adding the rest ({urgency_pct:.0f}%)."
             ),
-        })
+        }
+        # Pass the positional index back so TypeScript can match without ambiguous ID lookups
+        if "__queueIndex" in p and p["__queueIndex"] is not None:
+            entry["__queueIndex"] = p["__queueIndex"]
+        ranked.append(entry)
     ranked.sort(key=lambda r: r["priorityScore"], reverse=True)
     for rank, r in enumerate(ranked, start=1):
         r["rank"] = rank
