@@ -1,8 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import { Sparkles } from "lucide-react";
 import { Patient } from "@/app/types";
 import DischargePatient from "./DischargePatient";
+import PatientFeatureContributionModal from "./PatientFeatureContributionModal";
 import { movePatientToQueue } from "@/app/actions/patientActions";
 import { useAuthSession } from "@/app/context/AuthSessionContext";
 import { canSetTriage } from "@/lib/rbac";
@@ -56,6 +58,7 @@ export default function PatientDetail({
   );
   const [isUpdatingTriage, setIsUpdatingTriage] = useState(false);
   const [triageError, setTriageError] = useState("");
+  const [showExplanationModal, setShowExplanationModal] = useState(false);
 
   const admissionDate = patient.admissionTime
     ? new Date(patient.admissionTime)
@@ -126,6 +129,49 @@ export default function PatientDetail({
   const canEditTriage =
     Boolean(patient.wardId) && canSetTriage(session, patient.wardId || "");
 
+  const getExplanationWithPercentages = (p: Patient): string => {
+    if (p.queueReason) return p.queueReason;
+
+    const triageNum =
+      typeof p.priority === "string"
+        ? parseInt(p.priority.replace(/\D/g, ""), 10) || 5
+        : 5;
+
+    const waitMinutes =
+      typeof p.queueWaitTime === "number" && Number.isFinite(p.queueWaitTime)
+        ? Math.max(0, p.queueWaitTime)
+        : p.admissionTime
+        ? Math.max(0, (Date.now() - new Date(p.admissionTime).getTime()) / 60000)
+        : 0;
+
+    const waitHours = waitMinutes / 60;
+    const wt = 0.6;
+    const ww = 0.4;
+
+    const urgencyContrib = (6 - triageNum) * wt;
+    const waitContrib = waitHours * ww;
+    const totalScore = urgencyContrib + waitContrib;
+
+    if (totalScore <= 0) {
+      return `Triage ${triageNum} urgency (50% of score), with 0.0h waiting (50%).`;
+    }
+
+    const urgencyPct = Math.round((urgencyContrib / totalScore) * 100);
+    const waitPct = 100 - urgencyPct;
+
+    if (urgencyPct >= waitPct) {
+      return `Prioritized mainly due to Triage ${triageNum} urgency (${urgencyPct}% of score), with ${waitHours.toFixed(
+        1
+      )}h waiting adding the rest (${waitPct}%).`;
+    }
+
+    return `Prioritized mainly due to ${waitHours.toFixed(
+      1
+    )}h waiting (${waitPct}% of score), with Triage ${triageNum} urgency adding the rest (${urgencyPct}%).`;
+  };
+
+  const patientExplanation = getExplanationWithPercentages(patient);
+
   return (
     <div className="bg-linear-to-br from-blue-50 to-indigo-50 rounded-lg p-6 border border-blue-200">
       <div className="flex justify-between items-start mb-4">
@@ -133,11 +179,11 @@ export default function PatientDetail({
           <h3 className="text-2xl font-bold text-gray-800">{patient.name}</h3>
           <p className="text-gray-600 text-sm">Patient ID: {patient.id}</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 items-center flex-wrap">
           {!isEditingTriage ? (
             <span
               onClick={() => canEditTriage && setIsEditingTriage(true)}
-              className={`${priorityColors[patient.priority]} text-white px-3 py-1 rounded-full text-sm font-semibold ${
+              className={`${priorityColors[patient.priority]} text-white px-3 py-1 rounded-full text-sm font-semibold whitespace-nowrap text-center ${
                 canEditTriage
                   ? "cursor-pointer hover:opacity-80 transition-opacity"
                   : ""
@@ -223,6 +269,27 @@ export default function PatientDetail({
           <p className="text-red-800 text-sm">{triageError}</p>
         </div>
       )}
+
+      {/* XAI Explanation Card */}
+      <div className="mb-4 rounded-xl border border-indigo-200 bg-white/90 p-3.5 shadow-2xs">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-indigo-700">
+            <Sparkles className="h-4 w-4 text-indigo-600" />
+            <span>MAPPO Model Explanation</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowExplanationModal(true)}
+            className="flex h-5 w-5 items-center justify-center rounded-full bg-amber-500 text-[11px] font-black text-white hover:bg-amber-600 hover:scale-110 transition-all shadow-xs cursor-pointer"
+            title="View XAI Feature Contribution Breakdown"
+          >
+            !
+          </button>
+        </div>
+        <p className="mt-1.5 text-xs leading-relaxed text-slate-700 font-medium">
+          {patientExplanation}
+        </p>
+      </div>
 
       <div className="grid grid-cols-2 gap-4 mb-4">
         <div className="bg-white rounded p-3 border border-gray-200">
@@ -317,6 +384,18 @@ export default function PatientDetail({
             </div>
           </div>
         )}
+
+      {showExplanationModal && (
+        <PatientFeatureContributionModal
+          patient={{
+            ...patient,
+            queueReason: patientExplanation,
+          }}
+          wardId={patient.wardId || ""}
+          isOpen={showExplanationModal}
+          onClose={() => setShowExplanationModal(false)}
+        />
+      )}
     </div>
   );
 }

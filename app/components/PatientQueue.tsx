@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Sparkles } from "lucide-react";
+import { Sparkles, AlertCircle } from "lucide-react";
 import type { Bed, Patient, Ward } from "@/app/types";
 import AssignFromQueueModal from "./AssignFromQueueModal";
+import PatientFeatureContributionModal from "./PatientFeatureContributionModal";
 import { updatePatient } from "@/app/utils/api";
 import { useAuthSession } from "@/app/context/AuthSessionContext";
 import { canSetTriage } from "@/lib/rbac";
@@ -96,6 +97,65 @@ function resolvePriorityClass(priority: string): string {
   return "bg-gray-100 border-gray-400 text-gray-700";
 }
 
+function getPatientExplanationWithPercentages(
+  patient: Patient,
+  patientReasonById: Record<string, string> = {},
+  nowMs: number = Date.now()
+): string {
+  const existingReason =
+    patient.queueReason ||
+    patientReasonById[patient._id || patient.id] ||
+    patientReasonById[patient.id] ||
+    patientReasonById[patient._id || ""];
+
+  if (existingReason) {
+    return existingReason;
+  }
+
+  const triageNum =
+    typeof patient.priority === "string"
+      ? parseInt(patient.priority.replace(/\D/g, ""), 10) || 5
+      : 5;
+
+  let waitMinutes = 0;
+  if (
+    typeof patient.queueWaitTime === "number" &&
+    Number.isFinite(patient.queueWaitTime)
+  ) {
+    waitMinutes = Math.max(0, patient.queueWaitTime);
+  } else if (patient.admissionTime) {
+    const arrivalMs = new Date(patient.admissionTime).getTime();
+    if (!Number.isNaN(arrivalMs)) {
+      waitMinutes = Math.max(0, (nowMs - arrivalMs) / 60_000);
+    }
+  }
+
+  const waitHours = waitMinutes / 60;
+  const wt = 0.6;
+  const ww = 0.4;
+
+  const urgencyContrib = (6 - triageNum) * wt;
+  const waitContrib = waitHours * ww;
+  const totalScore = urgencyContrib + waitContrib;
+
+  if (totalScore <= 0) {
+    return `Triage ${triageNum} urgency (50% of score), with 0.0h waiting (50%).`;
+  }
+
+  const urgencyPct = Math.round((urgencyContrib / totalScore) * 100);
+  const waitPct = 100 - urgencyPct;
+
+  if (urgencyPct >= waitPct) {
+    return `Ranked mainly due to Triage ${triageNum} urgency (${urgencyPct}% of score), with ${waitHours.toFixed(
+      1
+    )}h waiting adding the rest (${waitPct}%).`;
+  }
+
+  return `Ranked mainly due to ${waitHours.toFixed(
+    1
+  )}h waiting (${waitPct}% of score), with Triage ${triageNum} urgency adding the rest (${urgencyPct}%).`;
+}
+
 export default function PatientQueue({
   patients = [],
   beds = [],
@@ -120,6 +180,8 @@ export default function PatientQueue({
   );
   const [triageError, setTriageError] = useState("");
   const [isOpen, setIsOpen] = useState(false);
+  const [selectedExplanationPatient, setSelectedExplanationPatient] =
+    useState<Patient | null>(null);
 
   const getPatientKey = (patient: Patient): string => patient._id || patient.id;
 
@@ -284,17 +346,17 @@ export default function PatientQueue({
         >
           {displayPatients.map((patient, index) => (
             (() => {
-              const patientReason =
-                patient.queueReason ||
-                patientReasonById[patient._id || patient.id] ||
-                patientReasonById[patient.id] ||
-                patientReasonById[patient._id || ""];
+              const patientReason = getPatientExplanationWithPercentages(
+                patient,
+                patientReasonById,
+                now
+              );
 
               return (
             <div
               key={patient.id}
               onClick={() => handlePatientClick(patient)}
-              className={`border-l-4 rounded-lg p-4 ${resolvePriorityClass(
+              className={`border-l-4 rounded-lg p-3.5 ${resolvePriorityClass(
                 patient.priority
               )} ${
                 wardId && beds.length > 0 && canAssign
@@ -302,44 +364,64 @@ export default function PatientQueue({
                   : ""
               }`}
             >
-              <div className="flex justify-between items-start mb-2">
-                <div>
-                  <p className="font-semibold flex items-center gap-1.5 flex-wrap">
+              {/* Header Row: Name & Badges on Left, Triage Badge on Right */}
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold flex items-center gap-1.5 flex-wrap text-slate-900">
                     <span>{index + 1}. {patient.name}</span>
-                    <span className="text-xs font-mono font-semibold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">
+                    <span className="text-xs font-mono font-semibold text-slate-500 bg-white/80 px-1.5 py-0.5 rounded ring-1 ring-black/5">
                       #{patient.id}
                     </span>
                   </p>
-                  <p className="text-sm flex flex-wrap gap-2 mt-1">
+                  <p className="text-sm flex flex-wrap gap-1.5 mt-1">
                     <span
-                      className={`px-2 py-1 rounded text-xs font-medium ${ageGroupBadgeColors[patient.ageGroup]}`}
+                      className={`px-2 py-0.5 rounded text-xs font-medium ${ageGroupBadgeColors[patient.ageGroup]}`}
                     >
                       {patient.ageGroup} ({patient.age}y)
                     </span>
-                    <span className="px-2 py-1 rounded text-xs font-medium bg-gray-200">
+                    <span className="px-2 py-0.5 rounded text-xs font-medium bg-gray-200">
                       {patient.disease}
                     </span>
                     {patient.previousDiseases && patient.previousDiseases.length > 0 && (
-                      <span className="px-2 py-1 rounded text-xs font-medium bg-purple-100 text-purple-800" title={`Previous history: ${patient.previousDiseases.join(", ")}`}>
+                      <span className="px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800" title={`Previous history: ${patient.previousDiseases.join(", ")}`}>
                         History: {patient.previousDiseases.slice(0, 2).join(", ")}{patient.previousDiseases.length > 2 ? "..." : ""}
                       </span>
                     )}
                     {patient.triageRequested && (
-                      <span className="px-2 py-1 rounded text-xs font-semibold bg-amber-200 text-amber-900">
+                      <span className="px-2 py-0.5 rounded text-xs font-semibold bg-amber-200 text-amber-900">
                         Pending Triage
                       </span>
                     )}
                   </p>
-                  {patientReason && (
-                    <div className="mt-2 flex w-full items-start gap-1.5 rounded-md bg-white/70 px-2.5 py-1.5 ring-1 ring-black/5">
-                      <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-indigo-500" />
-                      <p className="min-w-0 flex-1 break-words text-xs leading-relaxed text-slate-600">
-                        {renderReasonText(patientReason)}
-                      </p>
-                    </div>
-                  )}
                 </div>
-                <span className="text-xs font-bold">{patient.priority}</span>
+                <span className="whitespace-nowrap shrink-0 self-start text-center text-xs font-bold px-2.5 py-1 rounded-md bg-white/90 text-slate-900 ring-1 ring-black/10 shadow-2xs">
+                  {patient.priority}
+                </span>
+              </div>
+
+              {/* Full Width Explanation Card */}
+              <div className="mt-2.5 flex w-full items-center justify-between gap-1.5 rounded-md bg-white/85 px-2.5 py-1.5 ring-1 ring-black/5 shadow-2xs">
+                <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                  <Sparkles className="h-3.5 w-3.5 shrink-0 text-indigo-500" />
+                  <p className="min-w-0 flex-1 text-xs leading-relaxed text-slate-700 font-medium">
+                    {renderReasonText(patientReason)}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelectedExplanationPatient({
+                      ...patient,
+                      queueRank: index + 1,
+                      queueReason: patientReason,
+                    });
+                  }}
+                  className="ml-2 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-500 text-[11px] font-black text-white hover:bg-amber-600 hover:scale-110 transition-all shadow-xs cursor-pointer"
+                  title="View XAI Feature Contribution Breakdown"
+                >
+                  !
+                </button>
               </div>
 
               {triageEditable && patient.triageRequested && (
@@ -425,6 +507,16 @@ export default function PatientQueue({
           onAssigned={handleAssignSuccess}
           onTriageUpdated={handleTriageUpdated}
           onClose={handleModalClose}
+        />
+      )}
+
+      {selectedExplanationPatient && (
+        <PatientFeatureContributionModal
+          patient={selectedExplanationPatient}
+          wardId={wardId}
+          wardName={wardName}
+          isOpen={Boolean(selectedExplanationPatient)}
+          onClose={() => setSelectedExplanationPatient(null)}
         />
       )}
     </div>
