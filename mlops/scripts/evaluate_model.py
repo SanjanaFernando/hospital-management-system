@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Evaluate trained DDQN model performance.
+Evaluate trained MAPPO model performance.
 
 Usage:
     python mlops/scripts/evaluate_model.py \
@@ -32,45 +32,80 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-class DDQN(nn.Module):
-    """Double Deep Q-Network model."""
-
-    def __init__(self, state_dim: int = 16, action_dim: int = 81,
-                 hidden_dims: tuple = (128, 128), dropout_rate: float = 0.2):
+# ============================================================
+# MAPPO Model Definitions (must match training script)
+# ============================================================
+class TriageActor(nn.Module):
+    """Individual actor network for each triage agent."""
+    
+    def __init__(self, state_dim=10, n_actions=99, hidden_dims=(128, 128)):
         super().__init__()
-
         layers = []
         in_dim = state_dim
-
+        
         for hidden in hidden_dims:
             layers.append(nn.Linear(in_dim, hidden))
             layers.append(nn.ReLU())
-            layers.append(nn.Dropout(dropout_rate))
             in_dim = hidden
-
-        layers.append(nn.Linear(in_dim, action_dim))
-
+        
+        layers.append(nn.Linear(in_dim, n_actions))
         self.net = nn.Sequential(*layers)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    
+    def forward(self, x):
         return self.net(x)
 
 
-def load_model(model_path: str, state_dim: int = 16, action_dim: int = 81,
-               device: str = 'cpu') -> DDQN:
-    """Load trained model."""
-    logger.info(f"Loading model from {model_path}...")
+class CentralizedCritic(nn.Module):
+    """Centralized critic for value estimation."""
     
-    model = DDQN(state_dim=state_dim, action_dim=action_dim)
-    model.load_state_dict(torch.load(model_path, map_location=device))
-    model.to(device)
-    model.eval()
+    def __init__(self, state_dim=10, hidden_dims=(128, 128)):
+        super().__init__()
+        layers = []
+        in_dim = state_dim
+        
+        for hidden in hidden_dims:
+            layers.append(nn.Linear(in_dim, hidden))
+            layers.append(nn.ReLU())
+            in_dim = hidden
+        
+        layers.append(nn.Linear(in_dim, 1))
+        self.net = nn.Sequential(*layers)
     
-    logger.info("Model loaded successfully")
-    return model
+    def forward(self, x):
+        return self.net(x)
 
 
-def calculate_inference_latency(model: DDQN, test_inputs: torch.Tensor, 
+# ============================================================
+# Evaluation Utilities
+# ============================================================
+def load_model(model_path: str, state_dim: int = 10, action_dim: int = 99,
+               device: str = 'cpu'):
+    """Load trained MAPPO model (5 actors + critic)."""
+    logger.info(f"Loading MAPPO model from {model_path}...")
+    
+    checkpoint = torch.load(model_path, map_location=device)
+    
+    hidden_dims = (128, 128)  # Default, could be extracted from checkpoint
+    
+    # Create 5 actors
+    actors = [TriageActor(state_dim, action_dim, hidden_dims).to(device) 
+              for _ in range(5)]
+    
+    # Load actor weights
+    for i in range(5):
+        actors[i].load_state_dict(checkpoint[f'actor_{i}'])
+        actors[i].eval()
+    
+    # Create and load critic
+    critic = CentralizedCritic(state_dim, hidden_dims).to(device)
+    critic.load_state_dict(checkpoint['critic'])
+    critic.eval()
+    
+    logger.info("MAPPO model loaded successfully (5 actors + critic)")
+    return actors, critic
+
+
+def calculate_inference_latency(actors, critic, test_inputs, 
                                num_runs: int = 100, device: str = 'cpu') -> dict:
     """Calculate model inference latency."""
     logger.info(f"Calculating inference latency ({num_runs} runs)...")
@@ -80,7 +115,15 @@ def calculate_inference_latency(model: DDQN, test_inputs: torch.Tensor,
     with torch.no_grad():
         for _ in range(num_runs):
             start = time.time()
-            _ = model(test_inputs.to(device))
+            
+            # Run all 5 actors
+            test_input = test_inputs[0:1].to(device)
+            for actor in actors:
+                _ = actor(test_input)
+            
+            # Run critic
+            _ = critic(test_input)
+            
             latencies.append((time.time() - start) * 1000)  # Convert to ms
     
     latencies = np.array(latencies)
@@ -94,64 +137,102 @@ def calculate_inference_latency(model: DDQN, test_inputs: torch.Tensor,
     }
 
 
-def calculate_fairness_score(predictions: np.ndarray) -> float:
+def calculate_fairness_score(actors, test_inputs, device='cpu') -> float:
     """
-    Calculate fairness score based on distribution of predictions.
+    Calculate fairness score based on action distribution across agents.
     
-    Fairness is measured as low variance in wait times across priority levels.
-    Score range: 0-1 (1 is most fair)
+    Fairness is measured as consistency in policy across different agents.
+    Score range: 0-1 (1 is most fair/consistent)
     """
-    # Simulate priority levels
-    num_samples = len(predictions)
-    priority_groups = 5
-    samples_per_group = num_samples // priority_groups
+    logger.info("Calculating fairness score...")
     
-    variances = []
-    for i in range(priority_groups):
-        group_preds = predictions[i * samples_per_group:(i + 1) * samples_per_group]
-        if len(group_preds) > 0:
-            variances.append(np.var(group_preds))
+    all_actions = []
     
-    # Low variance = fair (score closer to 1)
-    max_var = np.mean(variances) if variances else 1.0
-    fairness = 1.0 / (1.0 + max_var)
+    with torch.no_grad():
+        for test_input in test_inputs:
+            state_t = test_input.unsqueeze(0).to(device)
+            agent_actions = []
+            
+            for actor in actors:
+                logits = actor(state_t)
+                action = torch.argmax(logits, dim=-1).item()
+                agent_actions.append(action)
+            
+            all_actions.append(agent_actions)
     
-    return float(fairness)
+    # Calculate variance in actions across agents
+    all_actions = np.array(all_actions)
+    action_variance = np.mean(np.var(all_actions, axis=1))
+    
+    # Lower variance = more consistent = fairer
+    # Normalize to 0-1 range (assuming max variance of 5000 for 99 actions)
+    fairness = 1.0 / (1.0 + action_variance / 1000.0)
+    
+    return float(np.clip(fairness, 0.0, 1.0))
 
 
-def calculate_efficiency_score(predictions: np.ndarray) -> float:
+def calculate_efficiency_score(actors, test_inputs, device='cpu') -> float:
     """
-    Calculate efficiency score.
+    Calculate efficiency score based on action confidence.
     
-    Efficiency is based on how well the model prioritizes critical cases.
+    Efficiency is measured by how confident the agents are in their decisions.
     Score range: 0-1
     """
-    # Top 20% of predictions should be higher (representing better queue order)
-    top_20_percent = int(len(predictions) * 0.2)
-    top_predictions = np.argsort(predictions)[-top_20_percent:]
+    logger.info("Calculating efficiency score...")
     
-    # Check if top predictions have higher values
-    top_values = predictions[top_predictions]
-    bottom_values = predictions[~np.isin(np.arange(len(predictions)), top_predictions)]
+    confidences = []
     
-    efficiency = float(np.mean(top_values)) / (float(np.mean(bottom_values)) + 1e-6)
+    with torch.no_grad():
+        for test_input in test_inputs:
+            state_t = test_input.unsqueeze(0).to(device)
+            
+            for actor in actors:
+                logits = actor(state_t)
+                probs = torch.softmax(logits, dim=-1)
+                max_prob = torch.max(probs).item()
+                confidences.append(max_prob)
     
-    return min(efficiency, 1.0)
+    # Higher confidence = more efficient
+    efficiency = float(np.mean(confidences))
+    
+    return float(np.clip(efficiency, 0.0, 1.0))
 
 
-def calculate_accuracy(predictions: np.ndarray, ground_truth: np.ndarray) -> float:
-    """Calculate accuracy of priority ordering."""
-    # Compare top-k predictions with ground truth
-    k = 5
-    pred_top_k = set(np.argsort(predictions)[-k:])
-    truth_top_k = set(np.argsort(ground_truth)[-k:])
+def calculate_accuracy(actors, test_inputs, device='cpu') -> float:
+    """
+    Calculate accuracy based on policy consistency.
     
-    accuracy = len(pred_top_k & truth_top_k) / k
-    return float(accuracy)
+    Accuracy is measured by how often agents agree on actions.
+    """
+    logger.info("Calculating accuracy...")
+    
+    agreements = []
+    
+    with torch.no_grad():
+        for test_input in test_inputs:
+            state_t = test_input.unsqueeze(0).to(device)
+            
+            actions = []
+            for actor in actors:
+                logits = actor(state_t)
+                action = torch.argmax(logits, dim=-1).item()
+                actions.append(action)
+            
+            # Calculate agreement (how many agents chose the same action)
+            action_counts = {}
+            for action in actions:
+                action_counts[action] = action_counts.get(action, 0) + 1
+            
+            max_agreement = max(action_counts.values())
+            agreement_ratio = max_agreement / len(actions)
+            agreements.append(agreement_ratio)
+    
+    accuracy = float(np.mean(agreements))
+    return float(np.clip(accuracy, 0.0, 1.0))
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Evaluate DDQN model')
+    parser = argparse.ArgumentParser(description='Evaluate MAPPO model')
     parser.add_argument('--model', type=str, required=True, help='Model path')
     parser.add_argument('--data', type=str, default='mlops/data/test_sets', 
                        help='Test data directory')
@@ -163,13 +244,14 @@ def main():
     args = parser.parse_args()
     
     logger.info(f"Using device: {args.device}")
-    logger.info("Starting model evaluation...")
+    logger.info("Starting MAPPO model evaluation...")
     
-    # Load model
+    # Load model config
     model_config = json.load(open('mlops/config/model_config.json'))
     arch = model_config['architecture']
     
-    model = load_model(
+    # Load model
+    actors, critic = load_model(
         args.model,
         state_dim=arch['state_dim'],
         action_dim=arch['action_dim'],
@@ -179,25 +261,24 @@ def main():
     # Create test data
     logger.info("Creating test data...")
     test_inputs = torch.randn(100, arch['state_dim'])
-    test_outputs = torch.randn(100, arch['action_dim'])
-    
-    # Inference
-    with torch.no_grad():
-        predictions = model(test_inputs.to(args.device))
-        predictions_np = predictions.cpu().numpy()
     
     # Calculate metrics
     logger.info("Calculating evaluation metrics...")
     
-    latency_metrics = calculate_inference_latency(model, test_inputs, num_runs=100, device=args.device)
-    fairness_score = calculate_fairness_score(predictions_np.mean(axis=1))
-    efficiency_score = calculate_efficiency_score(predictions_np.mean(axis=1))
-    accuracy = calculate_accuracy(predictions_np.mean(axis=1), test_outputs.numpy().mean(axis=1))
+    latency_metrics = calculate_inference_latency(
+        actors, critic, test_inputs, num_runs=100, device=args.device
+    )
+    fairness_score = calculate_fairness_score(actors, test_inputs, device=args.device)
+    efficiency_score = calculate_efficiency_score(actors, test_inputs, device=args.device)
+    accuracy = calculate_accuracy(actors, test_inputs, device=args.device)
     
     # Compile results
     performance = {
         "evaluation_timestamp": datetime.now().isoformat(),
         "model_path": args.model,
+        "model_type": "MAPPO",
+        "n_agents": arch['n_agents'],
+        "agent_names": arch['agent_names'],
         "metrics": {
             "fairness_score": fairness_score,
             "efficiency_score": efficiency_score,
@@ -227,8 +308,9 @@ def main():
     
     # Print summary
     print("\n" + "="*60)
-    print("EVALUATION SUMMARY")
+    print("MAPPO EVALUATION SUMMARY")
     print("="*60)
+    print(f"Model Type:       MAPPO (5 agents)")
     print(f"Fairness Score:   {fairness_score:.4f} / 1.00")
     print(f"Efficiency Score: {efficiency_score:.4f} / 1.00")
     print(f"Accuracy:         {accuracy:.4f} / 1.00")

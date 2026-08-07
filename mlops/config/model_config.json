@@ -1,47 +1,46 @@
 {
   "model": {
-    "name": "DDQN Hospital Queue Optimizer",
-    "type": "DDQN",
-    "description": "Double Deep Q-Network for fair patient queue reordering",
+    "name": "MAPPO Hospital Queue Optimizer",
+    "type": "MAPPO",
+    "description": "Multi-Agent Proximal Policy Optimization for fair patient queue reordering",
     "version": "1.0.0"
   },
   "architecture": {
-    "state_dim": 16,
-    "action_dim": 81,
+    "state_dim": 10,
+    "action_dim": 99,
     "hidden_dims": [128, 128],
     "activation": "ReLU",
-    "output_activation": "Linear"
+    "output_activation": "Softmax",
+    "n_agents": 5,
+    "agent_names": ["Critical", "Emergent", "Urgent", "Semi-urgent", "Non-urgent"],
+    "alpha_weights": [0.40, 0.30, 0.15, 0.10, 0.05]
   },
   "features": {
     "state_features": [
-      "patient_triage_level",
-      "patient_wait_hours",
-      "ward_occupancy_rate",
-      "ward_avg_triage",
-      "priority_distribution_5",
-      "age_group_mix",
-      "special_requirements_count",
-      "recent_discharges",
-      "avg_bed_turnover",
-      "season",
-      "day_of_week",
-      "hour_of_day",
-      "patient_age_normalized",
-      "queue_length",
-      "fairness_penalty",
-      "efficiency_bonus"
+      "bed_occupancy_rate",
+      "queue_length_norm",
+      "triage1_proportion",
+      "triage2_proportion",
+      "triage3_proportion",
+      "triage4_proportion",
+      "triage5_proportion",
+      "longest_wait_norm",
+      "predicted_arrival_load",
+      "predicted_critical_share"
     ],
     "normalization": "minmax",
     "feature_scaling": {
-      "triage_level": [1, 5],
-      "wait_hours": [0, 24],
       "occupancy_rate": [0, 1],
-      "queue_length": [0, 50]
+      "queue_length": [0, 30],
+      "wait_hours": [0, 48],
+      "triage_proportion": [0, 1]
     }
   },
   "actions": {
-    "total": 81,
-    "description": "Possible queue orderings (for up to ~9 patients at once)"
+    "total": 99,
+    "description": "11 triage weights × 9 wait weights grid",
+    "w_triage_values": [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
+    "w_wait_values": [0.0, 0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7]
   },
   "performance_targets": {
     "fairness_score": 0.85,
