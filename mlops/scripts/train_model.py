@@ -85,23 +85,62 @@ def load_config(config_path: str) -> dict:
         return json.load(f)
 
 
-def create_dummy_dataset(state_dim=10, n_actions=99, num_samples=1000):
-    """Create dummy dataset for demonstration."""
-    logger.info(f"Creating dummy dataset with {num_samples} samples...")
+def load_training_data(data_dir: str, batch_size: int = 32, val_split: float = 0.2):
+    """Load preprocessed training data from .npy files.
     
-    # Random state vectors
-    states = torch.randn(num_samples, state_dim)
+    Args:
+        data_dir: Directory containing states.npy and actions.npy
+        batch_size: Training batch size
+        val_split: Fraction of data to use for validation
     
-    # Random action advantages (for policy gradient)
-    advantages = torch.randn(num_samples)
+    Returns:
+        (train_dataloader, val_dataloader)
+    """
+    data_path = Path(data_dir)
     
-    # Random returns (for value loss)
-    returns = torch.randn(num_samples)
+    # Load data
+    states_file = data_path / 'states.npy'
+    actions_file = data_path / 'actions.npy'
     
-    dataset = TensorDataset(states, advantages, returns)
-    dataloader = DataLoader(dataset, batch_size=32, shuffle=True)
+    if not states_file.exists() or not actions_file.exists():
+        raise FileNotFoundError(
+            f"Training data not found in {data_dir}. "
+            f"Run generate_training_data.py first."
+        )
     
-    return dataloader
+    logger.info(f"Loading training data from {data_dir}...")
+    states = np.load(states_file)
+    actions = np.load(actions_file)
+    
+    logger.info(f"Loaded {len(states)} samples")
+    logger.info(f"State shape: {states.shape}, Action shape: {actions.shape}")
+    
+    # Split into train/val
+    n_samples = len(states)
+    n_val = int(n_samples * val_split)
+    n_train = n_samples - n_val
+    
+    # Shuffle before splitting
+    indices = np.random.permutation(n_samples)
+    train_indices = indices[:n_train]
+    val_indices = indices[n_train:]
+    
+    train_states = torch.FloatTensor(states[train_indices])
+    train_actions = torch.LongTensor(actions[train_indices])
+    
+    val_states = torch.FloatTensor(states[val_indices])
+    val_actions = torch.LongTensor(actions[val_indices])
+    
+    # Create datasets
+    train_dataset = TensorDataset(train_states, train_actions)
+    val_dataset = TensorDataset(val_states, val_actions)
+    
+    train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+    val_dataloader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
+    
+    logger.info(f"Train samples: {n_train}, Val samples: {n_val}")
+    
+    return train_dataloader, val_dataloader
 
 
 def compute_gae(rewards, values, gamma=0.99, lam=0.95):
@@ -124,7 +163,7 @@ def compute_gae(rewards, values, gamma=0.99, lam=0.95):
 
 def train_epoch(actors, critic, dataloader, optimizers, critic_optimizer, 
                 device, clip_epsilon=0.2):
-    """Train one epoch of MAPPO."""
+    """Train one epoch of MAPPO with expert demonstrations."""
     for actor in actors:
         actor.train()
     critic.train()
@@ -134,21 +173,28 @@ def train_epoch(actors, critic, dataloader, optimizers, critic_optimizer,
     total_entropy = 0.0
     num_batches = 0
     
-    for batch_idx, (states, advantages, returns) in enumerate(dataloader):
-        states = states.to(device)
-        advantages = advantages.to(device)
-        returns = returns.to(device)
+    for batch_idx, batch in enumerate(dataloader):
+        # Handle both (states, actions) and (states, advantages, returns) formats
+        if len(batch) == 2:
+            states, expert_actions = batch
+            states = states.to(device)
+            expert_actions = expert_actions.to(device)
+            advantages = None
+            returns = None
+        else:
+            states, advantages, returns = batch
+            states = states.to(device)
+            advantages = advantages.to(device)
+            returns = returns.to(device)
         
-        # Normalize advantages
-        advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
-        
-        # Update critic
-        critic_optimizer.zero_grad()
-        values = critic(states).squeeze()
-        value_loss = nn.MSELoss()(values, returns)
-        value_loss.backward()
-        nn.utils.clip_grad_norm_(critic.parameters(), max_norm=0.5)
-        critic_optimizer.step()
+        # Update critic (if we have returns)
+        if returns is not None:
+            critic_optimizer.zero_grad()
+            values = critic(states).squeeze()
+            value_loss = nn.MSELoss()(values, returns)
+            value_loss.backward()
+            nn.utils.clip_grad_norm_(critic.parameters(), max_norm=0.5)
+            critic_optimizer.step()
         
         # Update each actor
         for i, (actor, optimizer) in enumerate(zip(actors, optimizers)):
@@ -158,12 +204,16 @@ def train_epoch(actors, critic, dataloader, optimizers, critic_optimizer,
             logits = actor(states)
             dist = torch.distributions.Categorical(logits=logits)
             
-            # Get actions and log probs
-            actions = dist.sample()
-            log_probs = dist.log_prob(actions)
-            
-            # Policy gradient loss (simplified - in real MAPPO you'd have old log probs)
-            policy_loss = -(log_probs * advantages.detach()).mean()
+            if expert_actions is not None:
+                # Supervised learning: mimic expert actions
+                log_probs = dist.log_prob(expert_actions)
+                policy_loss = -log_probs.mean()
+            else:
+                # Policy gradient (if we have advantages)
+                actions = dist.sample()
+                log_probs = dist.log_prob(actions)
+                advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
+                policy_loss = -(log_probs * advantages.detach()).mean()
             
             # Entropy bonus for exploration
             entropy = dist.entropy().mean()
@@ -177,11 +227,12 @@ def train_epoch(actors, critic, dataloader, optimizers, critic_optimizer,
             total_policy_loss += policy_loss.item()
             total_entropy += entropy.item()
         
-        total_value_loss += value_loss.item()
+        if returns is not None:
+            total_value_loss += value_loss.item()
         num_batches += 1
     
     avg_policy_loss = total_policy_loss / (num_batches * len(actors))
-    avg_value_loss = total_value_loss / num_batches
+    avg_value_loss = total_value_loss / num_batches if num_batches > 0 else 0.0
     avg_entropy = total_entropy / (num_batches * len(actors))
     
     return avg_policy_loss, avg_value_loss, avg_entropy
@@ -193,21 +244,55 @@ def validate(actors, critic, dataloader, device):
         actor.eval()
     critic.eval()
     
-    total_loss = 0.0
+    total_policy_loss = 0.0
+    total_value_loss = 0.0
     num_batches = 0
     
     with torch.no_grad():
-        for states, _, returns in dataloader:
-            states = states.to(device)
-            returns = returns.to(device)
+        for batch in dataloader:
+            # Handle both (states, actions) and (states, advantages, returns) formats
+            states = None
+            expert_actions = None
+            returns = None
             
-            values = critic(states).squeeze()
-            loss = nn.MSELoss()(values, returns)
-            total_loss += loss.item()
+            if len(batch) == 2:
+                states, expert_actions = batch
+                states = states.to(device)
+                expert_actions = expert_actions.to(device)
+            else:
+                states, advantages, returns = batch
+                states = states.to(device)
+                returns = returns.to(device)
+                expert_actions = None
+            
+            # Compute policy loss
+            for actor in actors:
+                logits = actor(states)
+                dist = torch.distributions.Categorical(logits=logits)
+                
+                if expert_actions is not None:
+                    log_probs = dist.log_prob(expert_actions)
+                    policy_loss = -log_probs.mean()
+                else:
+                    actions = dist.sample()
+                    log_probs = dist.log_prob(actions)
+                    policy_loss = -log_probs.mean()
+                
+                total_policy_loss += policy_loss.item()
+            
+            # Compute value loss (if we have returns)
+            if returns is not None:
+                values = critic(states).squeeze()
+                value_loss = nn.MSELoss()(values, returns)
+                total_value_loss += value_loss.item()
+            
             num_batches += 1
     
-    avg_loss = total_loss / num_batches
-    return avg_loss
+    avg_policy_loss = total_policy_loss / (num_batches * len(actors))
+    avg_value_loss = total_value_loss / num_batches if num_batches > 0 else 0.0
+    
+    # Return combined loss
+    return avg_policy_loss + avg_value_loss
 
 
 def main():
@@ -262,19 +347,18 @@ def main():
                                   eps=optimizer_config['epsilon'],
                                   weight_decay=optimizer_config['weight_decay'])
     
-    # Create datasets
+    # Load real training data
     logger.info("Loading training data...")
-    train_dataloader = create_dummy_dataset(
-        state_dim=state_dim,
-        n_actions=action_dim,
-        num_samples=1000
-    )
-    
-    val_dataloader = create_dummy_dataset(
-        state_dim=state_dim,
-        n_actions=action_dim,
-        num_samples=200
-    )
+    try:
+        train_dataloader, val_dataloader = load_training_data(
+            data_dir=args.data,
+            batch_size=training_config.get('batch_size', 32),
+            val_split=0.2
+        )
+    except FileNotFoundError as e:
+        logger.error(f"❌ {e}")
+        logger.error("Please run: python mlops/scripts/generate_training_data.py --days 7")
+        return
     
     # Training loop
     logger.info(f"Starting training for {training_config['epochs']} epochs...")
@@ -291,10 +375,13 @@ def main():
     }
     
     for epoch in range(training_config['epochs']):
+        # Training step
         train_policy_loss, train_value_loss, train_entropy = train_epoch(
             actors, critic, train_dataloader, actor_optimizers, critic_optimizer,
             args.device
         )
+        
+        # Validation step
         val_loss = validate(actors, critic, val_dataloader, args.device)
         
         training_history['epochs'].append(epoch + 1)

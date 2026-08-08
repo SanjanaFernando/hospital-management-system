@@ -24,58 +24,74 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r mlops/requirements.txt
       
-      - name: Collect data from past week
+      - name: Generate training data from MongoDB
         env:
           MONGODB_URI: ${{ secrets.MONGODB_URI }}
         run: |
-          python mlops/scripts/collect_data.py \
+          # Create model version directory with timestamp
+          MODEL_VERSION="v_weekly_$(date +%Y%m%d)"
+          MODEL_DIR="mlops/models/$MODEL_VERSION"
+          mkdir -p $MODEL_DIR
+          
+          # Generate training data from last 7 days
+          python mlops/scripts/generate_training_data.py \
             --days 7 \
-            --output mlops/data/raw
+            --output $MODEL_DIR
       
       - name: Train new model
         run: |
+          # Get the latest model directory
+          MODEL_DIR=$(ls -td mlops/models/v_weekly_* | head -1)
+          
+          # Train model using the generated data
           python mlops/scripts/train_model.py \
-            --data mlops/data/processed \
-            --config mlops/config/training_config.json \
-            --output mlops/models/v_weekly_$(date +%Y%m%d)
+            --output $MODEL_DIR \
+            --config mlops/config/training_config.json
       
       - name: Evaluate model
         run: |
           MODEL_DIR=$(ls -td mlops/models/v_weekly_* | head -1)
           python mlops/scripts/evaluate_model.py \
             --model $MODEL_DIR/model.pth \
-            --data mlops/data/test_sets \
             --output $MODEL_DIR/performance.json
       
       - name: Check if improvement and deploy
         run: |
           # Get latest model performance
           LATEST_MODEL=$(ls -td mlops/models/v_weekly_* | head -1)
-          LATEST_FAIRNESS=$(jq '.metrics.fairness_score' $LATEST_MODEL/performance.json)
+          LATEST_FAIRNESS=$(jq '.metrics.fairness_score' $LATEST_MODEL/performance.json 2>/dev/null || echo "0")
           
           # Get current active model performance
-          ACTIVE_MODEL=$(jq -r '.model_path' mlops/models/active_version.json)
-          ACTIVE_DIR=$(dirname $ACTIVE_MODEL)
-          ACTIVE_FAIRNESS=$(jq '.metrics.fairness_score' $ACTIVE_DIR/performance.json 2>/dev/null || echo "0")
+          if [ -f mlops/models/active_version.json ]; then
+            ACTIVE_MODEL=$(jq -r '.model_path' mlops/models/active_version.json)
+            ACTIVE_DIR=$(dirname $ACTIVE_MODEL)
+            ACTIVE_FAIRNESS=$(jq '.metrics.fairness_score' $ACTIVE_DIR/performance.json 2>/dev/null || echo "0")
+          else
+            ACTIVE_FAIRNESS="0"
+          fi
           
           # Compare and deploy if improved
           if (( $(echo "$LATEST_FAIRNESS > $ACTIVE_FAIRNESS" | bc -l) )); then
             echo "Model improved! Fairness: $ACTIVE_FAIRNESS → $LATEST_FAIRNESS"
+            
+            # Activate new model version
             python mlops/scripts/deploy_model.py --activate $(basename $LATEST_MODEL)
+            
+            # Copy to production model location
             python mlops/scripts/deploy_model.py \
               --version $(basename $LATEST_MODEL) \
-              --copy-to model/best_ddqn_hospital_fair.pth
+              --copy-to model/best_mappo_hospital.pth
           else
             echo "No improvement. Fairness: $LATEST_FAIRNESS vs Active: $ACTIVE_FAIRNESS"
           fi
       
-      - name: Commit changes
+      - name: Commit and push changes
         run: |
           git config --global user.email "actions@github.com"
           git config --global user.name "GitHub Actions"
           git add -A
-          git commit -m "MLOps: Weekly model update" || true
-          git push || true
+          git diff --cached --quiet || git commit -m "MLOps: Weekly model update $(date +%Y-%m-%d)"
+          git push
       
       - name: Send email notification on failure
         if: failure()
@@ -85,7 +101,7 @@ jobs:
           server_port: 465
           username: ${{ secrets.GMAIL_USER }}
           password: ${{ secrets.GMAIL_APP_PASSWORD }}
-          subject: " MLOps Weekly Retraining Failed"
+          subject: "MLOps Weekly Retraining Failed"
           body: |
             MLOps weekly retraining has failed.
             
@@ -103,7 +119,7 @@ jobs:
           server_port: 465
           username: ${{ secrets.GMAIL_USER }}
           password: ${{ secrets.GMAIL_APP_PASSWORD }}
-          subject: " MLOps Weekly Retraining Completed"
+          subject: "MLOps Weekly Retraining Completed"
           body: |
             MLOps weekly retraining has completed successfully.
             
