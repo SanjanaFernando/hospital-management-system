@@ -171,8 +171,8 @@ export function initializeWard16(): Ward {
       disease: "Chest Pain",
       previousDiseases: [],
       priority: "Triage 2",
-      admissionTime: new Date(Date.now() - 0.5 * 60 * 60 * 1000),
-      queueWaitTime: 30,
+      admissionTime: new Date(Date.now() - 4.5 * 60 * 60 * 1000),
+      queueWaitTime: 270,
       specialRequirements: [],
     },
     {
@@ -236,8 +236,8 @@ export function initializeWard16(): Ward {
       disease: "Chest Pain",
       previousDiseases: [],
       priority: "Triage 1",
-      admissionTime: new Date(Date.now() - 5 * 60 * 60 * 1000),
-      queueWaitTime: 300,
+      admissionTime: new Date(Date.now() - 0.5 * 60 * 60 * 1000),
+      queueWaitTime: 30,
       specialRequirements: [],
     },
   ];
