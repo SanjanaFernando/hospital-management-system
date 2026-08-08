@@ -1,0 +1,44 @@
+﻿
+> hospital-management@0.1.0 build
+> next build
+
+Γû▓ Next.js 16.1.6 (Turbopack)
+- Environments: .env.local
+
+  Creating an optimized production build ...
+Γ£ô Compiled successfully in 14.2s
+  Running TypeScript ...
+node.exe : Failed to compile.
+At C:\Users\This Pc\AppData\Roaming\npm\npm.ps1:24 char:5
++     & "node$exe"  "$basedir/node_modules/npm/bin/npm-cli.js" $args
++     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Failed to compile.:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+./app/utils/mockData.ts:363:14
+Type error: Argument of type 'Ward' is not assignable to parameter of type '{ id: string; name: string; beds: ({ id: 
+string; bedNumber: number; status: "occupied"; type: "ICU" | "NORMAL"; patient: Patient; } | { id: string; bedNumber: 
+number; status: "available" | "maintenance"; type: "ICU" | "NORMAL"; patient?: undefined; })[]; ... 5 more ...; 
+maintenanceBeds: number; }'.
+  Types of property 'beds' are incompatible.
+    Type 'Bed[]' is not assignable to type '({ id: string; bedNumber: number; status: "occupied"; type: "ICU" | 
+"NORMAL"; patient: Patient; } | { id: string; bedNumber: number; status: "available" | "maintenance"; type: "ICU" | 
+"NORMAL"; patient?: undefined; })[]'.
+      Type 'Bed' is not assignable to type '{ id: string; bedNumber: number; status: "occupied"; type: "ICU" | 
+"NORMAL"; patient: Patient; } | { id: string; bedNumber: number; status: "available" | "maintenance"; type: "ICU" | 
+"NORMAL"; patient?: undefined; }'.
+        Type 'Bed' is not assignable to type '{ id: string; bedNumber: number; status: "available" | "maintenance"; 
+type: "ICU" | "NORMAL"; patient?: undefined; }'.
+          Types of property 'status' are incompatible.
+            Type 'BedStatus' is not assignable to type '"available" | "maintenance"'.
+              Type '"occupied"' is not assignable to type '"available" | "maintenance"'.
+
+[0m [90m 361 |[39m
+ [90m 362 |[39m   [90m// Append Ward 16[39m
+[31m[1m>[22m[39m[90m 363 |[39m   wards[33m.[39mpush(initializeWard16())[33m;[39m
+ [90m     |[39m              [31m[1m^[22m[39m
+ [90m 364 |[39m   [36mreturn[39m wards[33m;[39m
+ [90m 365 |[39m }
+ [90m 366 |[39m[0m
+Next.js build worker exited with code: 1 and signal: null

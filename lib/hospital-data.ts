@@ -2,7 +2,7 @@ import { unstable_cache } from "next/cache";
 import { ObjectId } from "mongodb";
 import { connectToDatabase } from "@/lib/mongodb";
 import { Bed, Patient, Ward } from "@/app/types";
-import { reorderQueueWithAi } from "@/lib/queueAi";
+import { reorderQueueWithAi, fallbackPrioritySort } from "@/lib/queueAi";
 
 type MongoDoc = Record<string, unknown>;
 
@@ -354,7 +354,7 @@ async function queryWardsWithPatients(): Promise<Ward[]> {
         name: String(ward.name || wardId),
         beds,
         patients: admittedPatients,
-        patientQueue: queuedPatients,
+        patientQueue: fallbackPrioritySort(queuedPatients),
         dischargedPatients,
         totalBeds: beds.length,
         occupiedBeds,

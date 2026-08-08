@@ -64,6 +64,8 @@ function computeFallbackPriorityScore(patient: Patient, nowMs: number = Date.now
   const triageNum =
     typeof patient.priority === "string"
       ? parseInt(patient.priority.replace(/\D/g, ""), 10) || 5
+      : typeof patient.priority === "number"
+      ? patient.priority
       : 5;
 
   let waitMinutes = 0;
@@ -77,15 +79,24 @@ function computeFallbackPriorityScore(patient: Patient, nowMs: number = Date.now
   }
 
   const waitHours = waitMinutes / 60;
-  return (6 - triageNum) * 0.6 + waitHours * 0.4;
+  // Primary: Triage level (T1 gets 5000+, T2 gets 4000+, T3 gets 3000+, T4 gets 2000+, T5 gets 1000+)
+  // Secondary: Wait hours (longer wait adds to score within same triage level)
+  return (6 - triageNum) * 1000 + waitHours;
 }
 
-function fallbackPrioritySort(queue: Patient[]): Patient[] {
+export function fallbackPrioritySort(queue: Patient[]): Patient[] {
   const now = Date.now();
   return [...queue]
-    .sort(
-      (a, b) => computeFallbackPriorityScore(b, now) - computeFallbackPriorityScore(a, now)
-    )
+    .sort((a, b) => {
+      const rankA = resolvePriorityRank(a.priority);
+      const rankB = resolvePriorityRank(b.priority);
+      if (rankA !== rankB) {
+        return rankA - rankB; // Lower rank number = higher triage urgency (Triage 1 first)
+      }
+      const waitA = getWaitMinutes(a, new Date(now));
+      const waitB = getWaitMinutes(b, new Date(now));
+      return waitB - waitA; // Longer wait first
+    })
     .map((patient, idx) => ({
       ...patient,
       queueRank: idx + 1,
