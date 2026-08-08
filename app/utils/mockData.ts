@@ -209,7 +209,7 @@ export function initializeWard16(): Ward {
       gender: "Male",
       disease: "Chest Pain",
       previousDiseases: [],
-      priority: "Triage 2",
+      priority: "Triage 1",
       admissionTime: new Date(Date.now() - 2 * 60 * 60 * 1000),
       queueWaitTime: 120,
       specialRequirements: [],
