@@ -284,16 +284,19 @@ export default function PatientQueue({
     );
   }
 
-  const hasUnknownPriority = patients.some(
-    (patient) => resolvePriorityRank(patient.priority) === 99
-  );
-
-  const sortedPatients = hasUnknownPriority
-    ? [...patients].sort(
-        (a, b) =>
-          resolvePriorityRank(a.priority) - resolvePriorityRank(b.priority)
-      )
-    : patients;
+  const sortedPatients =
+    queueOrderStrategy === "priority"
+      ? [...patients].sort((a, b) => {
+          const rankA = resolvePriorityRank(a.priority);
+          const rankB = resolvePriorityRank(b.priority);
+          if (rankA !== rankB) {
+            return rankA - rankB;
+          }
+          const waitA = resolveWaitMinutes(a) ?? 0;
+          const waitB = resolveWaitMinutes(b) ?? 0;
+          return waitB - waitA;
+        })
+      : patients;
 
   const displayPatients = sortedPatients;
 
