@@ -291,7 +291,7 @@ export function initializeWards(): Ward[] {
     "Ward 6 - Surgical Type D",
   ];
 
-  const wards = wardNames.map((name, wardIndex) => {
+  const wards: Ward[] = wardNames.map((name, wardIndex) => {
     // Generate main ward patients (currently admitted)
     const admittedPatients: Patient[] = [];
     const patientQueue: Patient[] = [];
