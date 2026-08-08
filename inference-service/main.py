@@ -5,7 +5,7 @@ Deployed on Render. Called by the Next.js app via HTTP instead of a local subpro
 Endpoints:
   GET  /health   — liveness / readiness probe
   GET  /debug    — detailed diagnostics (file existence, model layout, env vars)
-  POST /reorder  — run DDQN inference and return ordered patient IDs
+  POST /reorder  — run MAPPO inference and return ordered patient IDs
 """
 from __future__ import annotations
 
@@ -79,8 +79,8 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="Hospital AI Queue Inference",
-    description="DDQN-based patient queue reordering service",
-    version="1.0.0",
+    description="MAPPO shared-actor patient queue reordering service",
+    version="2.0.0",
     lifespan=lifespan,
 )
 
@@ -139,6 +139,7 @@ def debug() -> dict[str, Any]:
             "state_dim": meta.get("state_dim"),
             "action_dim": meta.get("action_dim"),
             "hidden_dims": list(meta.get("hidden_dims", [])),
+            "model_type": meta.get("model_type", "unknown"),
         } if meta else None,
         "env": {
             "MODEL_PATH": os.environ.get("MODEL_PATH"),
@@ -151,19 +152,21 @@ def debug() -> dict[str, Any]:
 @app.post("/reorder")
 async def reorder(request: Request) -> JSONResponse:
     """
-    Run DDQN inference and return a ranked patient list.
+    Run MAPPO shared-actor inference and return a ranked patient list.
 
     Request body (JSON):
-      - targetWardId        string
-      - targetWardQueue     Patient[]  (or "queue" — both keys accepted)
-      - targetWardTotalBeds number
+      - targetWardId          string
+      - targetWardQueue        Patient[]  (or "queue" — both keys accepted)
+      - targetWardTotalBeds    number
       - targetWardOccupiedBeds number
-      - patientHistory      PatientHistoryEntry[]  (optional)
+      - totalMaleBeds          number  (optional — improves gender-aware state)
+      - totalFemaleBeds        number  (optional)
+      - patientHistory         PatientHistoryEntry[]  (optional)
 
     Response (JSON):
       - orderedPatientIds   string[]
       - predictive_analytics  { enabled, pred_load, pred_crit, … }
-      - meta                { action, weights, … }
+      - meta                { action, weights, model_type, … }
     """
     if "model" not in _model_state:
         raise HTTPException(

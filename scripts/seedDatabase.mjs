@@ -148,6 +148,19 @@ function ageGroupFromAge(age) {
 
 let patientCounter = 10001;
 
+// ---------------------------------------------------------------------------
+// Ward 16 – Male Medical: fixed queue patients from the PDF
+// ---------------------------------------------------------------------------
+const WARD16_QUEUE_PATIENTS = [
+  { id: "9140", name: "Patient 9140", age: 68, ageGroup: "Elderly", disease: "Rash on Buttocks",        waitHours: 3,   priority: "Triage 3" },
+  { id: "9141", name: "Patient 9141", age: 18, ageGroup: "Adult",   disease: "Chest Pain",              waitHours: 4.5, priority: "Triage 2" },
+  { id: "9142", name: "Patient 9142", age: 73, ageGroup: "Elderly", disease: "Transfer from WD 24/26",  waitHours: 1,   priority: "Triage 4" },
+  { id: "9143", name: "Patient 9143", age: 20, ageGroup: "Adult",   disease: "Faintness / Vertigo",     waitHours: 0.5, priority: "Triage 3" },
+  { id: "9144", name: "Patient 9144", age: 74, ageGroup: "Elderly", disease: "Chest Pain",              waitHours: 2,   priority: "Triage 2" },
+  { id: "9145", name: "Patient 9145", age: 47, ageGroup: "Adult",   disease: "Fits",                   waitHours: 0.5, priority: "Triage 1" },
+  { id: "9146", name: "Patient 9146", age: 44, ageGroup: "Adult",   disease: "Chest Pain",              waitHours: 5,   priority: "Triage 1" },
+];
+
 function generatePatient(patientId, wardId, status) {
   const firstName = randomItem(FIRST_NAMES);
   const lastName = randomItem(LAST_NAMES);
@@ -245,6 +258,15 @@ async function resetDatabase() {
         maintenanceBeds: 2,
         queuePatients: 10,
       },
+      {
+        wardId: "ward-16",
+        name: "Ward 16 - Male Medical",
+        normalBeds: 40,
+        icuBeds: 0,
+        occupiedRate: 0.975, // 39 of 40
+        maintenanceBeds: 0,
+        queuePatients: 0, // handled separately via WARD16_QUEUE_PATIENTS
+      },
     ];
 
     let totalPatients = 0;
@@ -271,12 +293,38 @@ async function resetDatabase() {
 
       for (let i = 0; i < occupiedBeds; i++) {
         const patientId = `${wardId}-admitted-${i + 1}`;
-        admitted.push(generatePatient(patientId, wardId, "admitted"));
+        const p = generatePatient(patientId, wardId, "admitted");
+        // Ward 16 is a Male-only ward
+        if (wardId === "ward-16") p.gender = "Male";
+        admitted.push(p);
       }
 
-      for (let i = 0; i < queuePatients; i++) {
-        const patientId = `${wardId}-queue-${i + 1}`;
-        queued.push(generatePatient(patientId, wardId, "queued"));
+      // Ward 16 queue is seeded from the fixed list below
+      if (wardId !== "ward-16") {
+        for (let i = 0; i < queuePatients; i++) {
+          const patientId = `${wardId}-queue-${i + 1}`;
+          queued.push(generatePatient(patientId, wardId, "queued"));
+        }
+      } else {
+        for (const pDef of WARD16_QUEUE_PATIENTS) {
+          queued.push({
+            id: pDef.id,
+            wardId,
+            status: "queued",
+            name: pDef.name,
+            age: pDef.age,
+            ageGroup: pDef.ageGroup,
+            gender: "Male",
+            disease: pDef.disease,
+            previousDiseases: [],
+            priority: pDef.priority,
+            admissionTime: new Date(Date.now() - pDef.waitHours * 60 * 60 * 1000),
+            queueWaitTime: Math.round(pDef.waitHours * 60),
+            specialRequirements: [],
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          });
+        }
       }
 
       const bedBlueprints = [];
