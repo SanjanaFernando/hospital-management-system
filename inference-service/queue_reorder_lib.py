@@ -11,6 +11,7 @@ from pathlib import Path
 from datetime import datetime, timezone
 from typing import Any
 
+import math
 import numpy as np
 import torch
 import torch.nn as nn
@@ -58,6 +59,27 @@ class DDQN(nn.Module):
             in_dim = hidden
         layers.append(nn.Linear(in_dim, action_dim))
         self.net = nn.Sequential(*layers)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.net(x)
+
+
+class MAPPOActor(nn.Module):
+    """Shared MAPPO actor — mirrors Actor in train.py exactly.
+
+    Architecture: Linear→Tanh (×3 hidden) → Linear (logits)
+      state_dim : 15  (gender-aware + time-aware, see FAIR_Env._state())
+      n_actions : 25  (5 W_T × 5 W_W grid)
+    """
+
+    def __init__(self, state_dim: int = 15, n_actions: int = 25):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Linear(state_dim, 256), nn.Tanh(),
+            nn.Linear(256, 256),       nn.Tanh(),
+            nn.Linear(256, 128),       nn.Tanh(),
+            nn.Linear(128, n_actions),
+        )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.net(x)
@@ -214,7 +236,92 @@ def build_training_state(payload: dict[str, Any], state_dim: int = 10) -> np.nda
     return state[:state_dim]
 
 
+def build_mappo_state(payload: dict[str, Any], state_dim: int = 15) -> np.ndarray:
+    """15-dim state that exactly mirrors FAIR_Env._state() from train.py.
+
+    Dimensions (15 total):
+      [0]    occ           – overall bed occupancy
+      [1]    male_occ      – male-bed occupancy  (0 if ward has no male beds)
+      [2]    female_occ    – female-bed occupancy (0 if ward has no female beds)
+      [3]    q_len         – queue length / 40 (capped at 1)
+      [4]    male_q_ratio  – fraction of queue that is Male
+      [5]    female_q_ratio
+      [6-10] triage_dist   – normalised triage-level histogram (T1…T5)
+      [11]   longest_wait  – max queue wait / 48 h (capped at 1)
+      [12]   avg_wait      – mean queue wait / 24 h (capped at 1)
+      [13]   hour_sin      – sin(2π * hour / 24)
+      [14]   hour_cos      – cos(2π * hour / 24)
+    """
+    queue         = payload.get("targetWardQueue") or payload.get("queue") or []
+    total_beds    = max(1, int(payload.get("targetWardTotalBeds")  or payload.get("totalBeds",    40)))
+    occupied_beds = int(payload.get("targetWardOccupiedBeds") or payload.get("occupiedBeds", 0))
+
+    # Gender-split bed counts (caller may supply; graceful fallback)
+    total_male_beds   = int(payload.get("totalMaleBeds",   total_beds))
+    total_female_beds = int(payload.get("totalFemaleBeds", 0))
+    occupied_male     = int(payload.get("occupiedMaleBeds",
+                            occupied_beds if total_female_beds == 0 else occupied_beds // 2))
+    occupied_female   = int(payload.get("occupiedFemaleBeds",
+                            0 if total_female_beds == 0 else occupied_beds // 2))
+
+    occ        = min(max(occupied_beds  / total_beds,          0.0), 1.0)
+    male_occ   = (occupied_male   / total_male_beds)   if total_male_beds   > 0 else 0.0
+    female_occ = (occupied_female / total_female_beds) if total_female_beds > 0 else 0.0
+    q_len      = min(len(queue) / 40.0, 1.0)
+
+    now         = datetime.now(timezone.utc)
+    male_q      = 0
+    female_q    = 0
+    triage_dist = np.zeros(5, dtype=np.float32)
+    waits: list[float] = []
+
+    for p in queue:
+        g = str(p.get("gender", "M")).strip().upper()
+        if g in {"M", "MALE"}:
+            male_q += 1
+        else:
+            female_q += 1
+        t = max(0, min(4, priority_to_triage_level(p.get("priority")) - 1))
+        triage_dist[t] += 1
+        waits.append(normalized_wait_hours(p, now))
+
+    if queue:
+        triage_dist    /= len(queue)
+        male_q_ratio    = male_q   / len(queue)
+        female_q_ratio  = female_q / len(queue)
+        longest_wait    = min(max(waits) / 48.0, 1.0)
+        avg_wait        = min(float(np.mean(waits)) / 24.0, 1.0)
+    else:
+        male_q_ratio = female_q_ratio = longest_wait = avg_wait = 0.0
+
+    hour     = now.hour + now.minute / 60.0
+    hour_sin = math.sin(2 * math.pi * hour / 24)
+    hour_cos = math.cos(2 * math.pi * hour / 24)
+
+    # 15-dim base (matches FAIR_Env._state())
+    state_15 = np.array(
+        [occ, male_occ, female_occ,
+         q_len, male_q_ratio, female_q_ratio,
+         *triage_dist,
+         longest_wait, avg_wait,
+         hour_sin, hour_cos],
+        dtype=np.float32,
+    )
+
+    if state_dim <= 15:
+        return state_15[:state_dim]
+
+    # Extended ("predictive") model: dims 15-16 are forecaster predictions
+    # run_inference injects these under _pred_load / _pred_crit before calling build_state
+    pred_load = float(payload.get("_pred_load", 0.0))
+    pred_crit = float(payload.get("_pred_crit", 0.0))
+    state_17 = np.append(state_15, [pred_load, pred_crit]).astype(np.float32)
+    return state_17[:state_dim]
+
+
 def build_state(payload: dict[str, Any], state_dim: int, action_dim: int) -> np.ndarray:
+    if action_dim == 25:
+        return build_mappo_state(payload, state_dim=state_dim)
     if action_dim == 99:
         return build_training_state(payload, state_dim=state_dim)
     if action_dim == 64 and state_dim <= 12:
@@ -226,11 +333,21 @@ def build_state(payload: dict[str, Any], state_dim: int, action_dim: int) -> np.
 # Action decoding
 # ---------------------------------------------------------------------------
 
+# MAPPO 5×5 action grid — must match W_T_LIST / W_W_LIST in train.py exactly
+_MAPPO_W_T_LIST = [0.0, 0.25, 0.5, 0.75, 1.0]
+_MAPPO_W_W_LIST = [0.0, 0.15, 0.3,  0.5,  0.7]
+
+# Legacy DDQN action grids
 _W_T_LIST = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]  # 11 values
 _W_W_LIST = [0.0, 0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7]             # 9 values
 
 
 def action_to_weights(action: int, action_dim: int) -> list[float]:
+    if action_dim == 25:
+        # MAPPO 5×5 grid (matches W_T_LIST / W_W_LIST in train.py)
+        w_t = _MAPPO_W_T_LIST[max(0, min(action // 5, len(_MAPPO_W_T_LIST) - 1))]
+        w_w = _MAPPO_W_W_LIST[max(0, min(action %  5, len(_MAPPO_W_W_LIST) - 1))]
+        return [w_t, w_w]
     if action_dim == 99:
         w_triage = _W_T_LIST[action // 9]
         w_wait = _W_W_LIST[action % 9]
@@ -272,6 +389,11 @@ def patient_score(
 ) -> float:
     triage_level = priority_to_triage_level(patient.get("priority"))
     wait_hours = normalized_wait_hours(patient, now)
+
+    if action_dim == 25:
+        # MAPPO: exact scoring from FAIR_Env.step() in train.py
+        w_t, w_w = weights
+        return w_t * (6 - triage_level) + w_w * wait_hours
 
     if action_dim == 99:
         w_t, w_w = weights
@@ -435,17 +557,30 @@ def infer_model_layout(state_dict: dict[str, torch.Tensor]) -> tuple[int, tuple[
 # ---------------------------------------------------------------------------
 
 def load_model(model_path: str) -> tuple[nn.Module, dict[str, Any]]:
-    """Load a DDQN checkpoint. Returns (model, layout_metadata)."""
+    """Load a MAPPO or DDQN checkpoint and return (model, layout_metadata).
+
+    Auto-detection rule:
+      action_dim == 25  →  MAPPOActor  (shared actor, any state_dim)
+      Otherwise         →  DDQN        (legacy, backward-compat)
+    """
     checkpoint = torch.load(model_path, map_location="cpu", weights_only=False)
     state_dict = extract_state_dict(checkpoint)
     state_dim, hidden_dims, action_dim = infer_model_layout(state_dict)
-    model = DDQN(state_dim=state_dim, action_dim=action_dim, hidden_dims=hidden_dims)
+
+    if action_dim == 25:
+        model: nn.Module = MAPPOActor(state_dim=state_dim, n_actions=action_dim)
+        model_type = "mappo"
+    else:
+        model = DDQN(state_dim=state_dim, action_dim=action_dim, hidden_dims=hidden_dims)
+        model_type = "ddqn"
+
     model.load_state_dict(state_dict)
     model.eval()
     return model, {
         "state_dim": state_dim,
         "hidden_dims": hidden_dims,
         "action_dim": action_dim,
+        "model_type": model_type,
     }
 
 
@@ -500,13 +635,19 @@ def run_inference(
         "surge_predicted": forecaster.is_surge(now),
     }
 
+    # Inject forecaster predictions so build_mappo_state can include them
+    # in the 17-dim predictive state (dims 15-16 = pred_load, pred_crit)
+    normalized["_pred_load"] = float(forecast.get("pred_load", 0.0))
+    normalized["_pred_crit"] = round(predicted_critical_share, 6)
+
     state = build_state(normalized, state_dim=state_dim, action_dim=action_dim)
 
     with torch.no_grad():
         q_values = model(torch.FloatTensor(state).unsqueeze(0)).squeeze(0).numpy()
 
     disallowed_actions: set[int] = set()
-    if action_dim in (64, 99):
+    # Block action 0 for MAPPO (w_t=0, w_w=0 — no-op ordering) and legacy DDQN grids
+    if action_dim in (25, 64, 99):
         disallowed_actions.add(0)
 
     selection_q = q_values.copy()
