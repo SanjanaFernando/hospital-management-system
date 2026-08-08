@@ -170,7 +170,7 @@ function generatePatient(patientId, wardId, status) {
 // ---------------------------------------------------------------------------
 const WARD16_QUEUE_PATIENTS = [
   { id: "9140", name: "Patient 9140", age: 68, ageGroup: "Elderly", gender: "Male", disease: "Rash on Buttocks",        waitHours: 3,   priority: "Triage 5" },
-  { id: "9141", name: "Patient 9141", age: 18, ageGroup: "Adult",   gender: "Male", disease: "Chest Pain",              waitHours: 4.5, priority: "Triage 2" },
+  { id: "9141", name: "Patient 9141", age: 18, ageGroup: "Adult",   gender: "Male", disease: "Chest Pain",              waitHours: 1,   priority: "Triage 2" },
   { id: "9142", name: "Patient 9142", age: 73, ageGroup: "Elderly", gender: "Male", disease: "Transfer from WD 24/26",  waitHours: 1,   priority: "Triage 4" },
   { id: "9143", name: "Patient 9143", age: 20, ageGroup: "Adult",   gender: "Male", disease: "Faintness / Vertigo",     waitHours: 0.5, priority: "Triage 3" },
   { id: "9144", name: "Patient 9144", age: 74, ageGroup: "Elderly", gender: "Male", disease: "Chest Pain",              waitHours: 2,   priority: "Triage 1" },
