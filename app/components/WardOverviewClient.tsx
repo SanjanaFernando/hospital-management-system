@@ -250,10 +250,63 @@ export default function WardOverviewClient({
               <p className="text-gray-600">No beds available</p>
             )}
 
-            {/* Special Assigns */}
-            {canCrossWardAssign && specialAssigns.length > 0 && (
-              <div className="mt-6 rounded-2xl border border-cyan-200 bg-linear-to-br from-cyan-50 via-white to-sky-50 p-4 shadow-sm">
-                {/* ... existing special assigns code ... */}
+            {/* Transferred Out Patients Section */}
+            {specialAssigns.length > 0 && (
+              <div className="mt-6 rounded-xl border border-cyan-200 bg-gradient-to-br from-cyan-50 via-sky-50 to-indigo-50 p-4 shadow-sm">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-cyan-600 text-white text-xs font-bold">
+                      ⇄
+                    </span>
+                    <h3 className="text-sm font-bold text-cyan-950">
+                      Patients Transferred to Other Wards ({specialAssigns.length})
+                    </h3>
+                  </div>
+                  <span className="text-[11px] text-cyan-700 font-medium">
+                    Originated from this ward
+                  </span>
+                </div>
+                <div className="space-y-2">
+                  {specialAssigns.map(({ patient, targetWardId, targetWardName, targetBed }) => (
+                    <div
+                      key={patient.id || patient._id}
+                      className="flex items-center justify-between rounded-lg border border-cyan-100 bg-white p-3 shadow-xs hover:border-cyan-300 transition-colors"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="h-8 w-8 rounded-full bg-cyan-100 text-cyan-800 flex items-center justify-center font-bold text-xs">
+                          {patient.name.charAt(0)}
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <p className="text-sm font-semibold text-gray-900">{patient.name}</p>
+                            <span className="rounded bg-cyan-100 px-1.5 py-0.5 text-[10px] font-medium text-cyan-800">
+                              {patient.priority || "Triage"}
+                            </span>
+                          </div>
+                          <p className="text-xs text-gray-500">
+                            Age: {patient.age} • Disease: {patient.disease || "N/A"}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <div className="text-right">
+                          <p className="text-xs font-semibold text-cyan-800">
+                            Admitted in {targetWardName}
+                          </p>
+                          <p className="text-[11px] text-gray-500">
+                            {targetBed.type === "ICU" ? "ICU Bed" : "Bed"} #{targetBed.bedNumber}
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => router.push(`/wards/${targetWardId}/${targetBed.id}`)}
+                          className="rounded-md bg-cyan-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-cyan-700 transition-colors"
+                        >
+                          View Bed
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
           </div>

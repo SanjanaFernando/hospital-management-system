@@ -144,8 +144,8 @@ export default function BedGrid({
 
                   {bed.patient.assignedFromWardId &&
                     bed.patient.assignedFromWardId !== normalizedWardId && (
-                      <p className="mt-1 rounded-full bg-white/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide truncate">
-                        From {formatWardLabel(bed.patient.assignedFromWardId)}
+                      <p className="mt-1 rounded-full bg-cyan-900/40 border border-cyan-300/60 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider truncate text-cyan-100 flex items-center justify-center gap-1 shadow-2xs">
+                        <span>⇄</span> From {formatWardLabel(bed.patient.assignedFromWardId)}
                       </p>
                     )}
                 </>

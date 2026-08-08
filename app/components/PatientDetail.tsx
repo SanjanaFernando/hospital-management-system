@@ -234,8 +234,8 @@ export default function PatientDetail({
             {patient.ageGroup}
           </span>
           {patient.assignedFromWardId && patient.assignedFromWardId !== patient.wardId && (
-            <span className="bg-cyan-500 text-white px-3 py-1 rounded-full text-sm font-semibold">
-              From {formatWardLabel(patient.assignedFromWardId)}
+            <span className="bg-cyan-600 text-white px-3 py-1 rounded-full text-sm font-semibold flex items-center gap-1 shadow-xs">
+              <span>⇄</span> Transferred from {formatWardLabel(patient.assignedFromWardId)}
             </span>
           )}
           {canManageActions && (
