@@ -45,6 +45,7 @@ jobs:
           
           # Train model using the generated data
           python mlops/scripts/train_model.py \
+            --data $MODEL_DIR \
             --output $MODEL_DIR \
             --config mlops/config/training_config.json
       
