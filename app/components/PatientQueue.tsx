@@ -248,9 +248,12 @@ export default function PatientQueue({
     }));
   };
 
-  const handleSaveTriage = async (patient: Patient) => {
+  const handleSaveTriage = async (
+    patient: Patient,
+    priorityToSave?: Patient["priority"]
+  ) => {
     const patientKey = getPatientKey(patient);
-    const nextPriority = resolveTriageDraft(patient);
+    const nextPriority = priorityToSave || resolveTriageDraft(patient);
 
     setTriageError("");
     setIsUpdatingTriageId(patientKey);
@@ -349,6 +352,7 @@ export default function PatientQueue({
         >
           {displayPatients.map((patient, index) => (
             (() => {
+              const patientKey = getPatientKey(patient);
               const patientReason = getPatientExplanationWithPercentages(
                 patient,
                 patientReasonById,
@@ -367,7 +371,7 @@ export default function PatientQueue({
                   : ""
               }`}
             >
-              {/* Header Row: Name & Badges on Left, Triage Badge on Right */}
+              {/* Header Row: Name & Badges on Left, Interactive Triage Button/Selector on Right */}
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0 flex-1">
                   <p className="font-semibold flex items-center gap-1.5 flex-wrap text-slate-900">
@@ -391,15 +395,51 @@ export default function PatientQueue({
                       </span>
                     )}
                     {patient.triageRequested && (
-                      <span className="px-2 py-0.5 rounded text-xs font-semibold bg-amber-200 text-amber-900">
-                        Pending Triage
+                      <span className="px-2 py-0.5 rounded text-xs font-semibold bg-amber-200 text-amber-900 animate-pulse">
+                        Doctor Triage Needed
                       </span>
                     )}
                   </p>
                 </div>
-                <span className="whitespace-nowrap shrink-0 self-start text-center text-xs font-bold px-2.5 py-1 rounded-md bg-white/90 text-slate-900 ring-1 ring-black/10 shadow-2xs">
-                  {patient.priority}
-                </span>
+
+                {/* Triage Level Display / Edit Button */}
+                {triageEditable ? (
+                  <div
+                    className="relative shrink-0 flex items-center gap-1"
+                    onClick={(e) => e.stopPropagation()}
+                    title="Click to edit patient triage level"
+                  >
+                    <select
+                      value={resolveTriageDraft(patient)}
+                      disabled={isUpdatingTriageId === patientKey}
+                      onChange={async (e) => {
+                        const nextPriority = e.target.value as Patient["priority"];
+                        handleTriageDraftChange(patientKey, nextPriority);
+                        await handleSaveTriage(patient, nextPriority);
+                      }}
+                      className={`cursor-pointer rounded-md border px-2.5 py-1 text-xs font-bold shadow-2xs transition-all focus:outline-none focus:ring-2 ${
+                        patient.triageRequested
+                          ? "border-amber-400 bg-amber-100 text-amber-950 ring-amber-400 animate-pulse"
+                          : "border-slate-300 bg-white/95 text-slate-900 hover:border-slate-400 hover:bg-slate-50"
+                      }`}
+                    >
+                      <option value="Triage 1">Triage 1 (Critical)</option>
+                      <option value="Triage 2">Triage 2 (Emergent)</option>
+                      <option value="Triage 3">Triage 3 (Urgent)</option>
+                      <option value="Triage 4">Triage 4 (Semi-urgent)</option>
+                      <option value="Triage 5">Triage 5 (Non-urgent)</option>
+                    </select>
+                    {isUpdatingTriageId === patientKey && (
+                      <span className="text-[10px] text-slate-500 font-semibold animate-pulse">
+                        Saving...
+                      </span>
+                    )}
+                  </div>
+                ) : (
+                  <span className="whitespace-nowrap shrink-0 self-start text-center text-xs font-bold px-2.5 py-1 rounded-md bg-white/90 text-slate-900 ring-1 ring-black/10 shadow-2xs">
+                    {patient.priority}
+                  </span>
+                )}
               </div>
 
               {/* Full Width Explanation Card */}
@@ -426,67 +466,6 @@ export default function PatientQueue({
                   !
                 </button>
               </div>
-
-              {triageEditable && (
-                <div
-                  className={`mt-2 rounded border p-2 ${
-                    patient.triageRequested
-                      ? "border-amber-300 bg-amber-50"
-                      : "border-slate-200 bg-slate-50"
-                  }`}
-                >
-                  <p
-                    className={`text-xs font-semibold mb-2 ${
-                      patient.triageRequested
-                        ? "text-amber-900"
-                        : "text-slate-700"
-                    }`}
-                  >
-                    {patient.triageRequested
-                      ? "Consultant Doctor: set triage level for this patient."
-                      : "Triage Level"}
-                  </p>
-                  <div
-                    className="flex gap-2"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <select
-                      value={resolveTriageDraft(patient)}
-                      onChange={(e) =>
-                        handleTriageDraftChange(
-                          patient.id,
-                          e.target.value as Patient["priority"]
-                        )
-                      }
-                      className={`flex-1 rounded border px-2 py-1 text-xs text-gray-900 ${
-                        patient.triageRequested
-                          ? "border-amber-300 bg-white"
-                          : "border-slate-300 bg-white"
-                      }`}
-                    >
-                      <option value="Triage 1">Triage 1</option>
-                      <option value="Triage 2">Triage 2</option>
-                      <option value="Triage 3">Triage 3</option>
-                      <option value="Triage 4">Triage 4</option>
-                      <option value="Triage 5">Triage 5</option>
-                    </select>
-                    <button
-                      type="button"
-                      onClick={() => handleSaveTriage(patient)}
-                      disabled={isUpdatingTriageId === getPatientKey(patient)}
-                      className={`rounded px-2 py-1 text-xs font-semibold text-white ${
-                        patient.triageRequested
-                          ? "bg-amber-600 hover:bg-amber-700 disabled:bg-amber-300"
-                          : "bg-slate-600 hover:bg-slate-700 disabled:bg-slate-300"
-                      }`}
-                    >
-                      {isUpdatingTriageId === getPatientKey(patient)
-                        ? "Saving..."
-                        : "Save"}
-                    </button>
-                  </div>
-                </div>
-              )}
 
               {patient.admissionTime && (
                 <p className="text-xs mt-2">
