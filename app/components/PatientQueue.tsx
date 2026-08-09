@@ -284,16 +284,19 @@ export default function PatientQueue({
     );
   }
 
-  const hasUnknownPriority = patients.some(
-    (patient) => resolvePriorityRank(patient.priority) === 99
-  );
-
-  const sortedPatients = hasUnknownPriority
-    ? [...patients].sort(
-        (a, b) =>
-          resolvePriorityRank(a.priority) - resolvePriorityRank(b.priority)
-      )
-    : patients;
+  const sortedPatients =
+    queueOrderStrategy === "priority"
+      ? [...patients].sort((a, b) => {
+          const rankA = resolvePriorityRank(a.priority);
+          const rankB = resolvePriorityRank(b.priority);
+          if (rankA !== rankB) {
+            return rankA - rankB;
+          }
+          const waitA = resolveWaitMinutes(a) ?? 0;
+          const waitB = resolveWaitMinutes(b) ?? 0;
+          return waitB - waitA;
+        })
+      : patients;
 
   const displayPatients = sortedPatients;
 
@@ -424,10 +427,24 @@ export default function PatientQueue({
                 </button>
               </div>
 
-              {triageEditable && patient.triageRequested && (
-                <div className="mt-2 rounded border border-amber-300 bg-amber-50 p-2">
-                  <p className="text-xs font-semibold text-amber-900 mb-2">
-                    Consultant Doctor: set triage level for this patient.
+              {triageEditable && (
+                <div
+                  className={`mt-2 rounded border p-2 ${
+                    patient.triageRequested
+                      ? "border-amber-300 bg-amber-50"
+                      : "border-slate-200 bg-slate-50"
+                  }`}
+                >
+                  <p
+                    className={`text-xs font-semibold mb-2 ${
+                      patient.triageRequested
+                        ? "text-amber-900"
+                        : "text-slate-700"
+                    }`}
+                  >
+                    {patient.triageRequested
+                      ? "Consultant Doctor: set triage level for this patient."
+                      : "Triage Level"}
                   </p>
                   <div
                     className="flex gap-2"
@@ -441,7 +458,11 @@ export default function PatientQueue({
                           e.target.value as Patient["priority"]
                         )
                       }
-                      className="flex-1 rounded border border-amber-300 bg-white px-2 py-1 text-xs text-gray-900"
+                      className={`flex-1 rounded border px-2 py-1 text-xs text-gray-900 ${
+                        patient.triageRequested
+                          ? "border-amber-300 bg-white"
+                          : "border-slate-300 bg-white"
+                      }`}
                     >
                       <option value="Triage 1">Triage 1</option>
                       <option value="Triage 2">Triage 2</option>
@@ -453,7 +474,11 @@ export default function PatientQueue({
                       type="button"
                       onClick={() => handleSaveTriage(patient)}
                       disabled={isUpdatingTriageId === getPatientKey(patient)}
-                      className="rounded bg-amber-600 px-2 py-1 text-xs font-semibold text-white hover:bg-amber-700 disabled:bg-amber-300"
+                      className={`rounded px-2 py-1 text-xs font-semibold text-white ${
+                        patient.triageRequested
+                          ? "bg-amber-600 hover:bg-amber-700 disabled:bg-amber-300"
+                          : "bg-slate-600 hover:bg-slate-700 disabled:bg-slate-300"
+                      }`}
                     >
                       {isUpdatingTriageId === getPatientKey(patient)
                         ? "Saving..."

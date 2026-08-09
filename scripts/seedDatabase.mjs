@@ -126,6 +126,19 @@ function ageGroupFromAge(age) {
 
 let patientCounter = 10001;
 
+// ---------------------------------------------------------------------------
+// Ward 16 – Male Medical: fixed queue patients from the PDF
+// ---------------------------------------------------------------------------
+const WARD16_QUEUE_PATIENTS = [
+  { id: "9140", name: "Patient 9140", age: 68, ageGroup: "Elderly", disease: "Rash on Buttocks",        waitHours: 3,   priority: "Triage 5" },
+  { id: "9141", name: "Patient 9141", age: 18, ageGroup: "Adult",   disease: "Chest Pain",              waitHours: 4.5, priority: "Triage 2" },
+  { id: "9142", name: "Patient 9142", age: 73, ageGroup: "Elderly", disease: "Transfer from WD 24/26",  waitHours: 1,   priority: "Triage 4" },
+  { id: "9143", name: "Patient 9143", age: 20, ageGroup: "Adult",   disease: "Faintness / Vertigo",     waitHours: 0.5, priority: "Triage 3" },
+  { id: "9144", name: "Patient 9144", age: 74, ageGroup: "Elderly", disease: "Chest Pain",              waitHours: 2,   priority: "Triage 1" },
+  { id: "9145", name: "Patient 9145", age: 47, ageGroup: "Adult",   disease: "Fits",                   waitHours: 0.5, priority: "Triage 1" },
+  { id: "9146", name: "Patient 9146", age: 44, ageGroup: "Adult",   disease: "Chest Pain",              waitHours: 0.5, priority: "Triage 1" },
+];
+
 function generatePatient(patientId, wardId, status) {
   const firstName = randomItem(FIRST_NAMES);
   const lastName = randomItem(LAST_NAMES);
