@@ -1,4 +1,4 @@
-import { StaffRole, UserSession } from "@/app/types";
+import { StaffRole, UserSession, PermissionKey, RolePermissionsMap } from "@/app/types";
 
 export const ROLE_LABELS: Record<StaffRole, string> = {
   admin: "Admin",
@@ -7,6 +7,144 @@ export const ROLE_LABELS: Record<StaffRole, string> = {
   main_sister: "Main Sister",
   main_attendant: "Main Attendant",
 };
+
+// ---------------------------------------------------------------------------
+// Permission Catalogue
+// ---------------------------------------------------------------------------
+
+export const PERMISSION_KEYS: PermissionKey[] = [
+  "register_patient",
+  "admit_patient",
+  "discharge_patient",
+  "set_triage",
+  "move_patient_cross_ward",
+  "update_bed_status",
+  "assign_bed",
+  "view_queue",
+  "reorder_queue",
+  "view_reports",
+  "view_logs",
+  "manage_users",
+  "manage_roles",
+  "send_broadcast",
+];
+
+export const PERMISSION_LABELS: Record<PermissionKey, string> = {
+  register_patient: "Register a Patient",
+  admit_patient: "Admit Patient to Bed",
+  discharge_patient: "Discharge a Patient",
+  set_triage: "Set / Request Triage",
+  move_patient_cross_ward: "Move Patient Across Wards",
+  update_bed_status: "Update Bed Status",
+  assign_bed: "Assign Bed to Patient",
+  view_queue: "View Patient Queue",
+  reorder_queue: "Reorder / Manage Queue",
+  view_reports: "View Reports & Analytics",
+  view_logs: "View Audit Logs",
+  manage_users: "Manage Users (Create/Edit/Delete)",
+  manage_roles: "Manage Role Permissions",
+  send_broadcast: "Send Broadcast Messages",
+};
+
+export const PERMISSION_CATEGORIES: Record<string, PermissionKey[]> = {
+  "Patient Management": [
+    "register_patient",
+    "admit_patient",
+    "discharge_patient",
+    "set_triage",
+    "move_patient_cross_ward",
+  ],
+  "Bed Management": ["update_bed_status", "assign_bed"],
+  "Queue Management": ["view_queue", "reorder_queue"],
+  "Reports & Logs": ["view_reports", "view_logs"],
+  "User & Role Administration": ["manage_users", "manage_roles"],
+  Communication: ["send_broadcast"],
+};
+
+/** Default permission matrix — used when DB has no record for a role */
+export const DEFAULT_ROLE_PERMISSIONS: Record<StaffRole, RolePermissionsMap> = {
+  admin: {
+    register_patient: true,
+    admit_patient: true,
+    discharge_patient: true,
+    set_triage: true,
+    move_patient_cross_ward: true,
+    update_bed_status: true,
+    assign_bed: true,
+    view_queue: true,
+    reorder_queue: true,
+    view_reports: true,
+    view_logs: true,
+    manage_users: true,
+    manage_roles: true,
+    send_broadcast: true,
+  },
+  sub_admin: {
+    register_patient: true,
+    admit_patient: true,
+    discharge_patient: true,
+    set_triage: true,
+    move_patient_cross_ward: true,
+    update_bed_status: true,
+    assign_bed: true,
+    view_queue: true,
+    reorder_queue: true,
+    view_reports: true,
+    view_logs: true,
+    manage_users: true,
+    manage_roles: false,
+    send_broadcast: true,
+  },
+  consultant_doctor: {
+    register_patient: true,
+    admit_patient: true,
+    discharge_patient: true,
+    set_triage: true,
+    move_patient_cross_ward: true,
+    update_bed_status: true,
+    assign_bed: true,
+    view_queue: true,
+    reorder_queue: true,
+    view_reports: true,
+    view_logs: false,
+    manage_users: false,
+    manage_roles: false,
+    send_broadcast: true,
+  },
+  main_sister: {
+    register_patient: true,
+    admit_patient: true,
+    discharge_patient: true,
+    set_triage: false,
+    move_patient_cross_ward: false,
+    update_bed_status: true,
+    assign_bed: true,
+    view_queue: true,
+    reorder_queue: false,
+    view_reports: true,
+    view_logs: false,
+    manage_users: false,
+    manage_roles: false,
+    send_broadcast: true,
+  },
+  main_attendant: {
+    register_patient: false,
+    admit_patient: false,
+    discharge_patient: false,
+    set_triage: false,
+    move_patient_cross_ward: false,
+    update_bed_status: true,
+    assign_bed: false,
+    view_queue: true,
+    reorder_queue: false,
+    view_reports: false,
+    view_logs: false,
+    manage_users: false,
+    manage_roles: false,
+    send_broadcast: true,
+  },
+};
+
 
 const WARD_LETTER_TO_INDEX: Record<string, string> = {
   a: "0",

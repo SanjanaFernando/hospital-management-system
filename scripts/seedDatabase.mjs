@@ -1,42 +1,97 @@
-// scripts/seedDatabase.mjs
-import fs from "node:fs";
-import path from "node:path";
 import { MongoClient } from "mongodb";
+import path from "path";
+import fs from "fs";
 
 function loadMongoUri() {
-  // Priority 1: Environment variable
   if (process.env.MONGODB_URI) {
-    console.log("✅ Loaded MONGODB_URI from process.env");
-    return process.env.MONGODB_URI.trim();
+    console.log("✅ Loaded MONGODB_URI from environment");
+    return process.env.MONGODB_URI;
   }
-
-  // Priority 2: Read from .env.local
-  const envPath = path.join(process.cwd(), ".env.local");
-  if (!fs.existsSync(envPath)) {
-    throw new Error(".env.local file not found!");
-  }
-
-  const envRaw = fs.readFileSync(envPath, "utf-8");
-  const lines = envRaw.split(/\r?\n/);
-
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (trimmed.startsWith("MONGODB_URI=")) {
-      let uri = trimmed.replace("MONGODB_URI=", "").trim();
-
-      // Remove surrounding quotes if present
-      uri = uri.replace(/^["']|["']$/g, "");
-
-      console.log("✅ Loaded MONGODB_URI from .env.local");
-      console.log("Connection string prefix:", uri.substring(0, 70) + "...");
-      return uri;
+  const envLocalPath = path.resolve(process.cwd(), ".env.local");
+  if (fs.existsSync(envLocalPath)) {
+    const content = fs.readFileSync(envLocalPath, "utf-8");
+    for (const line of content.split("\n")) {
+      const trimmed = line.trim();
+      if (trimmed.startsWith("MONGODB_URI=")) {
+        const val = trimmed.substring("MONGODB_URI=".length).trim().replace(/^["']|["']$/g, "");
+        console.log("✅ Loaded MONGODB_URI from .env.local");
+        console.log(`Connection string prefix: ${val.substring(0, Math.min(30, val.length))}...`);
+        return val;
+      }
     }
   }
-
-  throw new Error("MONGODB_URI not found in .env.local");
+  console.error("❌ MONGODB_URI is not defined. Please set it in .env.local or environment variables.");
+  process.exit(1);
 }
 
-// ==================== Rest of the script (unchanged) ====================
+const FIRST_NAMES = [
+  "Amara",
+  "Buddhika",
+  "Chathura",
+  "Dilan",
+  "Erandi",
+  "Farzan",
+  "Gayan",
+  "Hiruni",
+  "Isuru",
+  "Janaki",
+  "Kasun",
+  "Lahiru",
+  "Manjula",
+  "Nimal",
+  "Oshada",
+  "Pradeep",
+  "Ruwan",
+  "Sanjaya",
+  "Tharindu",
+  "Upeksha",
+  "Vishwa",
+  "Wasana",
+  "Yohan",
+  "Zubair",
+];
+
+const LAST_NAMES = [
+  "Perera",
+  "Fernando",
+  "De Silva",
+  "Jayasinghe",
+  "Wijesinghe",
+  "Liyanage",
+  "Rathnayake",
+  "Gamage",
+  "Herath",
+  "Abeykoon",
+  "Bandara",
+  "Dissanayake",
+  "Senanayake",
+  "Wickramasinghe",
+  "Karunaratne",
+  "Gunawardena",
+];
+
+const DISEASES = [
+  "Acute Appendicitis",
+  "Inguinal Hernia",
+  "Gallbladder Disease",
+  "Surgical Wound Infection",
+  "Bowel Obstruction",
+  "Post-Op Monitoring",
+  "Fracture Fixation",
+  "Abdominal Trauma",
+  "Chest Pain",
+  "Vertigo",
+  "Fits",
+  "Rash on Buttocks",
+];
+
+const SPECIAL_REQUIREMENTS = [
+  "Oxygen Required",
+  "Isolation Required",
+  "Fall Risk",
+  "Wheelchair Access Needed",
+  "Cardiac Monitoring",
+];
 
 const TRIAGE_LEVELS = [
   "Triage 1",
@@ -46,97 +101,20 @@ const TRIAGE_LEVELS = [
   "Triage 5",
 ];
 
-const DISEASES = [
-  "Hypertension",
-  "Diabetes",
-  "Pneumonia",
-  "Heart Disease",
-  "Asthma",
-  "Cancer",
-  "Stroke",
-  "Kidney Disease",
-  "Liver Disease",
-  "Arthritis",
-  "Thyroid Disorder",
-  "Tuberculosis",
-  "Fever",
-  "Fracture",
-  "Infection",
-];
-
-const SPECIAL_REQUIREMENTS = [
-  "Oxygen Support",
-  "Dialysis",
-  "Ventilator",
-  "IV Drip",
-  "Catheter",
-  "Feeding Tube",
-  "Physical Therapy",
-  "Mental Health Support",
-  "Pain Management",
-  "Isolation Required",
-];
-
-const FIRST_NAMES = [
-  "John",
-  "Emma",
-  "Michael",
-  "Sarah",
-  "David",
-  "Jessica",
-  "Robert",
-  "Ashley",
-  "James",
-  "Lauren",
-  "William",
-  "Megan",
-  "Richard",
-  "Nicole",
-  "Joseph",
-  "Amanda",
-  "Thomas",
-  "Jennifer",
-  "Charles",
-  "Lisa",
-];
-
-const LAST_NAMES = [
-  "Smith",
-  "Johnson",
-  "Williams",
-  "Brown",
-  "Jones",
-  "Garcia",
-  "Miller",
-  "Davis",
-  "Rodriguez",
-  "Martinez",
-  "Hernandez",
-  "Lopez",
-  "Gonzalez",
-  "Wilson",
-  "Anderson",
-  "Thomas",
-  "Taylor",
-  "Moore",
-  "Jackson",
-  "Martin",
-];
+function randomItem(arr) {
+  return arr[Math.floor(Math.random() * arr.length)];
+}
 
 function randomInt(min, max) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
-function randomItem(items) {
-  return items[Math.floor(Math.random() * items.length)];
-}
-
 function generatePriority() {
-  const roll = Math.random();
-  if (roll < 0.08) return TRIAGE_LEVELS[0];
-  if (roll < 0.2) return TRIAGE_LEVELS[1];
-  if (roll < 0.4) return TRIAGE_LEVELS[2];
-  if (roll < 0.7) return TRIAGE_LEVELS[3];
+  const rand = Math.random();
+  if (rand < 0.15) return TRIAGE_LEVELS[0];
+  if (rand < 0.35) return TRIAGE_LEVELS[1];
+  if (rand < 0.65) return TRIAGE_LEVELS[2];
+  if (rand < 0.85) return TRIAGE_LEVELS[3];
   return TRIAGE_LEVELS[4];
 }
 
@@ -145,6 +123,10 @@ function ageGroupFromAge(age) {
   if (age < 60) return "Adult";
   return "Elderly";
 }
+
+let patientCounter = 10001;
+
+
 
 function generatePatient(patientId, wardId, status) {
   const firstName = randomItem(FIRST_NAMES);
@@ -159,8 +141,15 @@ function generatePatient(patientId, wardId, status) {
     ? [randomItem(SPECIAL_REQUIREMENTS)]
     : undefined;
 
+  const hasPrevDiseases = Math.random() < 0.6;
+  const previousDiseases = hasPrevDiseases
+    ? [randomItem(DISEASES)]
+    : [];
+
+  const numericId = String(patientCounter++);
+
   return {
-    id: patientId,
+    id: numericId,
     wardId,
     status,
     name: `${firstName} ${lastName}`,
@@ -168,6 +157,7 @@ function generatePatient(patientId, wardId, status) {
     ageGroup: ageGroupFromAge(age),
     gender: Math.random() < 0.5 ? "Male" : "Female",
     disease: randomItem(DISEASES),
+    previousDiseases,
     priority: generatePriority(),
     admissionTime,
     queueWaitTime: randomInt(10, 480),
@@ -176,6 +166,19 @@ function generatePatient(patientId, wardId, status) {
     updatedAt: new Date(),
   };
 }
+
+// ---------------------------------------------------------------------------
+// Ward 16 – Male Medical: fixed queue patients from the PDF
+// ---------------------------------------------------------------------------
+const WARD16_QUEUE_PATIENTS = [
+  { id: "9140", name: "Patient 9140", age: 68, ageGroup: "Elderly", gender: "Male", disease: "Rash on Buttocks",        waitHours: 3,   priority: "Triage 5" },
+  { id: "9141", name: "Patient 9141", age: 18, ageGroup: "Adult",   gender: "Male", disease: "Chest Pain",              waitHours: 1,   priority: "Triage 2" },
+  { id: "9142", name: "Patient 9142", age: 73, ageGroup: "Elderly", gender: "Male", disease: "Transfer from WD 24/26",  waitHours: 1,   priority: "Triage 4" },
+  { id: "9143", name: "Patient 9143", age: 20, ageGroup: "Adult",   gender: "Male", disease: "Faintness / Vertigo",     waitHours: 0.5, priority: "Triage 3" },
+  { id: "9144", name: "Patient 9144", age: 74, ageGroup: "Elderly", gender: "Male", disease: "Chest Pain",              waitHours: 0.5, priority: "Triage 1" },
+  { id: "9145", name: "Patient 9145", age: 47, ageGroup: "Adult",   gender: "Male", disease: "Fits",                   waitHours: 0.75, priority: "Triage 1" },
+  { id: "9146", name: "Patient 9146", age: 44, ageGroup: "Adult",   gender: "Male", disease: "Chest Pain",              waitHours: 0.5, priority: "Triage 1" },
+];
 
 async function resetDatabase() {
   const mongoUri = loadMongoUri();
@@ -235,6 +238,15 @@ async function resetDatabase() {
         maintenanceBeds: 2,
         queuePatients: 10,
       },
+      {
+        wardId: "ward-16",
+        name: "Ward 16 - Male Medical",
+        normalBeds: 40,
+        icuBeds: 0,
+        occupiedRate: 0.975, // 39 occupied beds out of 40
+        maintenanceBeds: 0,
+        queuePatients: 7,
+      },
     ];
 
     let totalPatients = 0;
@@ -261,12 +273,38 @@ async function resetDatabase() {
 
       for (let i = 0; i < occupiedBeds; i++) {
         const patientId = `${wardId}-admitted-${i + 1}`;
-        admitted.push(generatePatient(patientId, wardId, "admitted"));
+        const patient = generatePatient(patientId, wardId, "admitted");
+        if (wardId === "ward-16") {
+          patient.gender = "Male";
+        }
+        admitted.push(patient);
       }
 
-      for (let i = 0; i < queuePatients; i++) {
-        const patientId = `${wardId}-queue-${i + 1}`;
-        queued.push(generatePatient(patientId, wardId, "queued"));
+      if (wardId === "ward-16") {
+        for (const p of WARD16_QUEUE_PATIENTS) {
+          queued.push({
+            id: p.id,
+            wardId: "ward-16",
+            status: "queued",
+            name: p.name,
+            age: p.age,
+            ageGroup: p.ageGroup,
+            gender: "Male",
+            disease: p.disease,
+            previousDiseases: [],
+            priority: p.priority,
+            admissionTime: new Date(Date.now() - p.waitHours * 60 * 60 * 1000),
+            queueWaitTime: Math.round(p.waitHours * 60),
+            specialRequirements: [],
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          });
+        }
+      } else {
+        for (let i = 0; i < queuePatients; i++) {
+          const patientId = `${wardId}-queue-${i + 1}`;
+          queued.push(generatePatient(patientId, wardId, "queued"));
+        }
       }
 
       const bedBlueprints = [];

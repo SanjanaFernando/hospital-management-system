@@ -113,12 +113,56 @@ export async function POST(request: NextRequest) {
       body.triageRequested = true;
     }
 
+    const patientName = String(body.name || "").trim();
+    let requestedId = String(body.id || "").trim();
+
+    // Check for existing patient record (case-insensitive name match or matching ID)
+    const existingPatient = await db.collection("patients").findOne({
+      $or: [
+        { name: { $regex: `^${patientName.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, "\\$&")}$`, $options: "i" } },
+        ...(requestedId ? [{ id: requestedId }] : []),
+      ],
+    });
+
+    let patientId = requestedId;
+    let accumulatedPreviousDiseases: string[] = Array.isArray(body.previousDiseases)
+      ? body.previousDiseases.map(String)
+      : body.previousDiseases
+      ? [String(body.previousDiseases)]
+      : [];
+
+    if (existingPatient) {
+      // Reuse existing numerical Patient ID
+      const rawId = String(existingPatient.id || "");
+      patientId = /^\d+$/.test(rawId)
+        ? rawId
+        : rawId.replace(/\D/g, "").slice(-6) || String(Math.floor(10000 + Math.random() * 90000));
+
+      // Merge past diagnoses into previousDiseases
+      const pastSet = new Set<string>();
+      if (existingPatient.disease && existingPatient.disease !== body.disease) {
+        pastSet.add(String(existingPatient.disease));
+      }
+      if (Array.isArray(existingPatient.previousDiseases)) {
+        existingPatient.previousDiseases.forEach((d: any) => pastSet.add(String(d)));
+      } else if (existingPatient.previousDiseases) {
+        pastSet.add(String(existingPatient.previousDiseases));
+      }
+      accumulatedPreviousDiseases.forEach((d) => pastSet.add(d));
+      accumulatedPreviousDiseases = Array.from(pastSet);
+    } else if (!/^\d+$/.test(patientId)) {
+      patientId = String(Math.floor(10000 + Math.random() * 90000));
+    }
+
     const admissionTime = body.admissionTime
       ? new Date(body.admissionTime)
       : new Date();
 
     const result = await db.collection("patients").insertOne({
       ...body,
+      id: patientId,
+      name: patientName || body.name,
+      previousDiseases: accumulatedPreviousDiseases,
       admissionTime,
       createdAt: new Date(),
       updatedAt: new Date(),

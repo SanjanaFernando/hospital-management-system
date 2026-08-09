@@ -785,6 +785,14 @@ function PatientReportLayout({
       <ReportDivider label="Clinical Information" />
       <div className="report-section rounded-xl border border-slate-200 bg-white px-4 py-1">
         <ReportFieldRow label="Diagnosis / Disease" value={patient.disease} />
+        <ReportFieldRow
+          label="Previous Diseases / History"
+          value={
+            patient.previousDiseases?.length
+              ? patient.previousDiseases.join(", ")
+              : "None"
+          }
+        />
         <ReportFieldRow label="Priority" value={patient.priority} />
         <ReportFieldRow
           label="Special Requirements"

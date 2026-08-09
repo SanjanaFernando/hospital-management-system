@@ -1,5 +1,5 @@
 {
-  "version": "v1",
-  "activated_at": "2026-06-28T13:39:20.145310",
-  "model_path": "D:\\Undergraduate\\7th Sem\\FYP\\Project Code\\hospital-management-system\\mlops\\models\\v1\\model.pth"
+  "version": "v_weekly_20260809",
+  "activated_at": "2026-08-09T03:30:44.839915",
+  "model_path": "/home/runner/work/hospital-management-system/hospital-management-system/mlops/models/v_weekly_20260809/model.pth"
 }

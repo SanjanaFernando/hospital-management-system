@@ -18,6 +18,8 @@ import {
   UserRound,
   Users,
   Waves,
+  ShieldCheck,
+  FileSpreadsheet,
 } from "lucide-react";
 import { AuthSessionProvider } from "@/app/context/AuthSessionContext";
 import { useAuthSession } from "@/app/context/AuthSessionContext";
@@ -26,6 +28,7 @@ import { Ward } from "@/app/types";
 import { ROLE_LABELS } from "@/lib/rbac";
 import { UserSession } from "@/app/types";
 import NotificationPanel from "./NotificationPanel";
+import ChatWidget from "./ChatWidget";
 
 interface SidebarItem {
   label: string;
@@ -139,6 +142,8 @@ function AppShellContent({ children }: PropsWithChildren) {
     },
     { label: "Reports", href: "/reports", icon: ClipboardSignature },
     { label: "User Management", href: "/admin/users", icon: Users, adminOnly: true },
+    { label: "Role Management", href: "/admin/roles", icon: ShieldCheck, adminOnly: true },
+    { label: "Ward Management", href: "/admin/wards", icon: Bed, adminOnly: true },
     { label: "User Logs", href: "/admin/logs", icon: ScrollText, adminOnly: true },
   ];
 
@@ -492,6 +497,9 @@ function AppShellContent({ children }: PropsWithChildren) {
           {children}
         </main>
       </div>
+
+      {/* Floating chat widget — always visible on authenticated pages */}
+      <ChatWidget session={session} />
     </div>
   );
 }

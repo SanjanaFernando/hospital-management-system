@@ -60,10 +60,47 @@ function resolvePriorityRank(priority: string): number {
   return Number.MAX_SAFE_INTEGER;
 }
 
-function fallbackPrioritySort(queue: Patient[]): Patient[] {
-  return [...queue].sort(
-    (a, b) => resolvePriorityRank(a.priority) - resolvePriorityRank(b.priority)
-  );
+function computeFallbackPriorityScore(patient: Patient, nowMs: number = Date.now()): number {
+  const triageNum =
+    typeof patient.priority === "string"
+      ? parseInt(patient.priority.replace(/\D/g, ""), 10) || 5
+      : typeof patient.priority === "number"
+      ? patient.priority
+      : 5;
+
+  let waitMinutes = 0;
+  if (typeof patient.queueWaitTime === "number" && Number.isFinite(patient.queueWaitTime)) {
+    waitMinutes = Math.max(0, patient.queueWaitTime);
+  } else if (patient.admissionTime) {
+    const arr = new Date(patient.admissionTime).getTime();
+    if (!Number.isNaN(arr)) {
+      waitMinutes = Math.max(0, (nowMs - arr) / 60000);
+    }
+  }
+
+  const waitHours = waitMinutes / 60;
+  // Primary: Triage level (T1 gets 5000+, T2 gets 4000+, T3 gets 3000+, T4 gets 2000+, T5 gets 1000+)
+  // Secondary: Wait hours (longer wait adds to score within same triage level)
+  return (6 - triageNum) * 1000 + waitHours;
+}
+
+export function fallbackPrioritySort(queue: Patient[]): Patient[] {
+  const now = Date.now();
+  return [...queue]
+    .sort((a, b) => {
+      const rankA = resolvePriorityRank(a.priority);
+      const rankB = resolvePriorityRank(b.priority);
+      if (rankA !== rankB) {
+        return rankA - rankB; // Lower rank number = higher triage urgency (Triage 1 first)
+      }
+      const waitA = getWaitMinutes(a, new Date(now));
+      const waitB = getWaitMinutes(b, new Date(now));
+      return waitB - waitA; // Longer wait first
+    })
+    .map((patient, idx) => ({
+      ...patient,
+      queueRank: idx + 1,
+    }));
 }
 
 function parseExplainJson(stdout: string): unknown {
@@ -92,13 +129,161 @@ function runPythonCommand(command: string[], input: string) {
   });
 }
 
-export function reorderQueueWithAi(input: QueueAiInput): QueueAiResult {
+function getPatientRank(orderMap: Map<string, number>, patient: Patient): number {
+  if (patient._id && orderMap.has(String(patient._id))) {
+    return orderMap.get(String(patient._id))!;
+  }
+  if (patient.id && orderMap.has(String(patient.id))) {
+    return orderMap.get(String(patient.id))!;
+  }
+  if (patient.name && orderMap.has(patient.name)) {
+    return orderMap.get(patient.name)!;
+  }
+  return Number.MAX_SAFE_INTEGER;
+}
+
+function getPatientReason(
+  reasonMap: Map<string, string>,
+  patient: Patient
+): string | undefined {
+  if (patient._id && reasonMap.has(String(patient._id))) {
+    return reasonMap.get(String(patient._id));
+  }
+  if (patient.id && reasonMap.has(String(patient.id))) {
+    return reasonMap.get(String(patient.id));
+  }
+  if (patient.name && reasonMap.has(patient.name)) {
+    return reasonMap.get(patient.name);
+  }
+  return undefined;
+}
+
+// ---------------------------------------------------------------------------
+// HTTP inference path (used when QUEUE_AI_ENDPOINT env var is set)
+// This is the path used on Vercel / production deployments.
+// ---------------------------------------------------------------------------
+
+async function reorderViaHttp(input: QueueAiInput): Promise<QueueAiResult> {
+  const endpoint = process.env.QUEUE_AI_ENDPOINT!.replace(/\/$/, "");
+  const now = new Date();
+
+  const payload = {
+    targetWardId: input.targetWardId,
+    targetWardTotalBeds: input.targetWardTotalBeds ?? 0,
+    targetWardOccupiedBeds: input.targetWardOccupiedBeds ?? 0,
+    patientHistory: input.patientHistory,
+    // Use "targetWardQueue" key — matches what the FastAPI service expects
+    targetWardQueue: input.targetWardQueue.map((patient) => ({
+      ...patient,
+      patientId: patient._id || patient.id,
+      id: patient.id,
+      name: patient.name,
+      triageLevel: priorityToTriageLevel(patient.priority),
+      waitMinutes: getWaitMinutes(patient, now),
+      triageRequested: Boolean(patient.triageRequested),
+    })),
+  };
+
+  let response: Response;
+  try {
+    response = await fetch(`${endpoint}/reorder`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(INFERENCE_TIMEOUT_MS),
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error("[queueAi] HTTP inference request failed:", message);
+    return {
+      orderedPatients: fallbackPrioritySort(input.targetWardQueue),
+      strategy: "priority",
+      message: "AI inference service unreachable. Using priority ordering.",
+    };
+  }
+
+  if (!response.ok) {
+    console.error("[queueAi] HTTP inference returned status", response.status);
+    return {
+      orderedPatients: fallbackPrioritySort(input.targetWardQueue),
+      strategy: "priority",
+      message: `AI inference service error (${response.status}). Using priority ordering.`,
+    };
+  }
+
+  let parsed: {
+    orderedPatientIds?: string[];
+    predictive_analytics?: {
+      enabled?: boolean;
+      surge_predicted?: boolean;
+      pred_load?: number;
+      pred_crit?: number;
+      expected_arrivals?: number;
+      expected_critical_patients?: number;
+      horizon_hours?: number;
+    };
+  };
+
+  try {
+    parsed = await response.json();
+  } catch {
+    console.error("[queueAi] Failed to parse HTTP inference response");
+    return {
+      orderedPatients: fallbackPrioritySort(input.targetWardQueue),
+      strategy: "priority",
+      message: "AI inference response invalid. Using priority ordering.",
+    };
+  }
+
+  const order = new Map<string, number>();
+  (parsed.orderedPatientIds || []).forEach((patientId, index) => {
+    order.set(String(patientId), index);
+  });
+
+  const orderedPatients = [...input.targetWardQueue]
+    .sort((a, b) => getPatientRank(order, a) - getPatientRank(order, b))
+    .map((patient, idx) => ({
+      ...patient,
+      queueRank: idx + 1,
+    }));
+
+  const predictive = parsed.predictive_analytics;
+  const queuePrediction: QueuePrediction | undefined = predictive
+    ? {
+        enabled: predictive.enabled !== false,
+        load: predictive.pred_load,
+        criticalShare: predictive.pred_crit,
+        expectedArrivals: predictive.expected_arrivals,
+        expectedCriticalPatients: predictive.expected_critical_patients,
+        horizonHours: predictive.horizon_hours,
+        surgePredicted: Boolean(predictive.surge_predicted),
+      }
+    : undefined;
+
+  const forecastMessage =
+    queuePrediction?.expectedArrivals !== undefined
+      ? ` Expected ${queuePrediction.expectedArrivals} patients in the next ${queuePrediction.horizonHours ?? 6} hours; approximately ${queuePrediction.expectedCriticalPatients ?? 0} critical.`
+      : "";
+
+  return {
+    orderedPatients,
+    strategy: "ai",
+    message: orderedPatients[0]
+      ? `MAPPO+Predictive reordered queue. Top patient: ${orderedPatients[0].name}.${forecastMessage}`
+      : `MAPPO+Predictive reordered queue for ${input.targetWardName}.${forecastMessage}`,
+    queuePrediction,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Local subprocess inference path (used when QUEUE_AI_ENDPOINT is not set)
+// Works on your local machine where Python + model files exist.
+// ---------------------------------------------------------------------------
+
+function reorderViaSubprocess(input: QueueAiInput): QueueAiResult {
   const modelPath = resolveMappoModelPath(true);
   const forecasterProfilePath = resolveForecasterProfilePath();
-  const usesSharedPredictiveModel = modelPath?.includes("best_mappo_shared_predictive") ?? false;
-  const scriptPath = usesSharedPredictiveModel
-    ? path.join(process.cwd(), "scripts", "queue_reorder_infer.py")
-    : path.join(process.cwd(), "xai", "scripts", "explain.py");
+  const scriptPath = path.join(process.cwd(), "xai", "scripts", "explain.py");
 
   if (!modelPath || !existsSync(scriptPath)) {
     return {
@@ -110,6 +295,20 @@ export function reorderQueueWithAi(input: QueueAiInput): QueueAiResult {
 
   const usingPredictiveModel = modelPath.includes("predictive");
   const now = new Date();
+
+  // Tag every patient with its 0-based position so we can match back reliably
+  // regardless of how IDs are serialised through JSON / Python.
+  const taggedQueue = input.targetWardQueue.map((patient, queueIndex) => ({
+    ...patient,
+    patientId: patient._id ? String(patient._id) : String(patient.id),
+    id: patient.id,
+    name: patient.name,
+    __queueIndex: queueIndex,
+    triageLevel: priorityToTriageLevel(patient.priority),
+    waitMinutes: getWaitMinutes(patient, now),
+    triageRequested: Boolean(patient.triageRequested),
+  }));
+
   const wardSnapshot = {
     modelPath,
     targetWardId: input.targetWardId,
@@ -118,23 +317,17 @@ export function reorderQueueWithAi(input: QueueAiInput): QueueAiResult {
     usePredictive: true,
     forecasterProfilePath,
     patientHistory: input.patientHistory,
-    queue: input.targetWardQueue.map((patient) => ({
-      ...patient,
-      patientId: patient.id,
-      name: patient.name,
-      triageLevel: priorityToTriageLevel(patient.priority),
-      waitMinutes: getWaitMinutes(patient, now),
-      triageRequested: Boolean(patient.triageRequested),
-    })),
+    queue: taggedQueue,
   };
 
   const payload = JSON.stringify(wardSnapshot);
   const attempts = pythonCommandCandidates().map((cmd) => [
     ...cmd,
     scriptPath,
-    ...(usesSharedPredictiveModel
-      ? []
-      : ["--checkpoint", modelPath, "--forecaster-profile", forecasterProfilePath]),
+    "--checkpoint",
+    modelPath,
+    "--forecaster-profile",
+    forecasterProfilePath,
   ]);
 
   let lastError = "unknown error";
@@ -142,35 +335,22 @@ export function reorderQueueWithAi(input: QueueAiInput): QueueAiResult {
   for (const cmd of attempts) {
     const result = runPythonCommand(cmd, payload);
 
-    if (result.error) {
-      lastError = result.error.message;
-      continue;
-    }
-
-    if (result.signal) {
-      lastError = `process killed (${result.signal})`;
-      continue;
-    }
-
-    if (result.status !== 0) {
-      lastError = result.stderr?.trim() || `exit code ${result.status}`;
-      continue;
-    }
-
-    if (!result.stdout?.trim()) {
-      lastError = result.stderr?.trim() || "empty stdout";
-      continue;
-    }
+    if (result.error) { lastError = result.error.message; continue; }
+    if (result.signal) { lastError = `process killed (${result.signal})`; continue; }
+    if (result.status !== 0) { lastError = result.stderr?.trim() || `exit code ${result.status}`; continue; }
+    if (!result.stdout?.trim()) { lastError = result.stderr?.trim() || "empty stdout"; continue; }
 
     try {
+      type RankedEntry = {
+        patientId?: string;
+        name?: string;
+        reason?: string;
+        priorityScore?: number;
+        __queueIndex?: number;
+      };
       const parsed = parseExplainJson(result.stdout) as {
         error?: string;
-        orderedPatientIds?: string[];
-        ranked_queue?: Array<{
-          patientId?: string;
-          name?: string;
-          reason?: string;
-        }>;
+        ranked_queue?: RankedEntry[];
         predictive_analytics?: {
           enabled?: boolean;
           surge_predicted?: boolean;
@@ -182,100 +362,67 @@ export function reorderQueueWithAi(input: QueueAiInput): QueueAiResult {
         };
       };
 
-      if (parsed.error) {
-        lastError = parsed.error;
-        continue;
-      }
+      if (parsed.error) { lastError = parsed.error; continue; }
 
-      if (usesSharedPredictiveModel) {
-        const order = new Map(
-          (parsed.orderedPatientIds || []).map((patientId, index) => [patientId, index])
-        );
-        const orderedPatients = [...input.targetWardQueue].sort(
-          (a, b) =>
-            (order.get(a.id) ?? Number.MAX_SAFE_INTEGER) -
-            (order.get(b.id) ?? Number.MAX_SAFE_INTEGER)
-        );
-        const predictive = parsed.predictive_analytics;
-        const queuePrediction: QueuePrediction | undefined = predictive
-          ? {
-              enabled: predictive.enabled !== false,
-              load: predictive.pred_load,
-              criticalShare: predictive.pred_crit,
-              expectedArrivals: predictive.expected_arrivals,
-              expectedCriticalPatients: predictive.expected_critical_patients,
-              horizonHours: predictive.horizon_hours,
-              surgePredicted: Boolean(predictive.surge_predicted),
-            }
-          : undefined;
-        const forecastMessage = queuePrediction?.expectedArrivals !== undefined
-          ? ` Expected ${queuePrediction.expectedArrivals} patients in the next ${queuePrediction.horizonHours ?? 6} hours; approximately ${queuePrediction.expectedCriticalPatients ?? 0} critical.`
-          : "";
+      const rankedQueue = parsed.ranked_queue || [];
 
-        return {
-          orderedPatients,
-          strategy: "ai",
-          message: orderedPatients[0]
-            ? `MAPPO+Predictive reordered queue. Top patient: ${orderedPatients[0].name}.${forecastMessage}`
-            : `MAPPO+Predictive reordered queue for ${input.targetWardName}.${forecastMessage}`,
-          queuePrediction,
-        };
-      }
+      // Build a score/reason map keyed by __queueIndex (most reliable)
+      // with name fallback for backwards compat.
+      const scoreByIdx = new Map<number, number>();
+      const reasonByIdx = new Map<number, string>();
+      const scoreByName = new Map<string, number>();
+      const reasonByName = new Map<string, string>();
 
-      const order = new Map(
-        (parsed.ranked_queue || []).map((patient, index) => [
-          patient.patientId || patient.name || String(index),
-          index,
-        ])
-      );
-      const reasonByPatientKey = new Map(
-        (parsed.ranked_queue || []).map((patient, index) => [
-          patient.patientId || patient.name || String(index),
-          patient.reason,
-        ])
-      );
-      const orderedPatients = [...input.targetWardQueue]
-        .sort((a, b) => {
-          const aRank = order.get(a.id) ?? Number.MAX_SAFE_INTEGER;
-          const bRank = order.get(b.id) ?? Number.MAX_SAFE_INTEGER;
-          return aRank - bRank;
+      rankedQueue.forEach((entry) => {
+        const score = entry.priorityScore ?? 0;
+        const nameLower = entry.name?.trim().toLowerCase();
+        if (typeof entry.__queueIndex === "number") {
+          scoreByIdx.set(entry.__queueIndex, score);
+          if (entry.reason) reasonByIdx.set(entry.__queueIndex, entry.reason);
+        }
+        if (nameLower) {
+          scoreByName.set(nameLower, score);
+          if (entry.reason) reasonByName.set(nameLower, entry.reason);
+        }
+      });
+
+      // Sort original patients by MAPPO priority score DESCENDING.
+      // Use __queueIndex match first (exact), then name match, then fallback score.
+      const orderedPatients = input.targetWardQueue
+        .map((patient, queueIndex) => {
+          const nameLower = patient.name?.trim().toLowerCase() ?? "";
+          const score =
+            scoreByIdx.get(queueIndex) ??
+            (nameLower ? scoreByName.get(nameLower) : undefined) ??
+            computeFallbackPriorityScore(patient, now.getTime());
+          const reason =
+            reasonByIdx.get(queueIndex) ??
+            (nameLower ? reasonByName.get(nameLower) : undefined);
+          return { patient, score, reason };
         })
-        .map((patient) => ({
+        .sort((a, b) => b.score - a.score)  // Highest priority score first
+        .map(({ patient, reason }, idx) => ({
           ...patient,
-          queueReason: reasonByPatientKey.get(patient.id),
+          queueRank: idx + 1,
+          queueReason: reason || patient.queueReason,
         }));
 
       const predictive = parsed.predictive_analytics;
       const queuePrediction: QueuePrediction | undefined = predictive?.enabled
         ? {
             enabled: true,
-            load:
-              typeof predictive.pred_load === "number" &&
-              Number.isFinite(predictive.pred_load)
-                ? predictive.pred_load
-                : undefined,
-            criticalShare:
-              typeof predictive.pred_crit === "number" &&
-              Number.isFinite(predictive.pred_crit)
-                ? predictive.pred_crit
-                : undefined,
-            expectedArrivals:
-              typeof predictive.expected_arrivals === "number" &&
-              Number.isFinite(predictive.expected_arrivals)
-                ? predictive.expected_arrivals
-                : undefined,
-            horizonHours:
-              typeof predictive.horizon_hours === "number" &&
-              Number.isFinite(predictive.horizon_hours)
-                ? predictive.horizon_hours
-                : undefined,
+            load: typeof predictive.pred_load === "number" && Number.isFinite(predictive.pred_load) ? predictive.pred_load : undefined,
+            criticalShare: typeof predictive.pred_crit === "number" && Number.isFinite(predictive.pred_crit) ? predictive.pred_crit : undefined,
+            expectedArrivals: typeof predictive.expected_arrivals === "number" && Number.isFinite(predictive.expected_arrivals) ? predictive.expected_arrivals : undefined,
+            horizonHours: typeof predictive.horizon_hours === "number" && Number.isFinite(predictive.horizon_hours) ? predictive.horizon_hours : undefined,
             surgePredicted: Boolean(predictive.surge_predicted),
           }
         : undefined;
-      const predictiveNote = queuePrediction
-        ? queuePrediction.surgePredicted
-          ? " Predictive analytics expects heavier critical arrivals; keep the front of the queue ready."
-          : " Predictive analytics updated the queue recommendation."
+
+      const predictiveNote = queuePrediction?.surgePredicted
+        ? " Predictive analytics expects heavier critical arrivals; keep the front of the queue ready."
+        : queuePrediction
+        ? " Predictive analytics updated the queue recommendation."
         : "";
 
       return {
@@ -287,20 +434,41 @@ export function reorderQueueWithAi(input: QueueAiInput): QueueAiResult {
         queuePrediction,
       };
     } catch (error) {
-      lastError =
-        error instanceof Error
-          ? error.message
-          : result.stderr?.trim() || "failed to parse explain.py output";
+      lastError = error instanceof Error ? error.message : result.stderr?.trim() || "failed to parse explain.py output";
     }
   }
 
-  console.error("[queueAi] MAPPO inference failed:", lastError);
-
+  console.error("[queueAi] MAPPO subprocess inference failed:", lastError);
   return {
     orderedPatients: fallbackPrioritySort(input.targetWardQueue),
     strategy: "priority",
     message: "MAPPO inference unavailable. Using priority ordering.",
   };
+}
+
+// ---------------------------------------------------------------------------
+// Public entry point
+// ---------------------------------------------------------------------------
+
+/**
+ * Reorder the patient queue using AI inference.
+ *
+ * - When QUEUE_AI_ENDPOINT is set (Vercel / production): calls the Render
+ *   FastAPI service via HTTP.
+ * - When QUEUE_AI_ENDPOINT is not set (local dev): falls back to spawning
+ *   the Python subprocess directly (original behaviour).
+ *
+ * Always falls back to priority-based sorting if the AI path fails.
+ */
+export async function reorderQueueWithAi(input: QueueAiInput): Promise<QueueAiResult> {
+  const endpoint = process.env.QUEUE_AI_ENDPOINT;
+
+  if (endpoint) {
+    return reorderViaHttp(input);
+  }
+
+  // Local development — run Python subprocess synchronously
+  return reorderViaSubprocess(input);
 }
 
 function priorityToTriageLevel(priority: string): number {

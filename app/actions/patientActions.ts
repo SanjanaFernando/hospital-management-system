@@ -498,3 +498,67 @@ export async function forceAssignPatientToBed(
     severity: "warning",
   });
 }
+
+export interface ExistingPatientSearchResult {
+  id: string;
+  name: string;
+  age: number;
+  gender?: string;
+  disease: string;
+  previousDiseases: string[];
+  status?: string;
+}
+
+export async function searchExistingPatients(
+  query: string
+): Promise<ExistingPatientSearchResult[]> {
+  if (!query || query.trim().length < 1) return [];
+
+  const { db } = await connectToDatabase();
+  const q = query.trim();
+
+  // Search by name or numerical id
+  const docs = await db
+    .collection("patients")
+    .find({
+      $or: [
+        { name: { $regex: q, $options: "i" } },
+        { id: { $regex: q, $options: "i" } },
+      ],
+    })
+    .sort({ updatedAt: -1 })
+    .limit(10)
+    .toArray();
+
+  const map = new Map<string, ExistingPatientSearchResult>();
+
+  for (const doc of docs) {
+    const rawId = String(doc.id || doc._id || "");
+    const numericId = /^\d+$/.test(rawId)
+      ? rawId
+      : rawId.replace(/\D/g, "").slice(-6) || String(10000 + Math.floor(Math.random() * 90000));
+
+    const nameKey = String(doc.name || "").trim().toLowerCase();
+    if (!map.has(nameKey)) {
+      const pastDiseases = new Set<string>();
+      if (doc.disease) pastDiseases.add(String(doc.disease));
+      if (Array.isArray(doc.previousDiseases)) {
+        doc.previousDiseases.forEach((d: any) => pastDiseases.add(String(d)));
+      } else if (doc.previousDiseases) {
+        pastDiseases.add(String(doc.previousDiseases));
+      }
+
+      map.set(nameKey, {
+        id: numericId,
+        name: String(doc.name || ""),
+        age: Number(doc.age || 0),
+        gender: doc.gender ? String(doc.gender) : undefined,
+        disease: String(doc.disease || ""),
+        previousDiseases: Array.from(pastDiseases),
+        status: doc.status ? String(doc.status) : undefined,
+      });
+    }
+  }
+
+  return Array.from(map.values());
+}

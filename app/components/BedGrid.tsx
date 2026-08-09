@@ -46,6 +46,15 @@ const formatWardLabel = (wardId?: string | null) => {
   return wardId;
 };
 
+const getShortName = (fullName?: string) => {
+  if (!fullName) return "";
+  const parts = fullName.trim().split(/\s+/);
+  if (parts.length === 1) return parts[0];
+  const firstNameInitial = parts[0][0] ? `${parts[0][0]}.` : "";
+  const lastName = parts[parts.length - 1];
+  return `${firstNameInitial} ${lastName}`;
+};
+
 export default function BedGrid({
   beds,
   wardName,
@@ -118,8 +127,8 @@ export default function BedGrid({
                 : ""
             }`}
           >
-            <div className="text-center">
-              <p className="text-sm font-bold">
+            <div className="text-center w-full min-w-0">
+              <p className="text-sm font-bold truncate">
                 {bed.type === "ICU"
                   ? `ICU Bed ${bed.bedNumber}`
                   : `Bed ${bed.bedNumber}`}
@@ -128,15 +137,15 @@ export default function BedGrid({
 
               {bed.patient && (
                 <>
-                  <p className="text-xs mt-1 font-semibold truncate">
-                    {bed.patient.name}
+                  <p className="text-xs mt-1 font-semibold truncate max-w-full px-1" title={bed.patient.name}>
+                    {getShortName(bed.patient.name)}
                   </p>
                   <p className="text-xs">{bed.patient.priority}</p>
 
                   {bed.patient.assignedFromWardId &&
                     bed.patient.assignedFromWardId !== normalizedWardId && (
-                      <p className="mt-1 rounded-full bg-white/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide">
-                        From {formatWardLabel(bed.patient.assignedFromWardId)}
+                      <p className="mt-1 rounded-full bg-cyan-900/40 border border-cyan-300/60 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider truncate text-cyan-100 flex items-center justify-center gap-1 shadow-2xs">
+                        <span>⇄</span> From {formatWardLabel(bed.patient.assignedFromWardId)}
                       </p>
                     )}
                 </>

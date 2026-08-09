@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: hospital-ai-inference
+    runtime: python
+    rootDir: inference-service   # Render deploys from this subdirectory
+    # Install CPU-only PyTorch first (saves ~1.5 GB vs the CUDA build),
+    # then install the remaining requirements.
+    buildCommand: >
+      pip install --no-cache-dir
+      torch==2.13.0+cpu
+      --index-url https://download.pytorch.org/whl/cpu
+      &&
+      pip install --no-cache-dir -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: MODEL_PATH
+        value: ./model/best_mappo_shared_predictive.pth
+      - key: LOG_LEVEL
+        value: INFO
+    # Free tier is sufficient for this lightweight CPU-only service.
+    # Upgrade to Starter ($7/mo) if you need zero cold-start latency.
+    plan: free
