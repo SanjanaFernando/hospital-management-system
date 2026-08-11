@@ -125,14 +125,39 @@ function runExplainSubprocess(
     ];
     if (withShap) args.push("--with-shap", "--shap-samples", "60");
 
-    const child = spawn(PYTHON_BIN, args, { stdio: ["pipe", "pipe", "pipe"] });
+    let child: ReturnType<typeof spawn>;
+    try {
+      child = spawn(PYTHON_BIN, args, { stdio: ["pipe", "pipe", "pipe"] });
+    } catch (spawnErr: any) {
+      // Python not found on this machine / serverless environment
+      return reject(
+        new Error(
+          `Python executable not found (${PYTHON_BIN}). ` +
+          "Set INFERENCE_SERVICE_URL to your Render service URL so the hosted " +
+          "environment delegates XAI to the inference service instead of a local subprocess."
+        )
+      );
+    }
 
     let stdout = "";
     let stderr = "";
-    child.stdout.on("data", (chunk) => (stdout += chunk.toString()));
-    child.stderr.on("data", (chunk) => (stderr += chunk.toString()));
+    child.stdout?.on("data", (chunk) => (stdout += chunk.toString()));
+    child.stderr?.on("data", (chunk) => (stderr += chunk.toString()));
 
-    child.on("error", (err) => reject(err));
+    child.on("error", (err: NodeJS.ErrnoException) => {
+      if (err.code === "ENOENT") {
+        // Python executable does not exist — common on Vercel / serverless
+        reject(
+          new Error(
+            `Python executable not found (${PYTHON_BIN}). ` +
+            "Set INFERENCE_SERVICE_URL to your Render service URL so the hosted " +
+            "environment delegates XAI to the inference service instead of a local subprocess."
+          )
+        );
+      } else {
+        reject(err);
+      }
+    });
     child.on("close", (code) => {
       try {
         const parsed = JSON.parse(stdout.trim());
@@ -152,10 +177,11 @@ function runExplainSubprocess(
 
     // Pipe the ward snapshot in via stdin (see explain.py: reads --ward-json
     // OR stdin). stdin avoids OS argv length limits for large queues.
-    child.stdin.write(JSON.stringify(wardSnapshot));
-    child.stdin.end();
+    child.stdin?.write(JSON.stringify(wardSnapshot));
+    child.stdin?.end();
   });
 }
+
 
 async function loadShapCache() {
   try {
