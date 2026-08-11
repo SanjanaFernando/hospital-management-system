@@ -141,8 +141,8 @@ function runExplainSubprocess(
 
     let stdout = "";
     let stderr = "";
-    child.stdout.on("data", (chunk) => (stdout += chunk.toString()));
-    child.stderr.on("data", (chunk) => (stderr += chunk.toString()));
+    child.stdout?.on("data", (chunk) => (stdout += chunk.toString()));
+    child.stderr?.on("data", (chunk) => (stderr += chunk.toString()));
 
     child.on("error", (err: NodeJS.ErrnoException) => {
       if (err.code === "ENOENT") {
