@@ -177,8 +177,8 @@ function runExplainSubprocess(
 
     // Pipe the ward snapshot in via stdin (see explain.py: reads --ward-json
     // OR stdin). stdin avoids OS argv length limits for large queues.
-    child.stdin.write(JSON.stringify(wardSnapshot));
-    child.stdin.end();
+    child.stdin?.write(JSON.stringify(wardSnapshot));
+    child.stdin?.end();
   });
 }
 
