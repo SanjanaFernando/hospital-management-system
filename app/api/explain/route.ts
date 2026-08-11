@@ -34,6 +34,12 @@ const FORECASTER_PROFILE_PATH =
 const EXPLAIN_SCRIPT_PATH = path.join(process.cwd(), "xai", "scripts", "explain.py");
 const SHAP_CACHE_PATH = path.join(process.cwd(), "xai", "data", "shap_summary.json");
 
+// When running on Vercel (or any hosted env), the inference service URL is set.
+// In that case we delegate explain calls via HTTP to the FastAPI /explain endpoint
+// instead of spawning a local Python subprocess (which Vercel does not support).
+const INFERENCE_SERVICE_URL = process.env.INFERENCE_SERVICE_URL?.replace(/\/$/, "") ?? "";
+
+
 function toTriageInt(priority: string | number): number {
   if (typeof priority === "number") return priority;
   const match = priority.match(/\d+/);
@@ -119,14 +125,39 @@ function runExplainSubprocess(
     ];
     if (withShap) args.push("--with-shap", "--shap-samples", "60");
 
-    const child = spawn(PYTHON_BIN, args, { stdio: ["pipe", "pipe", "pipe"] });
+    let child: ReturnType<typeof spawn>;
+    try {
+      child = spawn(PYTHON_BIN, args, { stdio: ["pipe", "pipe", "pipe"] });
+    } catch (spawnErr: any) {
+      // Python not found on this machine / serverless environment
+      return reject(
+        new Error(
+          `Python executable not found (${PYTHON_BIN}). ` +
+          "Set INFERENCE_SERVICE_URL to your Render service URL so the hosted " +
+          "environment delegates XAI to the inference service instead of a local subprocess."
+        )
+      );
+    }
 
     let stdout = "";
     let stderr = "";
-    child.stdout.on("data", (chunk) => (stdout += chunk.toString()));
-    child.stderr.on("data", (chunk) => (stderr += chunk.toString()));
+    child.stdout?.on("data", (chunk) => (stdout += chunk.toString()));
+    child.stderr?.on("data", (chunk) => (stderr += chunk.toString()));
 
-    child.on("error", (err) => reject(err));
+    child.on("error", (err: NodeJS.ErrnoException) => {
+      if (err.code === "ENOENT") {
+        // Python executable does not exist — common on Vercel / serverless
+        reject(
+          new Error(
+            `Python executable not found (${PYTHON_BIN}). ` +
+            "Set INFERENCE_SERVICE_URL to your Render service URL so the hosted " +
+            "environment delegates XAI to the inference service instead of a local subprocess."
+          )
+        );
+      } else {
+        reject(err);
+      }
+    });
     child.on("close", (code) => {
       try {
         const parsed = JSON.parse(stdout.trim());
@@ -146,10 +177,11 @@ function runExplainSubprocess(
 
     // Pipe the ward snapshot in via stdin (see explain.py: reads --ward-json
     // OR stdin). stdin avoids OS argv length limits for large queues.
-    child.stdin.write(JSON.stringify(wardSnapshot));
-    child.stdin.end();
+    child.stdin?.write(JSON.stringify(wardSnapshot));
+    child.stdin?.end();
   });
 }
+
 
 async function loadShapCache() {
   try {
@@ -160,12 +192,47 @@ async function loadShapCache() {
   }
 }
 
+/**
+ * Call the hosted FastAPI /explain endpoint when INFERENCE_SERVICE_URL is set.
+ * This is the production path (Vercel cannot spawn local Python subprocesses).
+ */
+async function runExplainViaHttp(wardSnapshot: WardSnapshot): Promise<any> {
+  const url = `${INFERENCE_SERVICE_URL}/explain`;
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(wardSnapshot),
+    // Give the MAPPO checkpoint load time on cold starts (Render free tier).
+    signal: AbortSignal.timeout(60_000),
+  });
+
+  if (!response.ok) {
+    let detail = "";
+    try {
+      const body = await response.json();
+      detail = JSON.stringify(body.detail ?? body);
+    } catch {
+      detail = await response.text();
+    }
+    throw new Error(
+      `Inference service /explain returned ${response.status}: ${detail}`
+    );
+  }
+
+  const data = await response.json();
+  if (data.error) {
+    throw new Error(data.error);
+  }
+  return data;
+}
+
+
 async function handle(wardId: string | null, withShap: boolean, persist: boolean) {
   if (!wardId) {
     return NextResponse.json({ error: "wardId is required" }, { status: 400 });
   }
 
-  if (!CHECKPOINT_PATH) {
+  if (!CHECKPOINT_PATH && !INFERENCE_SERVICE_URL) {
     return NextResponse.json(
       { error: "No MAPPO checkpoint found in model/ directory." },
       { status: 500 }
@@ -173,7 +240,12 @@ async function handle(wardId: string | null, withShap: boolean, persist: boolean
   }
 
   const wardSnapshot = await buildWardSnapshot(wardId);
-  const explanation = await runExplainSubprocess(wardSnapshot, false); // Layer 3 is served from cache, not live
+
+  // Production path: delegate to hosted inference service via HTTP.
+  // Localhost path: spawn local Python subprocess (unchanged behaviour).
+  const explanation = INFERENCE_SERVICE_URL
+    ? await runExplainViaHttp(wardSnapshot)
+    : await runExplainSubprocess(wardSnapshot, false); // Layer 3 is served from cache, not live
 
   if (withShap) {
     explanation.shap_global_importance_cached = await loadShapCache();
@@ -197,6 +269,7 @@ async function handle(wardId: string | null, withShap: boolean, persist: boolean
 
   return explanation;
 }
+
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
