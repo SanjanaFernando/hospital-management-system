@@ -1,1 +1,4 @@
-# xai package — forecaster module for the inference service
+# xai package — explainability modules for the inference service
+# Modules:
+#   forecaster      — ArrivalForecaster for predictive load/surge analytics
+#   explain_engine  — MAPPO state vector, priority decomposition, NLG (Layers 1-5)

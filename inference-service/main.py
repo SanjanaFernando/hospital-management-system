@@ -30,6 +30,15 @@ MODEL_PATH = os.environ.get(
     "./model/best_mappo_shared_predictive.pth",
 )
 
+# Separate checkpoint used by the /explain endpoint (MAPPO 5-actor checkpoint).
+# Set MAPPO_EXPLAIN_CHECKPOINT_PATH in Render env vars to point at the file
+# uploaded to your persistent disk / object store.  Falls back to the same
+# model directory as MODEL_PATH.
+EXPLAIN_CHECKPOINT_PATH = os.environ.get(
+    "MAPPO_EXPLAIN_CHECKPOINT_PATH",
+    str(Path(MODEL_PATH).parent / "best_mappo_hospital.pth"),
+)
+
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
 logging.basicConfig(level=getattr(logging, LOG_LEVEL, logging.INFO))
 logger = logging.getLogger("inference-service")
@@ -194,5 +203,71 @@ async def reorder(request: Request) -> JSONResponse:
         return JSONResponse(content=result)
     except Exception as exc:
         logger.exception("Inference error: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.post("/explain")
+async def explain(request: Request) -> JSONResponse:
+    """
+    Run MAPPO explainability and return XAI results for the ward queue.
+
+    This endpoint is the hosted equivalent of the `python xai/scripts/explain.py`
+    subprocess the Next.js app calls locally.  The Next.js API route at
+    /api/explain will call this endpoint instead of spawning a subprocess when
+    the INFERENCE_SERVICE_URL environment variable is set (i.e. in production).
+
+    Request body (JSON) — same ward-snapshot shape as the local explain script:
+      - totalBeds          number
+      - occupiedBeds       number
+      - queue              Array of { patientId, name, triageLevel, waitMinutes, ... }
+      - usePredictive      boolean (optional, default true)
+      - patientHistory     Array of historical patient records (optional)
+      - forecasterProfilePath  string path (optional)
+
+    Response (JSON):
+      - state_vector           { feature_name: float, ... }  (10 features)
+      - predictive_analytics   { enabled, pred_load, pred_crit, ... }
+      - combined_weights        { w_t_urgency, w_w_wait }
+      - agent_votes            Array of per-agent negotiation details
+      - agent_confidence       Array of per-agent entropy/confidence
+      - ranked_queue           Array of patients with priorityScore, rank, reason, ...
+      - explanation_text       Natural-language summary (Layer 5)
+    """
+    explain_path = Path(EXPLAIN_CHECKPOINT_PATH)
+    if not explain_path.exists():
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "error": "MAPPO explain checkpoint not found.",
+                "path": str(explain_path),
+                "hint": (
+                    "Upload best_mappo_hospital.pth to the model/ directory and set "
+                    "MAPPO_EXPLAIN_CHECKPOINT_PATH in your Render environment variables."
+                ),
+            },
+        )
+
+    try:
+        ward_snapshot: dict = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON body.")
+
+    try:
+        from xai.explain_engine import explain_decision
+
+        result = explain_decision(
+            ward_snapshot,
+            checkpoint_path=str(explain_path),
+            device="cpu",
+            with_shap=bool(ward_snapshot.get("withShap", False)),
+        )
+        logger.info(
+            "Explain OK — queue_len=%d  top_patient=%s",
+            len(ward_snapshot.get("queue", [])),
+            result.get("ranked_queue", [{}])[0].get("name", "?") if result.get("ranked_queue") else "empty",
+        )
+        return JSONResponse(content=result)
+    except Exception as exc:
+        logger.exception("Explain error: %s", exc)
         raise HTTPException(status_code=500, detail=str(exc))
 
