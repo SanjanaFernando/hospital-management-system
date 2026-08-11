@@ -164,20 +164,22 @@ function getPatientReason(
 // ---------------------------------------------------------------------------
 
 async function reorderViaHttp(input: QueueAiInput): Promise<QueueAiResult> {
+  // Call /explain instead of /reorder so queue ordering comes from the same
+  // best_mappo_hospital.pth (5-actor) model that the XAI panel uses.
+  // This guarantees the displayed priority scores match the actual queue order.
   const endpoint = process.env.QUEUE_AI_ENDPOINT!.replace(/\/$/, "");
   const now = new Date();
 
-  const payload = {
-    targetWardId: input.targetWardId,
-    targetWardTotalBeds: input.targetWardTotalBeds ?? 0,
-    targetWardOccupiedBeds: input.targetWardOccupiedBeds ?? 0,
+  const wardSnapshot = {
+    totalBeds: input.targetWardTotalBeds ?? 0,
+    occupiedBeds: input.targetWardOccupiedBeds ?? 0,
+    usePredictive: true,
     patientHistory: input.patientHistory,
-    // Use "targetWardQueue" key — matches what the FastAPI service expects
-    targetWardQueue: input.targetWardQueue.map((patient) => ({
+    queue: input.targetWardQueue.map((patient, queueIndex) => ({
       ...patient,
-      patientId: patient._id || patient.id,
-      id: patient.id,
+      patientId: patient._id ? String(patient._id) : String(patient.id),
       name: patient.name,
+      __queueIndex: queueIndex,
       triageLevel: priorityToTriageLevel(patient.priority),
       waitMinutes: getWaitMinutes(patient, now),
       triageRequested: Boolean(patient.triageRequested),
@@ -186,15 +188,15 @@ async function reorderViaHttp(input: QueueAiInput): Promise<QueueAiResult> {
 
   let response: Response;
   try {
-    response = await fetch(`${endpoint}/reorder`, {
+    response = await fetch(`${endpoint}/explain`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
+      body: JSON.stringify(wardSnapshot),
       signal: AbortSignal.timeout(INFERENCE_TIMEOUT_MS),
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    console.error("[queueAi] HTTP inference request failed:", message);
+    console.error("[queueAi] HTTP explain request failed:", message);
     return {
       orderedPatients: fallbackPrioritySort(input.targetWardQueue),
       strategy: "priority",
@@ -203,7 +205,7 @@ async function reorderViaHttp(input: QueueAiInput): Promise<QueueAiResult> {
   }
 
   if (!response.ok) {
-    console.error("[queueAi] HTTP inference returned status", response.status);
+    console.error("[queueAi] HTTP explain returned status", response.status);
     return {
       orderedPatients: fallbackPrioritySort(input.targetWardQueue),
       strategy: "priority",
@@ -212,7 +214,13 @@ async function reorderViaHttp(input: QueueAiInput): Promise<QueueAiResult> {
   }
 
   let parsed: {
-    orderedPatientIds?: string[];
+    ranked_queue?: Array<{
+      patientId?: string;
+      name?: string;
+      reason?: string;
+      priorityScore?: number;
+      __queueIndex?: number;
+    }>;
     predictive_analytics?: {
       enabled?: boolean;
       surge_predicted?: boolean;
@@ -227,7 +235,7 @@ async function reorderViaHttp(input: QueueAiInput): Promise<QueueAiResult> {
   try {
     parsed = await response.json();
   } catch {
-    console.error("[queueAi] Failed to parse HTTP inference response");
+    console.error("[queueAi] Failed to parse HTTP explain response");
     return {
       orderedPatients: fallbackPrioritySort(input.targetWardQueue),
       strategy: "priority",
@@ -235,35 +243,69 @@ async function reorderViaHttp(input: QueueAiInput): Promise<QueueAiResult> {
     };
   }
 
-  const order = new Map<string, number>();
-  (parsed.orderedPatientIds || []).forEach((patientId, index) => {
-    order.set(String(patientId), index);
+  const rankedQueue = parsed.ranked_queue || [];
+  if (rankedQueue.length === 0) {
+    return {
+      orderedPatients: fallbackPrioritySort(input.targetWardQueue),
+      strategy: "priority",
+      message: "AI returned empty ranking. Using priority ordering.",
+    };
+  }
+
+  // Build score maps keyed by __queueIndex (most reliable) with name fallback
+  const scoreByIdx = new Map<number, number>();
+  const reasonByIdx = new Map<number, string>();
+  const scoreByName = new Map<string, number>();
+  const reasonByName = new Map<string, string>();
+
+  rankedQueue.forEach((entry) => {
+    const score = entry.priorityScore ?? 0;
+    const nameLower = entry.name?.trim().toLowerCase();
+    if (typeof entry.__queueIndex === "number") {
+      scoreByIdx.set(entry.__queueIndex, score);
+      if (entry.reason) reasonByIdx.set(entry.__queueIndex, entry.reason);
+    }
+    if (nameLower) {
+      scoreByName.set(nameLower, score);
+      if (entry.reason) reasonByName.set(nameLower, entry.reason);
+    }
   });
 
-  const orderedPatients = [...input.targetWardQueue]
-    .sort((a, b) => getPatientRank(order, a) - getPatientRank(order, b))
-    .map((patient, idx) => ({
+  const orderedPatients = input.targetWardQueue
+    .map((patient, queueIndex) => {
+      const nameLower = patient.name?.trim().toLowerCase() ?? "";
+      const score =
+        scoreByIdx.get(queueIndex) ??
+        (nameLower ? scoreByName.get(nameLower) : undefined) ??
+        0;
+      const reason =
+        reasonByIdx.get(queueIndex) ??
+        (nameLower ? reasonByName.get(nameLower) : undefined);
+      return { patient, score, reason };
+    })
+    .sort((a, b) => b.score - a.score)
+    .map(({ patient, reason }, idx) => ({
       ...patient,
       queueRank: idx + 1,
+      queueReason: reason || patient.queueReason,
     }));
 
   const predictive = parsed.predictive_analytics;
-  const queuePrediction: QueuePrediction | undefined = predictive
+  const queuePrediction = predictive?.enabled
     ? {
-        enabled: predictive.enabled !== false,
-        load: predictive.pred_load,
-        criticalShare: predictive.pred_crit,
-        expectedArrivals: predictive.expected_arrivals,
-        expectedCriticalPatients: predictive.expected_critical_patients,
-        horizonHours: predictive.horizon_hours,
+        enabled: true,
+        load: typeof predictive.pred_load === "number" ? predictive.pred_load : undefined,
+        criticalShare: typeof predictive.pred_crit === "number" ? predictive.pred_crit : undefined,
+        expectedArrivals: typeof predictive.expected_arrivals === "number" ? predictive.expected_arrivals : undefined,
+        expectedCriticalPatients: typeof predictive.expected_critical_patients === "number" ? predictive.expected_critical_patients : undefined,
+        horizonHours: typeof predictive.horizon_hours === "number" ? predictive.horizon_hours : undefined,
         surgePredicted: Boolean(predictive.surge_predicted),
       }
     : undefined;
 
-  const forecastMessage =
-    queuePrediction?.expectedArrivals !== undefined
-      ? ` Expected ${queuePrediction.expectedArrivals} patients in the next ${queuePrediction.horizonHours ?? 6} hours; approximately ${queuePrediction.expectedCriticalPatients ?? 0} critical.`
-      : "";
+  const forecastMessage = queuePrediction?.expectedArrivals !== undefined
+    ? ` Expected ${queuePrediction.expectedArrivals} patients in the next ${queuePrediction.horizonHours ?? 6} hours; approximately ${queuePrediction.expectedCriticalPatients ?? 0} critical.`
+    : "";
 
   return {
     orderedPatients,
@@ -281,7 +323,13 @@ async function reorderViaHttp(input: QueueAiInput): Promise<QueueAiResult> {
 // ---------------------------------------------------------------------------
 
 function reorderViaSubprocess(input: QueueAiInput): QueueAiResult {
-  const modelPath = resolveMappoModelPath(true);
+  // Use the explain-compatible baseline checkpoint (best_mappo_hospital.pth).
+  // The explain_engine.py load_mappo() expects 5 separate actor_0..actor_4 keys
+  // which only the baseline (non-predictive) checkpoint provides. The predictive
+  // shared-actor checkpoint (best_mappo_shared_predictive.pth) uses net.*.weight
+  // keys and cannot be loaded by load_mappo() — passing it would silently fall
+  // through to fallbackPrioritySort without any warning.
+  const modelPath = resolveMappoModelPath(false); // false = prefer best_mappo_hospital.pth
   const forecasterProfilePath = resolveForecasterProfilePath();
   const scriptPath = path.join(process.cwd(), "xai", "scripts", "explain.py");
 
