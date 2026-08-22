@@ -10,6 +10,7 @@
     "db:reset": "node scripts/seedDatabase.mjs",
     "db:indexes": "node scripts/createIndexes.mjs",
     "db:seed-admin": "node scripts/seedAdmin.mjs",
+    "db:user-reset": "node scripts/resetPrimaryUser.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "mlops:collect": "python mlops/scripts/collect_data.py --days 30 --output mlops/data/raw",
