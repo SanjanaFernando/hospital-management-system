@@ -16,7 +16,6 @@ function makeSession(role: UserSession['role'], wardIds: string[] = []): UserSes
   return { role, wardIds: normalizedWardIds, wardId: normalizedWardIds[0], displayName: 'Test User' };
 }
 
-
 describe('canRegisterPatient', () => {
   it('admin can register in any ward, even unassigned', () => {
     expect(canRegisterPatient(makeSession('admin', []), 'ward-3')).toBe(true);
@@ -52,8 +51,6 @@ describe('canSetTriage', () => {
 
 describe('canAssignQueuedPatientAcrossWards', () => {
   it('consultant_doctor assigned to source ward can move patient out', () => {
-    // Using ward-5 (not in the legacy remap table) to isolate cross-ward
-    // logic from normalizeWardId's legacy-id behavior.
     expect(canAssignQueuedPatientAcrossWards(makeSession('consultant_doctor', ['ward-5']), 'ward-5', 'ward-3')).toBe(true);
   });
 
@@ -68,6 +65,76 @@ describe('canAssignQueuedPatientAcrossWards', () => {
     // to both the session's wardIds and the sourceWardId parameter.
     const session = makeSession('consultant_doctor', ['ward-1']);
     expect(canAssignQueuedPatientAcrossWards(session, 'ward-1', 'ward-3')).toBe(true);
+  });
+});
+
+describe('canUpdateBedStatus', () => {
+  it('admin can update bed status in any ward, even unassigned', () => {
+    expect(canUpdateBedStatus(makeSession('admin', []), 'ward-3')).toBe(true);
+  });
+
+  it('sub_admin can update bed status in any ward, even unassigned', () => {
+    expect(canUpdateBedStatus(makeSession('sub_admin', []), 'ward-3')).toBe(true);
+  });
+
+  it('consultant_doctor can update bed status in an assigned ward', () => {
+    expect(canUpdateBedStatus(makeSession('consultant_doctor', ['ward-3']), 'ward-3')).toBe(true);
+  });
+
+  it('main_sister can update bed status in an assigned ward', () => {
+    expect(canUpdateBedStatus(makeSession('main_sister', ['ward-3']), 'ward-3')).toBe(true);
+  });
+
+  it('main_attendant can update bed status in an assigned ward', () => {
+    expect(canUpdateBedStatus(makeSession('main_attendant', ['ward-3']), 'ward-3')).toBe(true);
+  });
+
+  it('consultant_doctor CANNOT update bed status in an unassigned ward', () => {
+    expect(canUpdateBedStatus(makeSession('consultant_doctor', ['ward-1']), 'ward-3')).toBe(false);
+  });
+});
+
+describe('canManageStaff', () => {
+  it('admin can manage staff', () => {
+    expect(canManageStaff(makeSession('admin', []))).toBe(true);
+  });
+
+  it('sub_admin can manage staff', () => {
+    expect(canManageStaff(makeSession('sub_admin', []))).toBe(true);
+  });
+
+  it('consultant_doctor cannot manage staff', () => {
+    expect(canManageStaff(makeSession('consultant_doctor', ['ward-3']))).toBe(false);
+  });
+
+  it('main_sister cannot manage staff', () => {
+    expect(canManageStaff(makeSession('main_sister', ['ward-3']))).toBe(false);
+  });
+
+  it('main_attendant cannot manage staff', () => {
+    expect(canManageStaff(makeSession('main_attendant', ['ward-3']))).toBe(false);
+  });
+});
+
+describe('canViewLogs', () => {
+  it('admin can view logs', () => {
+    expect(canViewLogs(makeSession('admin', []))).toBe(true);
+  });
+
+  it('sub_admin can view logs', () => {
+    expect(canViewLogs(makeSession('sub_admin', []))).toBe(true);
+  });
+
+  it('consultant_doctor cannot view logs', () => {
+    expect(canViewLogs(makeSession('consultant_doctor', ['ward-3']))).toBe(false);
+  });
+
+  it('main_sister cannot view logs', () => {
+    expect(canViewLogs(makeSession('main_sister', ['ward-3']))).toBe(false);
+  });
+
+  it('main_attendant cannot view logs', () => {
+    expect(canViewLogs(makeSession('main_attendant', ['ward-3']))).toBe(false);
   });
 });
 
