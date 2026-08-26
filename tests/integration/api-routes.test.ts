@@ -120,8 +120,6 @@ describe('POST /api/wards', () => {
       body: JSON.stringify({ wardId: 'ward-9', name: 'Test Ward', totalBeds: 10 }),
     });
     const response = await POST(request);
-    const body = await response.json();
-    console.log('DEBUG:', response.status, body);
     expect(response.status).toBe(403);
   });
 });
