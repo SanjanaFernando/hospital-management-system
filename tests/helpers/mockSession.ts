@@ -59,11 +59,20 @@ export function makeMockDb(): Partial<Db> {
 }
 
 /**
- * Create a mock NextRequest headers object
+ * Create a mock NextRequest headers object.
+ *
+ * IMPORTANT: This must return a real Headers instance, not a duck-typed
+ * object with just get()/has(). NextRequest's constructor normalizes
+ * whatever is passed to its `headers` option internally, and a fake object
+ * without a proper iterator/entries() is silently dropped — resulting in
+ * an EMPTY real Headers object inside the request, not your fake one.
+ * That was causing x-user-role to read as missing in every route test,
+ * silently triggering the Finding #1 admin-fallback bug and making it look
+ * like permission checks were being bypassed when they weren't.
  */
 export function makeMockHeaders(sessionData?: Partial<UserSession>): Headers {
-  const headers = new Map<string, string>();
   const session = makeSession(sessionData);
+  const headers = new Headers();
 
   headers.set('x-user-role', session.role);
   if (session.userId) headers.set('x-user-id', session.userId);
@@ -73,19 +82,12 @@ export function makeMockHeaders(sessionData?: Partial<UserSession>): Headers {
     headers.set('x-user-ward-ids', session.wardIds.join(','));
   }
 
-  // Create a proper Headers object (duck-typed)
-  return {
-    get: (key: string) => headers.get(key.toLowerCase()) || null,
-    has: (key: string) => headers.has(key.toLowerCase()),
-  } as any;
+  return headers;
 }
 
 /**
  * Create mock headers with no role (simulates missing auth header)
  */
 export function makeMockHeadersNoRole(): Headers {
-  return {
-    get: () => null,
-    has: () => false,
-  } as any;
+  return new Headers();
 }

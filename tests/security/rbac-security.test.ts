@@ -15,6 +15,7 @@ import path from 'path';
 vi.mock('next/cache', () => ({
   revalidateTag: vi.fn(),
   revalidatePath: vi.fn(),
+  unstable_cache: vi.fn((fn: any) => fn), // pass through — just call the wrapped function directly, skip actual caching
 }));
 
 // Mock MongoDB before importing route handlers that use it
