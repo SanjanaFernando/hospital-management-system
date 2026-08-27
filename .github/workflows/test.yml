@@ -31,3 +31,24 @@ jobs:
       - run: npm ci
       - name: Run security tests (documents known findings — failures expected until fixed)
         run: npm run test -- --run tests/security/
+
+  ai-model-tests:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: inference-service
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: inference-service/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt pytest httpx
+
+      - name: Run AI/ML model tests
+        run: python -m pytest test_api.py -v
