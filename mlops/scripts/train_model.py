@@ -116,8 +116,13 @@ def load_training_data(data_dir: str, batch_size: int = 32, val_split: float = 0
     logger.info(f"State shape: {states.shape}, Action shape: {actions.shape}")
     
     # Split into train/val
+    # n_samples = len(states)
+    # n_val = int(n_samples * val_split)
+    # n_train = n_samples - n_val
     n_samples = len(states)
     n_val = int(n_samples * val_split)
+    if n_val == 0 and n_samples >= 2:
+        n_val = 1  # guarantee at least one val sample when possible
     n_train = n_samples - n_val
     
     # Shuffle before splitting
