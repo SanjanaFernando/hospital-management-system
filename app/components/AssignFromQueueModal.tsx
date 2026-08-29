@@ -233,7 +233,17 @@ export default function AssignFromQueueModal({
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-black">Patient to assign</p>
-              <p className="font-semibold text-lg text-black">{patient.name}</p>
+              <p className="font-semibold text-lg text-black flex items-center gap-1.5 flex-wrap">
+                {patient.name}
+                {patient.priorityScore !== undefined && (
+                  <span
+                    className="text-xs font-bold text-white bg-indigo-500 px-1.5 py-0.5 rounded-full ring-1 ring-indigo-600/30"
+                    title="AI priority score"
+                  >
+                    {patient.priorityScore.toFixed(3)}
+                  </span>
+                )}
+              </p>
               <div className="flex gap-2 mt-2">
                 <span className="px-2 py-1 rounded bg-gray-200 text-xs text-black">
                   {patient.age}y - {patient.ageGroup}

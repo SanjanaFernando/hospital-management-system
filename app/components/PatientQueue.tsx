@@ -376,6 +376,14 @@ export default function PatientQueue({
                 <div className="min-w-0 flex-1">
                   <p className="font-semibold flex items-center gap-1.5 flex-wrap text-slate-900">
                     <span>{index + 1}. {patient.name}</span>
+                    {patient.priorityScore !== undefined && (
+                      <span
+                        className="text-xs font-bold text-white bg-indigo-500 px-1.5 py-0.5 rounded-full ring-1 ring-indigo-600/30"
+                        title="AI priority score"
+                      >
+                        {patient.priorityScore.toFixed(3)}
+                      </span>
+                    )}
                     <span className="text-xs font-mono font-semibold text-slate-500 bg-white/80 px-1.5 py-0.5 rounded ring-1 ring-black/5">
                       #{patient.id}
                     </span>
