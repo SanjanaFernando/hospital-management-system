@@ -353,6 +353,7 @@ export default function WardOverviewClient({
                   wardName={ward.name}
                   onPatientAssigned={refreshWard}
                   queueOrderStrategy={ward.queueOrderStrategy}
+                  queueExplainSnapshot={ward.queueExplainSnapshot}
                   canAssign={canAssignPatients}
                   listMaxHeight={
                     isLargeScreen && bedGridHeight

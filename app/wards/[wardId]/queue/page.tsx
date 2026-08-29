@@ -193,6 +193,7 @@ export default function WardQueuePage() {
             wardName={ward.name}
             onPatientAssigned={handlePatientAssigned}
             queueOrderStrategy={ward.queueOrderStrategy}
+            queueExplainSnapshot={ward.queueExplainSnapshot}
             canAssign={canAssignPatients}
           />
         </div>
