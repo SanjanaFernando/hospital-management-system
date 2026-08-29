@@ -284,9 +284,10 @@ async function reorderViaHttp(input: QueueAiInput): Promise<QueueAiResult> {
       return { patient, score, reason };
     })
     .sort((a, b) => b.score - a.score)
-    .map(({ patient, reason }, idx) => ({
+    .map(({ patient, score, reason }, idx) => ({
       ...patient,
       queueRank: idx + 1,
+      priorityScore: score,
       queueReason: reason || patient.queueReason,
     }));
 
@@ -449,9 +450,10 @@ function reorderViaSubprocess(input: QueueAiInput): QueueAiResult {
           return { patient, score, reason };
         })
         .sort((a, b) => b.score - a.score)  // Highest priority score first
-        .map(({ patient, reason }, idx) => ({
+        .map(({ patient, score, reason }, idx) => ({
           ...patient,
           queueRank: idx + 1,
+          priorityScore: score,
           queueReason: reason || patient.queueReason,
         }));
 

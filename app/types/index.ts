@@ -55,6 +55,7 @@ export interface Patient {
   assignedFromWardId?: string | null;
   status?: "queued" | "admitted" | "discharged";
   triageRequested?: boolean;
+  priorityScore?: number; // AI-computed priority score (0–1) from MAPPO inference
   queueReason?: string; // MAPPO explanation for this patient's queue rank, set by reorderQueueWithAi
   queueRank?: number; // 1-indexed queue rank position
   customFields?: Record<string, any>; // Ward-specific custom fields data
