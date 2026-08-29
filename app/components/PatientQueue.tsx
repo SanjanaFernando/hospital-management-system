@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Sparkles, AlertCircle } from "lucide-react";
-import type { Bed, Patient, Ward } from "@/app/types";
+import type { Bed, Patient, QueueExplainSnapshot, Ward } from "@/app/types";
 import AssignFromQueueModal from "./AssignFromQueueModal";
-import PatientFeatureContributionModal from "./PatientFeatureContributionModal";
+import PatientFeatureContributionModal, {
+  type ExplainResponse,
+} from "./PatientFeatureContributionModal";
 import { updatePatient } from "@/app/utils/api";
 import { useAuthSession } from "@/app/context/AuthSessionContext";
 import { canSetTriage } from "@/lib/rbac";
@@ -37,6 +39,11 @@ interface PatientQueueProps {
   patientReasonById?: Record<string, string>;
   canAssign?: boolean;
   listMaxHeight?: number;
+  // Snapshot of the MAPPO negotiation output (combined_weights + state_vector)
+  // from the SAME /explain call that produced this queue's ordering. Passed
+  // through to the XAI breakdown modal so it shows the exact numbers behind
+  // the current order instead of firing a separate, later inference call.
+  queueExplainSnapshot?: QueueExplainSnapshot;
 }
 
 const priorityColors: Record<string, string> = {
@@ -167,6 +174,7 @@ export default function PatientQueue({
   patientReasonById = {},
   canAssign = true,
   listMaxHeight,
+  queueExplainSnapshot,
 }: PatientQueueProps) {
   const { session } = useAuthSession();
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
@@ -184,6 +192,43 @@ export default function PatientQueue({
     useState<Patient | null>(null);
 
   const getPatientKey = (patient: Patient): string => patient._id || patient.id;
+
+  // Reuse the exact decomposition already computed by the same reorder call
+  // that produced this queue's order, so the XAI modal shows the identical
+  // score instead of triggering a fresh (and potentially different) inference
+  // call against ward data that may have moved on since the list was ranked.
+  const explanationPreloadData: ExplainResponse | null = useMemo(() => {
+    const patient = selectedExplanationPatient;
+    if (!patient || !queueExplainSnapshot || typeof patient.priorityScore !== "number") {
+      return null;
+    }
+
+    const triageLevel =
+      typeof patient.priority === "string"
+        ? parseInt(patient.priority.replace(/\D/g, ""), 10) || 5
+        : 5;
+
+    return {
+      state_vector: queueExplainSnapshot.stateVector,
+      combined_weights: queueExplainSnapshot.combinedWeights,
+      ranked_queue: [
+        {
+          patientId: patient._id ? String(patient._id) : String(patient.id),
+          name: patient.name,
+          triageLevel,
+          triageRequested: Boolean(patient.triageRequested),
+          waitHours: patient.queueWaitHours,
+          priorityScore: patient.priorityScore,
+          urgencyContribution: patient.urgencyContribution,
+          waitContribution: patient.waitContribution,
+          urgencyShare: patient.urgencyShare,
+          waitShare: patient.waitShare,
+          reason: patient.queueReason,
+          rank: patient.queueRank,
+        },
+      ],
+    };
+  }, [selectedExplanationPatient, queueExplainSnapshot]);
 
   useEffect(() => {
     const intervalId = window.setInterval(() => {
@@ -529,6 +574,7 @@ export default function PatientQueue({
           wardName={wardName}
           isOpen={Boolean(selectedExplanationPatient)}
           onClose={() => setSelectedExplanationPatient(null)}
+          preloadedExplainData={explanationPreloadData}
         />
       )}
     </div>
