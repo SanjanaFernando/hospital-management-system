@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Bed } from "@/app/types";
 import { normalizeWardId } from "@/lib/rbac";
 
+type GenderFilter = "all" | "Male" | "Female";
 interface BedGridProps {
   beds: Bed[];
   wardName: string;
@@ -63,6 +64,7 @@ export default function BedGrid({
   canInteract = true,
 }: BedGridProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [genderFilter, setGenderFilter] = useState<GenderFilter>("all");
 
   const handleBedClick = (bed: Bed) => {
     if (!canInteract) return;
@@ -71,10 +73,42 @@ export default function BedGrid({
 
   const normalizedWardId = normalizeWardId(wardId);
 
+  // Count occupied beds by gender for the filter pill labels
+  const maleOccupied   = beds.filter((b) => b.patient?.gender === "Male").length;
+  const femaleOccupied = beds.filter((b) => b.patient?.gender === "Female").length;
+  const hasMale   = maleOccupied > 0;
+  const hasFemale = femaleOccupied > 0;
+  // Only show filter row when both genders are present
+  const showGenderFilter = hasMale && hasFemale;
+
+  // Empty / maintenance beds always show; occupied beds are gender-filtered
+  const filteredBeds =
+    genderFilter === "all"
+      ? beds
+      : beds.filter((b) => !b.patient || b.patient.gender === genderFilter);
+
+  const filterPill = (f: GenderFilter, label: string) => (
+    <button
+      key={f}
+      onClick={() => setGenderFilter(f)}
+      className={`px-2.5 py-0.5 rounded-full text-xs font-semibold border transition-all ${
+        genderFilter === f
+          ? f === "Male"
+            ? "bg-blue-600 border-blue-600 text-white shadow-sm"
+            : f === "Female"
+            ? "bg-pink-500 border-pink-500 text-white shadow-sm"
+            : "bg-slate-700 border-slate-700 text-white shadow-sm"
+          : "bg-white border-slate-300 text-slate-600 hover:border-slate-400 hover:bg-slate-50"
+      }`}
+    >
+      {label}
+    </button>
+  );
+
   return (
     <div className="w-full">
       {/* Header with Toggle Button for < lg screens */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-3">
         <h3 className="text-lg font-semibold text-gray-800">{wardName}</h3>
 
         {/* Dropdown toggle - visible only below lg */}
@@ -94,6 +128,16 @@ export default function BedGrid({
         </button>
       </div>
 
+      {/* Gender filter pills — only shown when ward has both genders */}
+      {showGenderFilter && (
+        <div className="flex items-center gap-1.5 mb-3 flex-wrap">
+          <span className="text-xs text-slate-500 font-medium mr-0.5">Filter:</span>
+          {filterPill("all",    `All (${beds.length})`)}
+          {hasMale   && filterPill("Male",   `♂ Male (${maleOccupied})`)}
+          {hasFemale && filterPill("Female", `♀ Female (${femaleOccupied})`)}
+        </div>
+      )}
+
       {/* Grid - always visible on lg+, collapsible on smaller screens */}
       <div
         className={`
@@ -103,7 +147,7 @@ export default function BedGrid({
           ${isOpen ? "grid" : "hidden lg:grid"}
         `}
       >
-        {beds.map((bed) => (
+        {filteredBeds.map((bed) => (
           <div
             key={bed.id}
             onClick={() => handleBedClick(bed)}

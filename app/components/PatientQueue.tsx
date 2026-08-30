@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Sparkles, AlertCircle } from "lucide-react";
-import type { Bed, Patient, Ward } from "@/app/types";
+import type { Bed, Patient, QueueExplainSnapshot, Ward } from "@/app/types";
 import AssignFromQueueModal from "./AssignFromQueueModal";
-import PatientFeatureContributionModal from "./PatientFeatureContributionModal";
+import PatientFeatureContributionModal, {
+  type ExplainResponse,
+} from "./PatientFeatureContributionModal";
 import { updatePatient } from "@/app/utils/api";
 import { useAuthSession } from "@/app/context/AuthSessionContext";
 import { canSetTriage } from "@/lib/rbac";
@@ -37,6 +39,11 @@ interface PatientQueueProps {
   patientReasonById?: Record<string, string>;
   canAssign?: boolean;
   listMaxHeight?: number;
+  // Snapshot of the MAPPO negotiation output (combined_weights + state_vector)
+  // from the SAME /explain call that produced this queue's ordering. Passed
+  // through to the XAI breakdown modal so it shows the exact numbers behind
+  // the current order instead of firing a separate, later inference call.
+  queueExplainSnapshot?: QueueExplainSnapshot;
 }
 
 const priorityColors: Record<string, string> = {
@@ -167,6 +174,7 @@ export default function PatientQueue({
   patientReasonById = {},
   canAssign = true,
   listMaxHeight,
+  queueExplainSnapshot,
 }: PatientQueueProps) {
   const { session } = useAuthSession();
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
@@ -182,8 +190,46 @@ export default function PatientQueue({
   const [isOpen, setIsOpen] = useState(false);
   const [selectedExplanationPatient, setSelectedExplanationPatient] =
     useState<Patient | null>(null);
+  const [genderFilter, setGenderFilter] = useState<"all" | "Male" | "Female">("all");
 
   const getPatientKey = (patient: Patient): string => patient._id || patient.id;
+
+  // Reuse the exact decomposition already computed by the same reorder call
+  // that produced this queue's order, so the XAI modal shows the identical
+  // score instead of triggering a fresh (and potentially different) inference
+  // call against ward data that may have moved on since the list was ranked.
+  const explanationPreloadData: ExplainResponse | null = useMemo(() => {
+    const patient = selectedExplanationPatient;
+    if (!patient || !queueExplainSnapshot || typeof patient.priorityScore !== "number") {
+      return null;
+    }
+
+    const triageLevel =
+      typeof patient.priority === "string"
+        ? parseInt(patient.priority.replace(/\D/g, ""), 10) || 5
+        : 5;
+
+    return {
+      state_vector: queueExplainSnapshot.stateVector,
+      combined_weights: queueExplainSnapshot.combinedWeights,
+      ranked_queue: [
+        {
+          patientId: patient._id ? String(patient._id) : String(patient.id),
+          name: patient.name,
+          triageLevel,
+          triageRequested: Boolean(patient.triageRequested),
+          waitHours: patient.queueWaitHours,
+          priorityScore: patient.priorityScore,
+          urgencyContribution: patient.urgencyContribution,
+          waitContribution: patient.waitContribution,
+          urgencyShare: patient.urgencyShare,
+          waitShare: patient.waitShare,
+          reason: patient.queueReason,
+          rank: patient.queueRank,
+        },
+      ],
+    };
+  }, [selectedExplanationPatient, queueExplainSnapshot]);
 
   useEffect(() => {
     const intervalId = window.setInterval(() => {
@@ -287,9 +333,23 @@ export default function PatientQueue({
     );
   }
 
+  // Gender counts for the filter pills
+  const maleCount   = patients.filter((p) => p.gender === "Male").length;
+  const femaleCount = patients.filter((p) => p.gender === "Female").length;
+  const hasMale   = maleCount > 0;
+  const hasFemale = femaleCount > 0;
+  // Only show filter row when both genders are present in the queue
+  const showGenderFilter = hasMale && hasFemale;
+
+  // Apply gender filter first, then sort
+  const genderFiltered =
+    genderFilter === "all"
+      ? patients
+      : patients.filter((p) => p.gender === genderFilter);
+
   const sortedPatients =
     queueOrderStrategy === "priority"
-      ? [...patients].sort((a, b) => {
+      ? [...genderFiltered].sort((a, b) => {
           const rankA = resolvePriorityRank(a.priority);
           const rankB = resolvePriorityRank(b.priority);
           if (rankA !== rankB) {
@@ -299,14 +359,32 @@ export default function PatientQueue({
           const waitB = resolveWaitMinutes(b) ?? 0;
           return waitB - waitA;
         })
-      : patients;
+      : genderFiltered;
 
   const displayPatients = sortedPatients;
+
+  const genderPill = (f: "all" | "Male" | "Female", label: string) => (
+    <button
+      key={f}
+      onClick={() => setGenderFilter(f)}
+      className={`px-2 py-0.5 rounded-full text-[11px] font-semibold border transition-all ${
+        genderFilter === f
+          ? f === "Male"
+            ? "bg-blue-600 border-blue-600 text-white shadow-sm"
+            : f === "Female"
+            ? "bg-pink-500 border-pink-500 text-white shadow-sm"
+            : "bg-slate-700 border-slate-700 text-white shadow-sm"
+          : "bg-white border-slate-300 text-slate-500 hover:border-slate-400 hover:bg-slate-50"
+      }`}
+    >
+      {label}
+    </button>
+  );
 
   return (
     <div className="w-full h-full">
       {/* Header with Toggle */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-2">
         <h3 className="text-lg font-semibold text-gray-800">
           Patient Queue ({patients.length})
         </h3>
@@ -326,6 +404,16 @@ export default function PatientQueue({
           </span>
         </button>
       </div>
+
+      {/* Gender filter pills — only shown when queue has both genders */}
+      {showGenderFilter && (
+        <div className="flex items-center gap-1.5 mb-3 flex-wrap">
+          <span className="text-xs text-slate-500 font-medium mr-0.5">Filter:</span>
+          {genderPill("all",    `All (${patients.length})`)}
+          {hasMale   && genderPill("Male",   `♂ Male (${maleCount})`)}
+          {hasFemale && genderPill("Female", `♀ Female (${femaleCount})`)}
+        </div>
+      )}
 
       {wardId && beds.length > 0 && (
         <p className="text-xs text-gray-500 mb-3">
@@ -350,6 +438,11 @@ export default function PatientQueue({
             listMaxHeight ? { maxHeight: `${listMaxHeight}px` } : undefined
           }
         >
+          {displayPatients.length === 0 ? (
+            <p className="text-sm text-slate-500 py-4 text-center">
+              No {genderFilter !== "all" ? genderFilter : ""} patients in queue.
+            </p>
+          ) : null}
           {displayPatients.map((patient, index) => (
             (() => {
               const patientKey = getPatientKey(patient);
@@ -376,6 +469,14 @@ export default function PatientQueue({
                 <div className="min-w-0 flex-1">
                   <p className="font-semibold flex items-center gap-1.5 flex-wrap text-slate-900">
                     <span>{index + 1}. {patient.name}</span>
+                    {patient.priorityScore !== undefined && (
+                      <span
+                        className="text-xs font-bold text-white bg-indigo-500 px-1.5 py-0.5 rounded-full ring-1 ring-indigo-600/30"
+                        title="AI priority score"
+                      >
+                        {patient.priorityScore.toFixed(3)}
+                      </span>
+                    )}
                     <span className="text-xs font-mono font-semibold text-slate-500 bg-white/80 px-1.5 py-0.5 rounded ring-1 ring-black/5">
                       #{patient.id}
                     </span>
@@ -386,6 +487,17 @@ export default function PatientQueue({
                     >
                       {patient.ageGroup} ({patient.age}y)
                     </span>
+                    {patient.gender && (
+                      <span
+                        className={`px-2 py-0.5 rounded text-xs font-semibold ${
+                          patient.gender === "Male"
+                            ? "bg-blue-100 text-blue-800"
+                            : "bg-pink-100 text-pink-800"
+                        }`}
+                      >
+                        {patient.gender === "Male" ? "♂" : "♀"} {patient.gender}
+                      </span>
+                    )}
                     <span className="px-2 py-0.5 rounded text-xs font-medium bg-gray-200">
                       {patient.disease}
                     </span>
@@ -521,6 +633,7 @@ export default function PatientQueue({
           wardName={wardName}
           isOpen={Boolean(selectedExplanationPatient)}
           onClose={() => setSelectedExplanationPatient(null)}
+          preloadedExplainData={explanationPreloadData}
         />
       )}
     </div>

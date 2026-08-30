@@ -1,5 +1,5 @@
 {
-  "version": "v_weekly_20260816",
-  "activated_at": "2026-08-16T19:17:39.110525",
-  "model_path": "/home/runner/work/hospital-management-system/hospital-management-system/mlops/models/v_weekly_20260816/model.pth"
+  "version": "v_weekly_20260829",
+  "activated_at": "2026-08-29T03:45:16.190887",
+  "model_path": "/home/runner/work/hospital-management-system/hospital-management-system/mlops/models/v_weekly_20260829/model.pth"
 }

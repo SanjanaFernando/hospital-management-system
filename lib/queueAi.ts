@@ -1,7 +1,7 @@
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { existsSync } from "node:fs";
-import type { Patient, QueuePrediction } from "@/app/types";
+import type { Patient, QueuePrediction, QueueExplainSnapshot } from "@/app/types";
 import { resolveForecasterProfilePath, resolveMappoModelPath } from "@/lib/get-mappo-model";
 import { pythonCommandCandidates } from "@/lib/resolve-python-bin";
 
@@ -34,6 +34,58 @@ interface QueueAiResult {
   strategy: "ai" | "priority";
   message: string;
   queuePrediction?: QueuePrediction;
+  queueExplainSnapshot?: QueueExplainSnapshot;
+}
+
+// Full per-patient decomposition returned by decompose_queue() in
+// xai/explain_engine.py (both the local and hosted copies) — kept in sync
+// with RankedPatient in PatientFeatureContributionModal.tsx.
+interface RankedEntry {
+  patientId?: string;
+  name?: string;
+  reason?: string;
+  priorityScore?: number;
+  urgencyContribution?: number;
+  waitContribution?: number;
+  urgencyShare?: number;
+  waitShare?: number;
+  waitHours?: number;
+  __queueIndex?: number;
+}
+
+function buildRankedEntryMaps(rankedQueue: RankedEntry[]) {
+  const entryByIdx = new Map<number, RankedEntry>();
+  const entryByName = new Map<string, RankedEntry>();
+
+  rankedQueue.forEach((entry) => {
+    const nameLower = entry.name?.trim().toLowerCase();
+    if (typeof entry.__queueIndex === "number") {
+      entryByIdx.set(entry.__queueIndex, entry);
+    }
+    if (nameLower) {
+      entryByName.set(nameLower, entry);
+    }
+  });
+
+  return { entryByIdx, entryByName };
+}
+
+function extractExplainSnapshot(parsed: {
+  combined_weights?: { w_t_urgency?: number; w_w_wait?: number };
+  state_vector?: Record<string, number>;
+}): QueueExplainSnapshot | undefined {
+  if (!parsed.combined_weights && !parsed.state_vector) return undefined;
+  return {
+    combinedWeights:
+      typeof parsed.combined_weights?.w_t_urgency === "number" &&
+      typeof parsed.combined_weights?.w_w_wait === "number"
+        ? {
+            w_t_urgency: parsed.combined_weights.w_t_urgency,
+            w_w_wait: parsed.combined_weights.w_w_wait,
+          }
+        : undefined,
+    stateVector: parsed.state_vector,
+  };
 }
 
 const INFERENCE_TIMEOUT_MS = 45_000;
@@ -214,13 +266,9 @@ async function reorderViaHttp(input: QueueAiInput): Promise<QueueAiResult> {
   }
 
   let parsed: {
-    ranked_queue?: Array<{
-      patientId?: string;
-      name?: string;
-      reason?: string;
-      priorityScore?: number;
-      __queueIndex?: number;
-    }>;
+    ranked_queue?: RankedEntry[];
+    combined_weights?: { w_t_urgency?: number; w_w_wait?: number };
+    state_vector?: Record<string, number>;
     predictive_analytics?: {
       enabled?: boolean;
       surge_predicted?: boolean;
@@ -252,43 +300,34 @@ async function reorderViaHttp(input: QueueAiInput): Promise<QueueAiResult> {
     };
   }
 
-  // Build score maps keyed by __queueIndex (most reliable) with name fallback
-  const scoreByIdx = new Map<number, number>();
-  const reasonByIdx = new Map<number, string>();
-  const scoreByName = new Map<string, number>();
-  const reasonByName = new Map<string, string>();
-
-  rankedQueue.forEach((entry) => {
-    const score = entry.priorityScore ?? 0;
-    const nameLower = entry.name?.trim().toLowerCase();
-    if (typeof entry.__queueIndex === "number") {
-      scoreByIdx.set(entry.__queueIndex, score);
-      if (entry.reason) reasonByIdx.set(entry.__queueIndex, entry.reason);
-    }
-    if (nameLower) {
-      scoreByName.set(nameLower, score);
-      if (entry.reason) reasonByName.set(nameLower, entry.reason);
-    }
-  });
+  // Build entry maps keyed by __queueIndex (most reliable) with name fallback.
+  // Each entry carries the FULL per-patient decomposition (score, urgency/wait
+  // contributions and shares, exact wait hours) so the XAI modal can later
+  // reuse the exact same numbers instead of recomputing them itself.
+  const { entryByIdx, entryByName } = buildRankedEntryMaps(rankedQueue);
 
   const orderedPatients = input.targetWardQueue
     .map((patient, queueIndex) => {
       const nameLower = patient.name?.trim().toLowerCase() ?? "";
-      const score =
-        scoreByIdx.get(queueIndex) ??
-        (nameLower ? scoreByName.get(nameLower) : undefined) ??
-        0;
-      const reason =
-        reasonByIdx.get(queueIndex) ??
-        (nameLower ? reasonByName.get(nameLower) : undefined);
-      return { patient, score, reason };
+      const entry =
+        entryByIdx.get(queueIndex) ??
+        (nameLower ? entryByName.get(nameLower) : undefined);
+      return { patient, entry };
     })
-    .sort((a, b) => b.score - a.score)
-    .map(({ patient, reason }, idx) => ({
+    .sort((a, b) => (b.entry?.priorityScore ?? 0) - (a.entry?.priorityScore ?? 0))
+    .map(({ patient, entry }, idx) => ({
       ...patient,
       queueRank: idx + 1,
-      queueReason: reason || patient.queueReason,
+      priorityScore: entry?.priorityScore ?? 0,
+      queueReason: entry?.reason || patient.queueReason,
+      urgencyContribution: entry?.urgencyContribution,
+      waitContribution: entry?.waitContribution,
+      urgencyShare: entry?.urgencyShare,
+      waitShare: entry?.waitShare,
+      queueWaitHours: entry?.waitHours,
     }));
+
+  const queueExplainSnapshot = extractExplainSnapshot(parsed);
 
   const predictive = parsed.predictive_analytics;
   const queuePrediction = predictive?.enabled
@@ -314,6 +353,7 @@ async function reorderViaHttp(input: QueueAiInput): Promise<QueueAiResult> {
       ? `MAPPO+Predictive reordered queue. Top patient: ${orderedPatients[0].name}.${forecastMessage}`
       : `MAPPO+Predictive reordered queue for ${input.targetWardName}.${forecastMessage}`,
     queuePrediction,
+    queueExplainSnapshot,
   };
 }
 
@@ -389,16 +429,11 @@ function reorderViaSubprocess(input: QueueAiInput): QueueAiResult {
     if (!result.stdout?.trim()) { lastError = result.stderr?.trim() || "empty stdout"; continue; }
 
     try {
-      type RankedEntry = {
-        patientId?: string;
-        name?: string;
-        reason?: string;
-        priorityScore?: number;
-        __queueIndex?: number;
-      };
       const parsed = parseExplainJson(result.stdout) as {
         error?: string;
         ranked_queue?: RankedEntry[];
+        combined_weights?: { w_t_urgency?: number; w_w_wait?: number };
+        state_vector?: Record<string, number>;
         predictive_analytics?: {
           enabled?: boolean;
           surge_predicted?: boolean;
@@ -414,46 +449,37 @@ function reorderViaSubprocess(input: QueueAiInput): QueueAiResult {
 
       const rankedQueue = parsed.ranked_queue || [];
 
-      // Build a score/reason map keyed by __queueIndex (most reliable)
-      // with name fallback for backwards compat.
-      const scoreByIdx = new Map<number, number>();
-      const reasonByIdx = new Map<number, string>();
-      const scoreByName = new Map<string, number>();
-      const reasonByName = new Map<string, string>();
-
-      rankedQueue.forEach((entry) => {
-        const score = entry.priorityScore ?? 0;
-        const nameLower = entry.name?.trim().toLowerCase();
-        if (typeof entry.__queueIndex === "number") {
-          scoreByIdx.set(entry.__queueIndex, score);
-          if (entry.reason) reasonByIdx.set(entry.__queueIndex, entry.reason);
-        }
-        if (nameLower) {
-          scoreByName.set(nameLower, score);
-          if (entry.reason) reasonByName.set(nameLower, entry.reason);
-        }
-      });
+      // Build entry maps keyed by __queueIndex (most reliable) with name
+      // fallback. Each entry carries the FULL per-patient decomposition so
+      // the XAI modal can later reuse the exact same numbers instead of
+      // recomputing them itself.
+      const { entryByIdx, entryByName } = buildRankedEntryMaps(rankedQueue);
 
       // Sort original patients by MAPPO priority score DESCENDING.
       // Use __queueIndex match first (exact), then name match, then fallback score.
       const orderedPatients = input.targetWardQueue
         .map((patient, queueIndex) => {
           const nameLower = patient.name?.trim().toLowerCase() ?? "";
-          const score =
-            scoreByIdx.get(queueIndex) ??
-            (nameLower ? scoreByName.get(nameLower) : undefined) ??
-            computeFallbackPriorityScore(patient, now.getTime());
-          const reason =
-            reasonByIdx.get(queueIndex) ??
-            (nameLower ? reasonByName.get(nameLower) : undefined);
-          return { patient, score, reason };
+          const entry =
+            entryByIdx.get(queueIndex) ??
+            (nameLower ? entryByName.get(nameLower) : undefined);
+          const score = entry?.priorityScore ?? computeFallbackPriorityScore(patient, now.getTime());
+          return { patient, entry, score };
         })
         .sort((a, b) => b.score - a.score)  // Highest priority score first
-        .map(({ patient, reason }, idx) => ({
+        .map(({ patient, entry, score }, idx) => ({
           ...patient,
           queueRank: idx + 1,
-          queueReason: reason || patient.queueReason,
+          priorityScore: score,
+          queueReason: entry?.reason || patient.queueReason,
+          urgencyContribution: entry?.urgencyContribution,
+          waitContribution: entry?.waitContribution,
+          urgencyShare: entry?.urgencyShare,
+          waitShare: entry?.waitShare,
+          queueWaitHours: entry?.waitHours,
         }));
+
+      const queueExplainSnapshot = extractExplainSnapshot(parsed);
 
       const predictive = parsed.predictive_analytics;
       const queuePrediction: QueuePrediction | undefined = predictive?.enabled
@@ -480,6 +506,7 @@ function reorderViaSubprocess(input: QueueAiInput): QueueAiResult {
           ? `MAPPO${usingPredictiveModel ? "+Predictive" : ""} reordered queue. Top patient: ${orderedPatients[0].name}.${predictiveNote}`
           : `MAPPO${usingPredictiveModel ? "+Predictive" : ""} reordered queue for ${input.targetWardName}.${predictiveNote}`,
         queuePrediction,
+        queueExplainSnapshot,
       };
     } catch (error) {
       lastError = error instanceof Error ? error.message : result.stderr?.trim() || "failed to parse explain.py output";

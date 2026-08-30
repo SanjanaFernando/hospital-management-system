@@ -27,7 +27,7 @@ from queue_reorder_lib import load_model, run_inference
 
 MODEL_PATH = os.environ.get(
     "MODEL_PATH",
-    "./model/best_mappo_shared_predictive.pth",
+    "./model/best_mappo_hospital.pth",
 )
 
 # Separate checkpoint used by the /explain endpoint (MAPPO 5-actor checkpoint).

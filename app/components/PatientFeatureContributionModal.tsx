@@ -236,13 +236,19 @@ export default function PatientFeatureContributionModal({
 
   if (!isOpen || !patient || !mounted) return null;
 
-  // 1. Exact wait hours for THIS patient
+  // 1. Exact wait hours for THIS patient. Prefer the value the backend
+  // actually used to compute the score below (matchedRankedPatient.waitHours)
+  // — recomputing from admissionTime/Date.now() here would drift further
+  // from the real score the longer the modal stays open after the queue
+  // was last ranked.
   const patientWaitHours =
-    typeof patient.queueWaitTime === "number" && Number.isFinite(patient.queueWaitTime)
+    typeof matchedRankedPatient?.waitHours === "number"
+      ? matchedRankedPatient.waitHours
+      : typeof patient.queueWaitTime === "number" && Number.isFinite(patient.queueWaitTime)
       ? Math.max(0, patient.queueWaitTime / 60)
       : patient.admissionTime
       ? Math.max(0, (Date.now() - new Date(patient.admissionTime).getTime()) / 3600000)
-      : matchedRankedPatient?.waitHours ?? 0;
+      : 0;
 
   // 2. Exact triage level number for THIS patient
   const triageLevelNum =
@@ -254,10 +260,44 @@ export default function PatientFeatureContributionModal({
   const w_t = data?.combined_weights?.w_t_urgency ?? 0.6;
   const w_w = data?.combined_weights?.w_w_wait ?? 0.4;
 
-  // 4. Exact per-patient score terms
-  const urgencyContrib = (6 - triageLevelNum) * w_t;
-  const waitContrib = patientWaitHours * w_w;
-  const totalScore = urgencyContrib + waitContrib;
+  // 4. Per-patient score terms — use the backend's own decomposition
+  // (matchedRankedPatient) whenever it's available so this modal always
+  // shows the exact numbers that produced the patient's queue rank, rather
+  // than an independently recomputed approximation. Only fall back to the
+  // local linear-formula reconstruction when no matching backend entry
+  // exists at all (e.g. explain call failed / patient not in ranked_queue).
+  const urgencyContrib =
+    matchedRankedPatient?.urgencyContribution ?? (6 - triageLevelNum) * w_t;
+  const waitContrib =
+    matchedRankedPatient?.waitContribution ?? patientWaitHours * w_w;
+  const totalScore =
+    matchedRankedPatient?.priorityScore ?? urgencyContrib + waitContrib;
+
+  // 5. Display-only weights for the "Formula:" lines and the Active Policy
+  // tile. The backend's combined_weights field is rounded independently of
+  // urgencyContrib/waitContrib (which are computed from the raw, unrounded
+  // negotiated weight), so multiplying the rounded w_t/w_w back out doesn't
+  // always reproduce the shown contribution exactly. Back-deriving the
+  // displayed weight FROM the authoritative contribution keeps the formula
+  // text self-consistent (operands always multiply out to the shown result)
+  // without touching backend rounding/scoring logic. Falls back to the raw
+  // w_t/w_w when there's nothing to divide by.
+  //
+  // Important: divide by the SAME figure the formula line actually displays
+  // for wait hours (2dp — matching matchedRankedPatient.waitHours' native
+  // backend precision), not a further-rounded 1dp value — otherwise the
+  // mismatch just moves from the weight operand to the hours operand
+  // instead of disappearing. The Formula line below shows patientWaitHours
+  // to 2dp for this reason (the Quick Metrics tile above still uses 1dp,
+  // which is fine since that figure isn't part of a reconstructable formula).
+  const w_t_display =
+    matchedRankedPatient && 6 - triageLevelNum > 0
+      ? urgencyContrib / (6 - triageLevelNum)
+      : w_t;
+  const w_w_display =
+    matchedRankedPatient && patientWaitHours > 0
+      ? waitContrib / patientWaitHours
+      : w_w;
 
   const calculatedUrgencyShare =
     totalScore > 0 ? (urgencyContrib / totalScore) * 100 : 50;
@@ -392,7 +432,7 @@ export default function PatientFeatureContributionModal({
                 </div>
               ) : (
                 <p className="mt-1 text-xs font-mono font-semibold text-indigo-700">
-                  w_t {formatNumber(w_t)} / w_w {formatNumber(w_w)}
+                  w_t {formatNumber(w_t_display, 3)} / w_w {formatNumber(w_w_display, 3)}
                 </p>
               )}
             </div>
@@ -504,7 +544,7 @@ export default function PatientFeatureContributionModal({
                           +{formatNumber(urgencyContrib, 3)}
                         </p>
                         <p className="mt-1 text-xs text-slate-500">
-                          Formula: (6 - {triageLevelNum}) &times; {w_t.toFixed(2)} ={" "}
+                          Formula: (6 - {triageLevelNum}) &times; {w_t_display.toFixed(3)} ={" "}
                           {urgencyContrib.toFixed(3)}
                         </p>
                       </>
@@ -537,8 +577,8 @@ export default function PatientFeatureContributionModal({
                           +{formatNumber(waitContrib, 3)}
                         </p>
                         <p className="mt-1 text-xs text-slate-500">
-                          Formula: {formatNumber(patientWaitHours, 1)}h &times;{" "}
-                          {w_w.toFixed(2)} = {waitContrib.toFixed(3)}
+                          Formula: {formatNumber(patientWaitHours, 2)}h &times;{" "}
+                          {w_w_display.toFixed(3)} = {waitContrib.toFixed(3)}
                         </p>
                       </>
                     )}
