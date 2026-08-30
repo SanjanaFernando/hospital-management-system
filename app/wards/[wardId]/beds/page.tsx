@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
-import { Bed, Ward } from "@/app/types";
+import { Bed, BedGender, Ward } from "@/app/types";
 import BedGrid from "@/app/components/BedGrid";
 import AssignPatientModal from "@/app/components/AssignPatientModal";
 import MedicalCrossLoader from "@/app/components/MedicalCrossLoader";
@@ -16,6 +16,8 @@ import {
   canManageWardActions,
 } from "@/lib/rbac";
 
+type BedType = "normal" | "icu";
+
 export default function WardBedsPage() {
   const params = useParams<{ wardId: string }>();
   const wardId = params?.wardId;
@@ -26,6 +28,11 @@ export default function WardBedsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isAddingBed, setIsAddingBed] = useState(false);
   const [error, setError] = useState("");
+
+  // Add Bed form state
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [newBedType, setNewBedType] = useState<BedType>("normal");
+  const [newBedGender, setNewBedGender] = useState<BedGender>("Unisex");
 
   const loadWard = useCallback(async () => {
     if (!wardId) return;
@@ -75,12 +82,18 @@ export default function WardBedsPage() {
     setIsAddingBed(true);
 
     try {
-      const result = await addBedToWard(ward.wardId || ward.id, session);
+      const result = await addBedToWard(
+        ward.wardId || ward.id,
+        session,
+        newBedType,
+        newBedGender
+      );
       if (!result.success) {
         setError(result.error || "Failed to add bed");
         return;
       }
 
+      setShowAddForm(false);
       await loadWard();
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unknown error";
@@ -159,18 +172,107 @@ export default function WardBedsPage() {
 
         <div className="bg-white rounded-lg shadow-md p-8">
           <div className="flex justify-end mb-4">
-            <button
-              onClick={handleAddBed}
-              disabled={isAddingBed || !canManageWard}
-              className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors disabled:bg-blue-300 disabled:cursor-not-allowed"
-            >
-              {!canManageWard
-                ? "Not allowed"
-                : isAddingBed
-                  ? "Adding..."
-                  : "+ Add Bed"}
-            </button>
+            {canManageWard && !showAddForm && (
+              <button
+                onClick={() => setShowAddForm(true)}
+                className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                + Add Bed
+              </button>
+            )}
+            {!canManageWard && (
+              <span className="px-4 py-2 bg-blue-300 text-white text-sm rounded-lg cursor-not-allowed">
+                Not allowed
+              </span>
+            )}
           </div>
+
+          {/* Add Bed Form */}
+          {showAddForm && canManageWard && (
+            <div className="mb-6 rounded-xl border border-blue-200 bg-blue-50 p-5">
+              <h3 className="text-sm font-bold text-blue-900 mb-4">
+                New Bed Configuration
+              </h3>
+              <div className="flex flex-wrap gap-6 items-end">
+                {/* Bed Type */}
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">
+                    Bed Type
+                  </label>
+                  <div className="flex gap-2">
+                    {(["normal", "icu"] as BedType[]).map((t) => (
+                      <button
+                        key={t}
+                        onClick={() => setNewBedType(t)}
+                        className={`px-3 py-1.5 text-sm rounded-lg font-semibold border transition-all ${
+                          newBedType === t
+                            ? "bg-blue-600 border-blue-600 text-white"
+                            : "bg-white border-gray-300 text-gray-700 hover:border-blue-400"
+                        }`}
+                      >
+                        {t === "icu" ? "ICU" : "Normal"}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Gender designation */}
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">
+                    Gender Designation
+                  </label>
+                  <div className="flex gap-2">
+                    {(["Male", "Female", "Unisex"] as BedGender[]).map((g) => (
+                      <button
+                        key={g}
+                        onClick={() => setNewBedGender(g)}
+                        className={`px-3 py-1.5 text-sm rounded-lg font-semibold border transition-all ${
+                          newBedGender === g
+                            ? g === "Male"
+                              ? "bg-blue-600 border-blue-600 text-white"
+                              : g === "Female"
+                              ? "bg-pink-500 border-pink-500 text-white"
+                              : "bg-slate-600 border-slate-600 text-white"
+                            : "bg-white border-gray-300 text-gray-700 hover:border-blue-400"
+                        }`}
+                      >
+                        {g === "Male" ? "♂ Male" : g === "Female" ? "♀ Female" : "⚪ Unisex"}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Actions */}
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleAddBed}
+                    disabled={isAddingBed}
+                    className="px-4 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 transition-colors disabled:bg-green-300"
+                  >
+                    {isAddingBed ? "Adding..." : "Confirm Add"}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowAddForm(false);
+                      setNewBedType("normal");
+                      setNewBedGender("Unisex");
+                    }}
+                    disabled={isAddingBed}
+                    className="px-4 py-2 bg-gray-300 text-gray-800 text-sm rounded-lg hover:bg-gray-400 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+
+              <p className="mt-3 text-xs text-blue-700">
+                {newBedGender !== "Unisex"
+                  ? `⚠ This bed will only accept ${newBedGender} patients by default. Force-assign can override.`
+                  : "Unisex beds accept patients of any gender."}
+              </p>
+            </div>
+          )}
+
           <BedGrid
             beds={ward.beds}
             wardName={ward.name}

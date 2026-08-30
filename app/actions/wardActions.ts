@@ -5,7 +5,7 @@ import {
   getWardWithPatientsData,
   getWardsWithPatientsData,
 } from "@/lib/hospital-data";
-import { Ward, UserSession } from "@/app/types";
+import { Ward, UserSession, BedGender } from "@/app/types";
 import { ObjectId } from "mongodb";
 import { revalidateTag } from "next/cache";
 import {
@@ -150,7 +150,8 @@ export async function updateBedStatus(
 export async function addBedToWard(
   wardId: string,
   actor: UserSession,
-  type: "normal" | "icu" = "normal"
+  type: "normal" | "icu" = "normal",
+  gender: BedGender = "Unisex"
 ): Promise<{ success: boolean; bedId?: string; error?: string }> {
   try {
     if (!wardId) {
@@ -209,6 +210,7 @@ export async function addBedToWard(
       wardId: effectiveWardId,
       bedNumber: nextBedNumber,
       type: bedType,
+      gender,
       status: "available",
       patientId: null,
       createdAt: new Date(),
