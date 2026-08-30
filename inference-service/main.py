@@ -36,7 +36,7 @@ MODEL_PATH = os.environ.get(
 # model directory as MODEL_PATH.
 EXPLAIN_CHECKPOINT_PATH = os.environ.get(
     "MAPPO_EXPLAIN_CHECKPOINT_PATH",
-    str(Path(MODEL_PATH).parent / "best_mappo_shared_predictive.pth"),
+    str(Path(MODEL_PATH).parent / "best_mappo_hospital.pth"),
 )
 
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
