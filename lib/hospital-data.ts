@@ -451,6 +451,7 @@ async function queryWardWithPatients(wardId: string): Promise<Ward | null> {
         ? aiResult.message
         : `${aiResult.message}${forecastMessage}`,
       queuePrediction: aiResult.queuePrediction,
+      queueExplainSnapshot: aiResult.queueExplainSnapshot,
     };
   }
 
@@ -469,6 +470,7 @@ async function queryWardWithPatients(wardId: string): Promise<Ward | null> {
     queueOrderStrategy: queueResult.strategy,
     queueOrderMessage: queueResult.message,
     queuePrediction: queueResult.queuePrediction,
+    queueExplainSnapshot: queueResult.queueExplainSnapshot,
   } satisfies Ward;
 }
 
