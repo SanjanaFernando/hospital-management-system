@@ -281,11 +281,31 @@ async function resetDatabase() {
         });
       }
 
-      // ICU beds: randomly occupy exactly 1 to make it realistic
-      // ICU beds are always Unisex — critical care overrides gender separation.
+      // ICU beds: randomly occupy exactly 1 per ward with a real patient.
+      // ICU beds are always Unisex — critical care accepts any patient.
+      // ICU patients: gender matches ward style (pure wards), random for mixed.
       const icuOccupiedIndex = randomInt(0, icuBeds - 1);
+      const icuAdmitted = [];
+
       for (let n = 1; n <= icuBeds; n++) {
         const isOccupied = (n - 1) === icuOccupiedIndex;
+        let icuPatient = null;
+
+        if (isOccupied) {
+          const icuGender =
+            maleAdmitted > 0 && femaleAdmitted === 0 ? "Male" :
+            femaleAdmitted > 0 && maleAdmitted === 0 ? "Female" :
+            Math.random() < 0.5 ? "Male" : "Female";
+
+          icuPatient = generatePatient(
+            `${wardId}-icu-${n}`,
+            wardId,
+            "admitted",
+            icuGender
+          );
+          icuAdmitted.push(icuPatient);
+        }
+
         beds.push({
           bedId:     `${wardId}-icu-${n}`,
           wardId,
@@ -293,7 +313,7 @@ async function resetDatabase() {
           type:      "ICU",
           gender:    "Unisex",
           status:    isOccupied ? "occupied" : "available",
-          patientId: null,
+          patientId: icuPatient ? icuPatient.id : null,
           createdAt: new Date(),
           updatedAt: new Date(),
         });
@@ -309,13 +329,14 @@ async function resetDatabase() {
         updatedAt: new Date(),
       });
 
-      if (admitted.length + queued.length > 0) {
-        await db.collection("patients").insertMany([...admitted, ...queued]);
+      const allPatients = [...admitted, ...queued, ...icuAdmitted];
+      if (allPatients.length > 0) {
+        await db.collection("patients").insertMany(allPatients);
       }
 
       await db.collection("beds").insertMany(beds);
 
-      totalPatients += admitted.length + queued.length;
+      totalPatients += allPatients.length;
       totalBeds     += beds.length;
 
       const freeCount = beds.filter(b => b.status === "available").length;
