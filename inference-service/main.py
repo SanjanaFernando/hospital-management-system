@@ -75,6 +75,7 @@ async def lifespan(app: FastAPI):
         _model_state["load_error"] = str(exc)
         logger.error("Failed to load model: %s", exc)
         # Service starts but /reorder will return 503
+ 
 
     yield
 
@@ -267,7 +268,11 @@ async def explain(request: Request) -> JSONResponse:
             result.get("ranked_queue", [{}])[0].get("name", "?") if result.get("ranked_queue") else "empty",
         )
         return JSONResponse(content=result)
+    # except Exception as exc:
+    #     logger.exception("Explain error: %s", exc)
+    #     raise HTTPException(status_code=500, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:
-        logger.exception("Explain error: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc))
-
+         logger.exception("Explain error: %s", exc)
+         raise HTTPException(status_code=500, detail=str(exc))

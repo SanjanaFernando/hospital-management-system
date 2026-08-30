@@ -77,15 +77,15 @@ def test_explain_returns_ranked_queue_or_503():
         assert "combined_weights" in data
 
 
-@pytest.mark.xfail(
-    reason=(
-        "Known issue: /explain returns 500 with a leaked internal KeyError "
-        "instead of a clean 400 when a required field (totalBeds) is missing. "
-        "Flagged for the XAI/model owner to decide whether to fix — not "
-        "changed here to avoid touching explain_engine.py / main.py close to "
-        "the deadline. See docstring below for full details."
-    )
-)
+# @pytest.mark.xfail(
+#     reason=(
+#         "Known issue: /explain returns 500 with a leaked internal KeyError "
+#         "instead of a clean 400 when a required field (totalBeds) is missing. "
+#         "Flagged for the XAI/model owner to decide whether to fix — not "
+#         "changed here to avoid touching explain_engine.py / main.py close to "
+#         "the deadline. See docstring below for full details."
+#     )
+# )
 def test_explain_returns_400_not_500_on_missing_totalBeds():
     """
     FINDING: /explain currently returns 500 with an internal Python KeyError
