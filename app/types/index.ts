@@ -1,4 +1,5 @@
 export type BedStatus = "available" | "occupied" | "maintenance";
+export type BedGender = "Male" | "Female" | "Unisex";
 export type AgeGroup = "Child" | "Adult" | "Elderly";
 export type Priority =
   | "Triage 1"
@@ -86,7 +87,8 @@ export interface Bed {
   bedNumber: number;
   status: BedStatus;
   patient?: Patient;
-  type: "ICU" | "NORMAL"; 
+  type: "ICU" | "NORMAL";
+  gender: BedGender;
 }
 
 export interface Ward {

@@ -56,6 +56,25 @@ const getShortName = (fullName?: string) => {
   return `${firstNameInitial} ${lastName}`;
 };
 
+/** Small pill that indicates a bed's gender designation */
+const GenderBadge = ({ gender }: { gender: Bed["gender"] }) => {
+  if (!gender || gender === "Unisex") return null;
+
+  const isMale = gender === "Male";
+  return (
+    <span
+      className={`absolute top-1.5 right-1.5 text-[9px] font-bold px-1.5 py-0.5 rounded-full leading-none shadow-sm ${
+        isMale
+          ? "bg-blue-900/60 text-blue-100 border border-blue-300/40"
+          : "bg-pink-900/60 text-pink-100 border border-pink-300/40"
+      }`}
+      title={`${gender} bed`}
+    >
+      {isMale ? "♂ M" : "♀ F"}
+    </span>
+  );
+};
+
 export default function BedGrid({
   beds,
   wardName,
@@ -153,7 +172,7 @@ export default function BedGrid({
             onClick={() => handleBedClick(bed)}
             className={`
               ${getBedColor(bed)} 
-              text-white rounded-lg p-4 transition-all shadow-md 
+              relative text-white rounded-lg p-4 transition-all shadow-md 
               flex flex-col items-center justify-center min-h-30 h-full
               ${
                 canInteract
@@ -162,6 +181,8 @@ export default function BedGrid({
               }
             `}
             title={`${statusLabels[bed.status]}${
+              bed.gender && bed.gender !== "Unisex" ? ` [${bed.gender}]` : ""
+            }${
               bed.patient ? ` - ${bed.patient.name}` : ""
             }${
               bed.patient?.assignedFromWardId
@@ -171,6 +192,9 @@ export default function BedGrid({
                 : ""
             }`}
           >
+            {/* Gender badge */}
+            <GenderBadge gender={bed.gender} />
+
             <div className="text-center w-full min-w-0">
               <p className="text-sm font-bold truncate">
                 {bed.type === "ICU"

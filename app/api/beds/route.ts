@@ -67,6 +67,7 @@ export async function POST(request: NextRequest) {
 
     const result = await db.collection("beds").insertOne({
       ...body,
+      gender: body.gender || "Unisex",
       createdAt: new Date(),
       updatedAt: new Date(),
     });

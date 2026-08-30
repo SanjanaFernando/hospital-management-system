@@ -259,6 +259,7 @@ export function initializeWard16(): Ward {
         bedNumber,
         status: "occupied" as const,
         type: bedType,
+        gender: "Male" as const,
         patient,
       };
     }
@@ -267,6 +268,7 @@ export function initializeWard16(): Ward {
       bedNumber,
       status: "available" as const,
       type: bedType,
+      gender: "Male" as const,
     };
   });
 
@@ -324,6 +326,7 @@ export function initializeWards(): Ward[] {
           bedNumber,
           status: "occupied" as const,
           type: bedType,
+          gender: "Unisex" as const,
           patient,
         };
       }
@@ -337,6 +340,7 @@ export function initializeWards(): Ward[] {
           ? ("maintenance" as const)
           : ("available" as const),
         type: bedType,
+        gender: "Unisex" as const,
       };
     });
 
