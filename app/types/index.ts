@@ -39,13 +39,12 @@ export interface AuthUser {
 
 export interface Patient {
   _id?: string;
-  id: string; // Numerical Patient ID
+  id: string;
   name: string;
   age: number;
   ageGroup: AgeGroup;
   gender?: Gender;
   disease: string;
-  previousDiseases?: string[];
   priority: Priority;
   admissionTime: Date;
   dischargeTime?: Date;
@@ -55,43 +54,7 @@ export interface Patient {
   assignedFromWardId?: string | null;
   status?: "queued" | "admitted" | "discharged";
   triageRequested?: boolean;
-  priorityScore?: number; // AI-computed priority score (0–1) from MAPPO inference
   queueReason?: string; // MAPPO explanation for this patient's queue rank, set by reorderQueueWithAi
-  queueRank?: number; // 1-indexed queue rank position
-  customFields?: Record<string, any>; // Ward-specific custom fields data
-  // Exact per-patient score decomposition from the SAME MAPPO explain call that
-  // produced priorityScore/queueRank above — carried through so the XAI modal
-  // can display the identical numbers instead of re-deriving its own.
-  urgencyContribution?: number;
-  waitContribution?: number;
-  urgencyShare?: number;
-  waitShare?: number;
-  queueWaitHours?: number; // exact wait-hours value the backend used for this score
-}
-
-// ---------------------------------------------------------------------------
-// Ward-Specific Dynamic Registration Form Configuration
-// ---------------------------------------------------------------------------
-
-export type WardFieldType = "text" | "number" | "select" | "checkbox" | "textarea" | "date";
-
-export interface WardFormField {
-  id: string;
-  label: string;
-  type: WardFieldType;
-  required?: boolean;
-  options?: string[]; // for "select" type
-  placeholder?: string;
-  defaultValue?: string;
-  category?: "general font" | "clinical font" | "custom font";
-}
-
-export interface WardFormConfig {
-  _id?: string;
-  wardId: string;
-  fields: WardFormField[];
-  updatedAt?: Date;
-  updatedBy?: string;
 }
 
 export interface QueuePrediction {
@@ -102,15 +65,6 @@ export interface QueuePrediction {
   expectedCriticalPatients?: number;
   horizonHours?: number;
   surgePredicted?: boolean;
-}
-
-// Snapshot of the MAPPO negotiation output (combined policy weights + the
-// ward state vector) from the SAME /explain call that reordered the queue.
-// Carried on Ward so the XAI breakdown modal can reuse it instead of firing
-// its own separate inference call against (possibly already-changed) live data.
-export interface QueueExplainSnapshot {
-  combinedWeights?: { w_t_urgency: number; w_w_wait: number };
-  stateVector?: Record<string, number>;
 }
 
 export interface Bed {
@@ -136,7 +90,6 @@ export interface Ward {
   queueOrderStrategy?: "ai" | "priority";
   queueOrderMessage?: string;
   queuePrediction?: QueuePrediction;
-  queueExplainSnapshot?: QueueExplainSnapshot;
 }
 
 export interface StaffMember {
@@ -195,99 +148,3 @@ export interface Notification {
   createdAt: Date;
   expiresAt?: Date;
 }
-
-// ---------------------------------------------------------------------------
-// Chat
-// ---------------------------------------------------------------------------
-
-export type ChatRecipientType = "user" | "all" | "role";
-
-export interface ChatMessage {
-  _id?: string;
-  id: string;
-  conversationId: string;
-  senderId: string;
-  senderName: string;
-  senderRole: StaffRole;
-  content: string;
-  recipientType: ChatRecipientType;
-  /** userId when recipientType==='user' */
-  recipientId?: string;
-  /** role name when recipientType==='role' */
-  recipientRole?: StaffRole;
-  readBy: string[];
-  createdAt: Date;
-  expiresAt?: Date;
-}
-
-export interface ChatConversation {
-  _id?: string;
-  id: string;
-  /** 'dm' for 1-on-1, 'broadcast' for group/role/all */
-  type: "dm" | "broadcast";
-  participants: string[];
-  participantNames: Record<string, string>;
-  participantRoles?: Record<string, StaffRole>;
-  lastMessage: string;
-  lastMessageAt: Date;
-  lastMessageBy: string;
-  recipientType?: ChatRecipientType;
-  recipientRole?: StaffRole;
-  unreadBy: string[];
-  createdAt: Date;
-}
-
-/** Lightweight user record used by the recipient picker */
-export interface ChatUser {
-  userId: string;
-  displayName: string;
-  role: StaffRole;
-}
-
-// ---------------------------------------------------------------------------
-// Role Permissions
-// ---------------------------------------------------------------------------
-
-export type PermissionKey =
-  | "register_patient"
-  | "admit_patient"
-  | "discharge_patient"
-  | "set_triage"
-  | "move_patient_cross_ward"
-  | "update_bed_status"
-  | "assign_bed"
-  | "view_queue"
-  | "reorder_queue"
-  | "view_reports"
-  | "view_logs"
-  | "manage_users"
-  | "manage_roles"
-  | "send_broadcast";
-
-export type RolePermissionsMap = Record<PermissionKey, boolean>;
-
-export interface RolePermissionsConfig {
-  _id?: string;
-  role: StaffRole;
-  permissions: RolePermissionsMap;
-  updatedAt?: Date;
-  updatedBy?: string;
-}
-
-/** All roles permission snapshot — keyed by StaffRole */
-export type AllRolePermissions = Record<StaffRole, RolePermissionsMap>;
-
-// ---------------------------------------------------------------------------
-// Custom Roles (user-defined, stored in MongoDB)
-// ---------------------------------------------------------------------------
-
-export interface CustomRole {
-  /** URL-safe slug, e.g. "senior_nurse" */
-  id: string;
-  /** Human-readable label, e.g. "Senior Nurse" */
-  label: string;
-  createdAt: Date;
-  createdBy?: string;
-}
-
-

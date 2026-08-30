@@ -2,7 +2,7 @@ import { unstable_cache } from "next/cache";
 import { ObjectId } from "mongodb";
 import { connectToDatabase } from "@/lib/mongodb";
 import { Bed, Patient, Ward } from "@/app/types";
-import { reorderQueueWithAi, fallbackPrioritySort } from "@/lib/queueAi";
+import { reorderQueueWithAi } from "@/lib/queueAi";
 
 type MongoDoc = Record<string, unknown>;
 
@@ -118,20 +118,6 @@ function serializeDoc(value: unknown): unknown {
   return value;
 }
 
-export function toNumericPatientId(rawId?: any): string {
-  const s = String(rawId || "").trim();
-  if (/^\d+$/.test(s)) return s;
-  const digits = s.replace(/\D/g, "");
-  if (digits.length >= 4) return digits.slice(-6);
-  let hash = 0;
-  for (let i = 0; i < s.length; i++) {
-    hash = (hash << 5) - hash + s.charCodeAt(i);
-    hash |= 0;
-  }
-  const num = (Math.abs(hash) % 90000) + 10000;
-  return String(num);
-}
-
 function toId(doc: MongoDoc): string {
   return String(doc.id || doc.bedId || doc.wardId || doc._id || "");
 }
@@ -145,17 +131,12 @@ function normalizePatient(doc: MongoDoc): Patient {
 
   return {
     _id: serialized._id ? String(serialized._id) : undefined,
-    id: toNumericPatientId(serialized.id || serialized._id),
+    id: String(serialized.id || serialized._id || ""),
     name: String(serialized.name || ""),
     age: Number(serialized.age || 0),
     ageGroup: (serialized.ageGroup as Patient["ageGroup"]) || "Adult",
     gender: serialized.gender as Patient["gender"],
     disease: String(serialized.disease || ""),
-    previousDiseases: Array.isArray(serialized.previousDiseases)
-      ? (serialized.previousDiseases as string[])
-      : serialized.previousDiseases
-      ? [String(serialized.previousDiseases)]
-      : [],
     priority: (serialized.priority as Patient["priority"]) || "Triage 5",
     admissionTime: serialized.admissionTime
       ? new Date(String(serialized.admissionTime))
@@ -170,10 +151,6 @@ function normalizePatient(doc: MongoDoc): Patient {
     specialRequirements: Array.isArray(serialized.specialRequirements)
       ? (serialized.specialRequirements as string[])
       : undefined,
-    customFields:
-      serialized.customFields && typeof serialized.customFields === "object"
-        ? (serialized.customFields as Record<string, any>)
-        : undefined,
     wardId: serialized.wardId ? String(serialized.wardId) : undefined,
     assignedFromWardId: serialized.assignedFromWardId
       ? String(serialized.assignedFromWardId)
@@ -354,7 +331,7 @@ async function queryWardsWithPatients(): Promise<Ward[]> {
         name: String(ward.name || wardId),
         beds,
         patients: admittedPatients,
-        patientQueue: fallbackPrioritySort(queuedPatients),
+        patientQueue: queuedPatients,
         dischargedPatients,
         totalBeds: beds.length,
         occupiedBeds,
@@ -427,7 +404,7 @@ async function queryWardWithPatients(wardId: string): Promise<Ward | null> {
     };
   } else {
     // Use AI model to reorder the queue
-    const aiResult = await reorderQueueWithAi({
+    const aiResult = reorderQueueWithAi({
       targetWardId: effectiveWardId,
       targetWardName: String(ward.name || effectiveWardId),
       targetWardQueue: queuedPatients,
@@ -451,7 +428,6 @@ async function queryWardWithPatients(wardId: string): Promise<Ward | null> {
         ? aiResult.message
         : `${aiResult.message}${forecastMessage}`,
       queuePrediction: aiResult.queuePrediction,
-      queueExplainSnapshot: aiResult.queueExplainSnapshot,
     };
   }
 
@@ -470,7 +446,6 @@ async function queryWardWithPatients(wardId: string): Promise<Ward | null> {
     queueOrderStrategy: queueResult.strategy,
     queueOrderMessage: queueResult.message,
     queuePrediction: queueResult.queuePrediction,
-    queueExplainSnapshot: queueResult.queueExplainSnapshot,
   } satisfies Ward;
 }
 
