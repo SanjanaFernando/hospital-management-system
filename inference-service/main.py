@@ -27,7 +27,7 @@ from queue_reorder_lib import load_model, run_inference
 
 MODEL_PATH = os.environ.get(
     "MODEL_PATH",
-    "./model/best_mappo_hospital.pth",
+    "./model/best_mappo_shared_predictive.pth",
 )
 
 # Separate checkpoint used by the /explain endpoint (MAPPO 5-actor checkpoint).
@@ -36,7 +36,7 @@ MODEL_PATH = os.environ.get(
 # model directory as MODEL_PATH.
 EXPLAIN_CHECKPOINT_PATH = os.environ.get(
     "MAPPO_EXPLAIN_CHECKPOINT_PATH",
-    str(Path(MODEL_PATH).parent / "best_mappo_hospital.pth"),
+    str(Path(MODEL_PATH).parent / "best_mappo_shared_predictive.pth"),
 )
 
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
