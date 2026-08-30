@@ -120,3 +120,30 @@ body {
 .animate-pulse-slow {
   animation: pulse-slow 2.5s ease-in-out infinite;
 }
+
+/* ---------------------------------------------------------------
+   Sidebar custom scrollbar — slim teal-tinted bar on dark bg
+   --------------------------------------------------------------- */
+.sidebar-scroll {
+  scrollbar-width: thin;                    /* Firefox */
+  scrollbar-color: rgba(45,180,160,0.25) transparent; /* Firefox */
+}
+
+.sidebar-scroll::-webkit-scrollbar {
+  width: 3px;
+}
+.sidebar-scroll::-webkit-scrollbar-track {
+  background: transparent;
+  margin-block: 12px;                       /* a little breathing room top/bottom */
+}
+.sidebar-scroll::-webkit-scrollbar-thumb {
+  background: rgba(45, 180, 160, 0.22);
+  border-radius: 99px;
+  transition: background 0.2s ease;
+}
+.sidebar-scroll:hover::-webkit-scrollbar-thumb {
+  background: rgba(45, 180, 160, 0.48);
+}
+.sidebar-scroll::-webkit-scrollbar-thumb:active {
+  background: rgba(45, 180, 160, 0.70);
+}
