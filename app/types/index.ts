@@ -45,16 +45,30 @@ export interface Patient {
   ageGroup: AgeGroup;
   gender?: Gender;
   disease: string;
+  previousDiseases?: string[];
   priority: Priority;
   admissionTime: Date;
   dischargeTime?: Date;
   queueWaitTime?: number; // in minutes
   specialRequirements?: string[];
+  customFields?: Record<string, unknown>;
   wardId?: string;
   assignedFromWardId?: string | null;
   status?: "queued" | "admitted" | "discharged";
   triageRequested?: boolean;
+  priorityScore?: number;
   queueReason?: string; // MAPPO explanation for this patient's queue rank, set by reorderQueueWithAi
+  queueRank?: number;
+  urgencyContribution?: number;
+  waitContribution?: number;
+  urgencyShare?: number;
+  waitShare?: number;
+  queueWaitHours?: number;
+}
+
+export interface QueueExplainSnapshot {
+  combinedWeights?: { w_t_urgency: number; w_w_wait: number };
+  stateVector?: Record<string, number>;
 }
 
 export interface QueuePrediction {
@@ -90,6 +104,7 @@ export interface Ward {
   queueOrderStrategy?: "ai" | "priority";
   queueOrderMessage?: string;
   queuePrediction?: QueuePrediction;
+  queueExplainSnapshot?: QueueExplainSnapshot;
 }
 
 export interface StaffMember {

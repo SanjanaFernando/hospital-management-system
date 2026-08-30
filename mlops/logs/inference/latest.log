@@ -9,3 +9,5 @@
 {"timestamp": "2026-08-30T05:29:37.138963+00:00", "success": true, "latency_ms": 21.49057388305664, "strategy": "ddqn"}
 {"timestamp": "2026-08-30T05:29:54.162186+00:00", "success": true, "latency_ms": 18.948793411254883, "strategy": "ddqn"}
 {"timestamp": "2026-08-30T05:54:49.210725+00:00", "success": true, "latency_ms": 152.9073715209961, "strategy": "ddqn"}
+{"timestamp": "2026-08-30T05:58:05.915263+00:00", "success": true, "latency_ms": 139.89877700805664, "strategy": "ddqn"}
+{"timestamp": "2026-08-30T05:58:09.166711+00:00", "success": true, "latency_ms": 17.011642456054688, "strategy": "ddqn"}
