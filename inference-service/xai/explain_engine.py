@@ -196,7 +196,10 @@ def build_state_vector(ward_snapshot, forecaster=None, use_predictive=True):
     }
     Returns (state: np.ndarray[10], queue_with_wait_hours: list[dict], predictive_meta: dict)
     """
+    if "totalBeds" not in ward_snapshot:
+         raise ValueError("Missing required field: totalBeds")
     total_beds = max(int(ward_snapshot["totalBeds"]), 1)
+    # total_beds = max(int(ward_snapshot["totalBeds"]), 1)
     occ = min(int(ward_snapshot["occupiedBeds"]) / total_beds, 1.0)
 
     queue = ward_snapshot.get("queue", [])
