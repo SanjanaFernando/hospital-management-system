@@ -533,16 +533,34 @@ function MessageThread({
       if (newer.length > 0) {
         lastPollRef.current = new Date();
         setMessages((prev) => {
-          const existingIds = new Set(prev.map((m) => m.id));
-          const fresh = newer.filter(
-            (m) => !existingIds.has(m.id) && m.conversationId === conv.id
-          );
-          return fresh.length > 0 ? [...prev, ...fresh] : prev;
+          let updated = [...prev];
+          for (const newMsg of newer) {
+            if (newMsg.conversationId !== conv.id) continue;
+            // Check if already present by exact message id
+            if (updated.some((m) => m.id === newMsg.id)) continue;
+
+            // If this message was sent by me, reconcile with optimistic placeholder
+            if (newMsg.senderId === myId) {
+              const optIndex = updated.findIndex(
+                (m) =>
+                  m.id.startsWith("optimistic-") &&
+                  m.content === newMsg.content &&
+                  m.senderId === myId
+              );
+              if (optIndex !== -1) {
+                updated[optIndex] = newMsg;
+                continue;
+              }
+            }
+
+            updated.push(newMsg);
+          }
+          return updated;
         });
       }
     }, 8000);
     return () => clearInterval(interval);
-  }, [conv.id, session]);
+  }, [conv.id, session, myId]);
 
   // Auto scroll to bottom
   useEffect(() => {
@@ -555,9 +573,10 @@ function MessageThread({
     setSending(true);
     setInput("");
 
+    const optimisticId = `optimistic-${Date.now()}`;
     // Optimistic message
     const optimistic: ChatMessage = {
-      id: `optimistic-${Date.now()}`,
+      id: optimisticId,
       conversationId: conv.id,
       senderId: myId,
       senderName: session.displayName ?? "Me",
@@ -571,7 +590,7 @@ function MessageThread({
     };
     setMessages((prev) => [...prev, optimistic]);
 
-    await sendMessage({
+    const result = await sendMessage({
       actor: session,
       content: text,
       recipientType: conv.recipientType ?? "user",
@@ -579,6 +598,22 @@ function MessageThread({
       recipientName: isBroadcast ? undefined : conv.participantNames[otherUserId],
       recipientRole: conv.recipientRole,
     });
+
+    if (result.ok && result.message) {
+      const realMsg: ChatMessage = {
+        ...result.message,
+        createdAt: new Date(result.message.createdAt),
+      };
+      setMessages((prev) => {
+        const alreadyExists = prev.some((m) => m.id === realMsg.id);
+        if (alreadyExists) {
+          return prev.filter((m) => m.id !== optimisticId);
+        }
+        return prev.map((m) => (m.id === optimisticId ? realMsg : m));
+      });
+    } else if (!result.ok) {
+      setMessages((prev) => prev.filter((m) => m.id !== optimisticId));
+    }
 
     setSending(false);
   };

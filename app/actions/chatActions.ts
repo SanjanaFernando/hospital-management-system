@@ -38,7 +38,7 @@ export async function sendMessage(params: {
   recipientName?: string;
   /** Required when recipientType === 'role' */
   recipientRole?: StaffRole;
-}): Promise<{ ok: boolean; error?: string }> {
+}): Promise<{ ok: boolean; error?: string; message?: ChatMessage }> {
   try {
     const session = normalizeSession(params.actor);
     if (!session.userId) return { ok: false, error: "Not authenticated" };
@@ -164,7 +164,23 @@ export async function sendMessage(params: {
       { upsert: true }
     );
 
-    return { ok: true };
+    return {
+      ok: true,
+      message: {
+        id: message.id,
+        conversationId: message.conversationId,
+        senderId: message.senderId,
+        senderName: message.senderName,
+        senderRole: message.senderRole,
+        content: message.content,
+        recipientType: message.recipientType,
+        recipientId: message.recipientId,
+        recipientRole: message.recipientRole,
+        readBy: message.readBy,
+        createdAt: message.createdAt,
+        expiresAt: message.expiresAt,
+      },
+    };
   } catch (err: unknown) {
     console.error("sendMessage error:", err);
     return { ok: false, error: "Failed to send message" };
