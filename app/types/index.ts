@@ -13,7 +13,8 @@ export type StaffRole =
   | "sub_admin"
   | "consultant_doctor"
   | "main_sister"
-  | "main_attendant";
+  | "main_attendant"
+  | "guest";
 
 export interface UserSession {
   userId?: string;
@@ -112,7 +113,7 @@ export interface Ward {
 export interface StaffMember {
   id: string;
   name: string;
-  role: Exclude<StaffRole, "admin" | "sub_admin">;
+  role: Exclude<StaffRole, "admin" | "sub_admin" | "guest">;
   wardId: string;
   createdAt: Date;
 }
