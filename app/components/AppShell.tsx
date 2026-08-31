@@ -66,7 +66,8 @@ function formatShiftCountdown(date = new Date()): string {
 
   return `${shiftLabel} · Ends in ${hours}h ${minutes}m`;
 }
-function RegisterPatientDropdown({
+
+function RegisterPatientDropdown({
   registerableWards,
   onNavigate,
 }: {
@@ -452,9 +453,9 @@ function AppShellContent({ children }: PropsWithChildren) {
   }
 
   return (
-    <div className="min-h-screen bg-linear-to-br from-slate-100 via-teal-50 to-cyan-100">
-      <div className="mx-auto flex max-w-412.5 flex-col gap-4 p-4 lg:flex-row lg:gap-6 lg:p-6">
-        <header className="sticky top-0 z-20 -mx-4 -mt-4 border-b border-teal-900/10 bg-[#0b2b33]/96 px-4 py-3 text-slate-100 shadow-[0_20px_45px_rgba(3,17,26,0.18)] backdrop-blur lg:hidden">
+    <div className="min-h-screen bg-linear-to-br from-slate-100 via-teal-50 to-cyan-100 print:min-h-0 print:bg-white">
+      <div className="mx-auto flex max-w-412.5 flex-col gap-4 p-4 lg:flex-row lg:gap-6 lg:p-6 print:block print:max-w-none print:gap-0 print:p-0">
+        <header className="sticky top-0 z-20 -mx-4 -mt-4 border-b border-teal-900/10 bg-[#0b2b33]/96 px-4 py-3 text-slate-100 shadow-[0_20px_45px_rgba(3,17,26,0.18)] backdrop-blur print:hidden lg:hidden">
           <div className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
             <div className="min-w-0 flex-1">
               <h1 className="truncate text-base font-bold tracking-tight text-white">
@@ -547,7 +548,7 @@ function AppShellContent({ children }: PropsWithChildren) {
           )}
         </header>
 
-        <aside className="sidebar-scroll hidden w-full max-w-[300px] rounded-3xl border border-teal-800/10 bg-[#0b2b33] p-5 text-slate-100 shadow-[0_20px_45px_rgba(3,17,26,0.25)] lg:sticky lg:top-4 lg:h-[calc(100vh-2rem)] lg:w-85 lg:overflow-y-auto lg:block xl:max-w-full">
+        <aside className="sidebar-scroll hidden w-full max-w-[300px] rounded-3xl border border-teal-800/10 bg-[#0b2b33] p-5 text-slate-100 shadow-[0_20px_45px_rgba(3,17,26,0.25)] print:hidden lg:sticky lg:top-4 lg:h-[calc(100vh-2rem)] lg:w-85 lg:overflow-y-auto lg:block xl:max-w-full">
           <div className="border-b border-white/15 pb-4">
             <h1 className="text-xl font-bold tracking-tight text-white">
               Karapitiya National Hospital
@@ -659,7 +660,7 @@ function AppShellContent({ children }: PropsWithChildren) {
           </div>
         </aside>
 
-        <main className="min-w-0 flex-1">
+        <main className="min-w-0 flex-1 print:block">
           {children}
         </main>
       </div>

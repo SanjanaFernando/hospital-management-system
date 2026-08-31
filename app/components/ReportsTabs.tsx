@@ -27,6 +27,23 @@ function countWardStats(ward: Ward) {
   };
 }
 
+function wardKey(ward: Ward): string {
+  return (ward.wardId || ward.id || "").toLowerCase();
+}
+
+/** Wards 2 and 9 are mixed male/female bed sections. */
+function isMixedGenderWard(ward: Ward): boolean {
+  const key = wardKey(ward);
+  return key === "ward-2" || key === "2" || key === "ward-9" || key === "9";
+}
+
+function countGenderBeds(ward: Ward) {
+  return {
+    male: ward.beds.filter((bed) => bed.gender === "Male").length,
+    female: ward.beds.filter((bed) => bed.gender === "Female").length,
+  };
+}
+
 export default function ReportsTabs({ wards, role, wardId }: ReportsTabsProps) {
   const [activeTab, setActiveTab] = useState<ReportTab>("ward");
   const [selectedWardId, setSelectedWardId] = useState<string>("");
@@ -125,21 +142,31 @@ export default function ReportsTabs({ wards, role, wardId }: ReportsTabsProps) {
         @media print {
           @page {
             size: A4 portrait;
-            margin: 20mm 18mm 24mm 18mm;
+            margin: 16mm 14mm 18mm 14mm;
           }
 
-          body * {
-            visibility: hidden !important;
+          html,
+          body {
+            height: auto !important;
+            min-height: 0 !important;
+            background: white !important;
           }
 
-          .printable-report,
-          .printable-report * {
-            visibility: visible !important;
+          .report-screen-only {
+            display: none !important;
+          }
+
+          .report-tab-section {
+            padding: 0 !important;
+            margin: 0 !important;
+            border: none !important;
+            box-shadow: none !important;
+            background: white !important;
           }
 
           .printable-report {
-            position: absolute !important;
-            inset: 0 !important;
+            display: block !important;
+            position: static !important;
             width: 100% !important;
             margin: 0 !important;
             padding: 0 !important;
@@ -148,25 +175,21 @@ export default function ReportsTabs({ wards, role, wardId }: ReportsTabsProps) {
             background: white !important;
           }
 
-          /* Each section block should not break in the middle */
           .report-section {
             page-break-inside: avoid;
             break-inside: avoid;
           }
 
-          /* Activity log should start on same page if possible */
           .report-log-section {
-            page-break-inside: avoid;
-            break-inside: avoid;
+            page-break-inside: auto;
+            break-inside: auto;
           }
 
-          /* Keep stat grid together */
           .report-stat-grid {
             page-break-inside: avoid;
             break-inside: avoid;
           }
 
-          /* Row-level protection */
           .report-row {
             page-break-inside: avoid;
             break-inside: avoid;
@@ -183,7 +206,7 @@ export default function ReportsTabs({ wards, role, wardId }: ReportsTabsProps) {
         }
       `}</style>
 
-      <div className="mb-6 flex flex-wrap gap-2 rounded-2xl bg-white p-2 shadow-sm print:hidden">
+      <div className="report-screen-only mb-6 flex flex-wrap gap-2 rounded-2xl bg-white p-2 shadow-sm print:hidden">
         {[
           { id: "ward" as const, label: "Ward-wise Report" },
           { id: "patient" as const, label: "Patient-wise Report" },
@@ -205,8 +228,8 @@ export default function ReportsTabs({ wards, role, wardId }: ReportsTabsProps) {
       </div>
 
       {activeTab === "ward" && (
-        <section className="rounded-2xl bg-white p-6 shadow-md">
-          <div className="mb-4 flex items-center justify-between gap-3">
+        <section className="report-tab-section rounded-2xl bg-white p-6 shadow-md">
+          <div className="report-screen-only mb-4 flex items-center justify-between gap-3">
             <div>
               <h2 className="text-xl font-bold text-slate-900">
                 Ward-wise Report
@@ -223,7 +246,7 @@ export default function ReportsTabs({ wards, role, wardId }: ReportsTabsProps) {
               />
             )}
           </div>
-          <div className="mb-6 flex flex-col gap-4 lg:flex-row print:hidden">
+          <div className="report-screen-only mb-6 flex flex-col gap-4 lg:flex-row print:hidden">
             <div className="w-full lg:max-w-md">
               <label className="mb-2 block text-sm font-semibold text-slate-700">
                 Select ward
@@ -249,7 +272,7 @@ export default function ReportsTabs({ wards, role, wardId }: ReportsTabsProps) {
           </div>
 
           {selectedWard && selectedWardStats && (
-            <div className="printable-report mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-5 shadow-sm print:rounded-none print:border-0 print:bg-white print:p-0 print:shadow-none">
+            <div className="printable-report mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-5 shadow-sm print:mt-0 print:rounded-none print:border-0 print:bg-white print:p-0 print:shadow-none">
               <div className="mb-6 flex items-start justify-between gap-3 print:hidden">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.18em] text-teal-700">
@@ -276,7 +299,7 @@ export default function ReportsTabs({ wards, role, wardId }: ReportsTabsProps) {
             </div>
           )}
 
-          <div className="mt-4 space-y-4 print:hidden">
+          <div className="report-screen-only mt-4 space-y-4 print:hidden">
             {visibleWards.map((ward) => {
               const stats = countWardStats(ward);
               return (
@@ -314,8 +337,8 @@ export default function ReportsTabs({ wards, role, wardId }: ReportsTabsProps) {
       )}
 
       {activeTab === "patient" && (
-        <section className="rounded-2xl bg-white p-6 shadow-md">
-          <div className="mb-4 flex items-center justify-between gap-3">
+        <section className="report-tab-section rounded-2xl bg-white p-6 shadow-md">
+          <div className="report-screen-only mb-4 flex items-center justify-between gap-3">
             <div>
               <h2 className="text-xl font-bold text-slate-900">
                 Patient-wise Report
@@ -332,7 +355,7 @@ export default function ReportsTabs({ wards, role, wardId }: ReportsTabsProps) {
               />
             )}
           </div>
-          <div className="mb-6 grid gap-4 md:grid-cols-2 print:hidden">
+          <div className="report-screen-only mb-6 grid gap-4 md:grid-cols-2 print:hidden">
             <div>
               <label className="mb-2 block text-sm font-semibold text-slate-700">
                 Ward
@@ -394,8 +417,8 @@ export default function ReportsTabs({ wards, role, wardId }: ReportsTabsProps) {
             </div>
           </div>
 
-          <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
-            <div className="space-y-4 print:hidden">
+          <div className="grid gap-4 print:block lg:grid-cols-[1.2fr_0.8fr]">
+            <div className="report-screen-only space-y-4 print:hidden">
               {visibleWards.map((ward) => (
                 <div
                   key={`${ward.id}-patients`}
@@ -459,8 +482,8 @@ export default function ReportsTabs({ wards, role, wardId }: ReportsTabsProps) {
       )}
 
       {activeTab === "bed" && (
-        <section className="rounded-2xl bg-white p-6 shadow-md">
-          <div className="mb-4 flex items-center justify-between gap-3">
+        <section className="report-tab-section rounded-2xl bg-white p-6 shadow-md">
+          <div className="report-screen-only mb-4 flex items-center justify-between gap-3">
             <div>
               <h2 className="text-xl font-bold text-slate-900">Bed Report</h2>
               <p className="text-sm text-slate-500">
@@ -476,7 +499,7 @@ export default function ReportsTabs({ wards, role, wardId }: ReportsTabsProps) {
               />
             )}
           </div>
-          <div className="mb-6 flex flex-col gap-4 lg:flex-row print:hidden">
+          <div className="report-screen-only mb-6 flex flex-col gap-4 lg:flex-row print:hidden">
             <div className="w-full lg:max-w-md">
               <label className="mb-2 block text-sm font-semibold text-slate-700">
                 Select ward
@@ -523,9 +546,12 @@ export default function ReportsTabs({ wards, role, wardId }: ReportsTabsProps) {
             </div>
           </div>
 
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 print:hidden">
+          <div className="report-screen-only grid gap-4 md:grid-cols-2 xl:grid-cols-3 print:hidden">
             {visibleWards.map((ward) => {
               const stats = countWardStats(ward);
+              const genderBeds = isMixedGenderWard(ward)
+                ? countGenderBeds(ward)
+                : null;
               return (
                 <div
                   key={`${ward.id}-beds`}
@@ -539,6 +565,15 @@ export default function ReportsTabs({ wards, role, wardId }: ReportsTabsProps) {
                     <p>Available beds: {stats.available}</p>
                     <p>Occupied beds: {stats.occupied}</p>
                     <p>Maintenance beds: {stats.maintenance}</p>
+                    {genderBeds && (
+                      <>
+                        <p className="pt-1 font-medium text-slate-700">
+                          Gender bed sections
+                        </p>
+                        <p>Male beds: {genderBeds.male}</p>
+                        <p>Female beds: {genderBeds.female}</p>
+                      </>
+                    )}
                   </div>
                 </div>
               );
@@ -546,7 +581,7 @@ export default function ReportsTabs({ wards, role, wardId }: ReportsTabsProps) {
           </div>
 
           {selectedWard && selectedBed ? (
-            <div className="printable-report mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-5 shadow-sm print:rounded-none print:border-0 print:bg-white print:p-0 print:shadow-none">
+            <div className="printable-report mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-5 shadow-sm print:mt-0 print:rounded-none print:border-0 print:bg-white print:p-0 print:shadow-none">
               <div className="mb-6 flex items-start justify-between gap-3 print:hidden">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.18em] text-teal-700">
@@ -575,7 +610,7 @@ export default function ReportsTabs({ wards, role, wardId }: ReportsTabsProps) {
               <BedReportLayout bed={selectedBed} wardName={selectedWard.name} />
             </div>
           ) : (
-            <div className="mt-6 rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-5 text-sm text-slate-500">
+            <div className="report-screen-only mt-6 rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-5 text-sm text-slate-500">
               Select a bed to view and print its report.
             </div>
           )}

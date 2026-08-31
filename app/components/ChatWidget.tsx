@@ -991,7 +991,7 @@ export default function ChatWidget({ session }: ChatWidgetProps) {
   }
 
   const widget = (
-    <div ref={widgetRef}>
+    <div ref={widgetRef} className="print:hidden">
       {/* Floating button */}
       <button
         id="chat-widget-toggle"
