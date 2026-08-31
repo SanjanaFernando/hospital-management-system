@@ -196,10 +196,16 @@ export async function POST(request: NextRequest) {
       ? new Date(body.admissionTime)
       : new Date();
 
+    const normalizedGender =
+      body.gender === "Female" || String(body.gender).toLowerCase() === "female"
+        ? "Female"
+        : "Male";
+
     const result = await db.collection("patients").insertOne({
       ...body,
       id: patientId,
       name: patientName || body.name,
+      gender: normalizedGender,
       previousDiseases: accumulatedPreviousDiseases,
       admissionTime,
       createdAt: new Date(),

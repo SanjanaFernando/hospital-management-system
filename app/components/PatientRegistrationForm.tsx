@@ -1,17 +1,20 @@
 import { useState, useEffect } from "react";
 import { createPatient } from "@/app/utils/api";
-import { Priority, AgeGroup, WardFormField } from "@/app/types";
+import { Priority, AgeGroup, WardFormField, Gender, Ward } from "@/app/types";
 import { useAuthSession } from "@/app/context/AuthSessionContext";
 import { canRegisterPatient, canSetTriage, canManageStaff } from "@/lib/rbac";
 import { getWardFormConfig } from "@/app/actions/wardFormActions";
+import { getWardWithPatients } from "@/app/actions/wardActions";
 import WardFormEditorModal from "@/app/components/WardFormEditorModal";
-import { Settings2, Edit3 } from "lucide-react";
+import { Settings2, Edit3, Lock } from "lucide-react";
 
 interface PatientRegistrationFormProps {
   wardId: string;
   onSuccess: () => void;
   onCancel: () => void;
 }
+
+type WardGenderPolicy = "Male" | "Female" | "any";
 
 import {
   searchExistingPatients,
@@ -74,12 +77,16 @@ export default function PatientRegistrationForm({
     patientId: String(Math.floor(10000 + Math.random() * 90000)),
     name: "",
     age: 0,
+    gender: "Male" as Gender,
     disease: "Hypertension",
     previousDiseases: [] as string[],
     customPreviousDisease: "",
     priority: "Triage 5" as Priority,
     specialRequirements: [] as string[],
   });
+
+  const [wardGenderPolicy, setWardGenderPolicy] = useState<WardGenderPolicy>("any");
+  const [wardInfo, setWardInfo] = useState<Ward | null>(null);
 
   const [wardFields, setWardFields] = useState<WardFormField[]>([]);
   const [customFieldsData, setCustomFieldsData] = useState<Record<string, any>>({});
@@ -98,16 +105,45 @@ export default function PatientRegistrationForm({
   const canRegister = canRegisterPatient(session, wardId);
   const triageEditable = canSetTriage(session, wardId);
 
-  const loadWardFields = () => {
+  const loadWardConfigAndGender = () => {
     if (wardId) {
       getWardFormConfig(wardId).then((fields) => {
         setWardFields(fields);
+      });
+
+      getWardWithPatients(wardId).then((w) => {
+        if (!w) return;
+        setWardInfo(w);
+        const name = (w.name || "").toLowerCase();
+        let policy: WardGenderPolicy = "any";
+
+        if (name.includes("female") || name.includes("maternity") || name.includes("gyn")) {
+          policy = "Female";
+        } else if (name.includes("male") && !name.includes("female")) {
+          policy = "Male";
+        } else {
+          // Check non-unisex beds
+          const designatedBeds = (w.beds || []).filter(
+            (b) => b.gender && b.gender !== "Unisex"
+          );
+          if (designatedBeds.length > 0) {
+            const hasMaleBeds = designatedBeds.some((b) => b.gender === "Male");
+            const hasFemaleBeds = designatedBeds.some((b) => b.gender === "Female");
+            if (hasMaleBeds && !hasFemaleBeds) policy = "Male";
+            else if (hasFemaleBeds && !hasMaleBeds) policy = "Female";
+          }
+        }
+
+        setWardGenderPolicy(policy);
+        if (policy !== "any") {
+          setFormData((prev) => ({ ...prev, gender: policy }));
+        }
       });
     }
   };
 
   useEffect(() => {
-    loadWardFields();
+    loadWardConfigAndGender();
   }, [wardId]);
 
   const handleCustomFieldChange = (fieldId: string, val: any) => {
@@ -125,11 +161,17 @@ export default function PatientRegistrationForm({
       )
     );
 
+    const patGender: Gender =
+      patient.gender === "Female" || String(patient.gender).toLowerCase() === "female"
+        ? "Female"
+        : "Male";
+
     setFormData((prev) => ({
       ...prev,
       patientId: patient.id,
       name: patient.name,
       age: patient.age || prev.age,
+      gender: wardGenderPolicy !== "any" ? wardGenderPolicy : patGender,
       previousDiseases: combinedDiseases,
     }));
     setSearchResults([]);
@@ -233,6 +275,10 @@ export default function PatientRegistrationForm({
       setErrorMessage("Patient name is required");
       return false;
     }
+    if (!formData.gender) {
+      setErrorMessage("Patient gender is required");
+      return false;
+    }
     if (formData.age < 1 || formData.age > 150) {
       setErrorMessage("Please enter a valid age (1-150)");
       return false;
@@ -287,6 +333,7 @@ export default function PatientRegistrationForm({
         name: formData.name.trim(),
         age: formData.age,
         ageGroup: determineAgeGroup(formData.age),
+        gender: formData.gender,
         disease: formData.disease,
         previousDiseases: allPrevious.length > 0 ? allPrevious : undefined,
         priority: triageEditable ? formData.priority : "Triage 5",
@@ -307,11 +354,12 @@ export default function PatientRegistrationForm({
         `${formData.name} (ID: #${patientData.id}) has been registered successfully!`
       );
 
-      // Reset form with new auto-generated numeric ID
+      // Reset form with new auto-generated numeric ID and correct ward gender
       setFormData({
         patientId: String(Math.floor(10000 + Math.random() * 90000)),
         name: "",
         age: 0,
+        gender: wardGenderPolicy === "Female" ? "Female" : "Male",
         disease: "Hypertension",
         previousDiseases: [],
         customPreviousDisease: "",
@@ -479,6 +527,80 @@ export default function PatientRegistrationForm({
                 className="text-purple-700 hover:text-purple-900 font-bold ml-2 underline"
               >
                 Clear
+              </button>
+            </div>
+          )}
+
+          {/* Returning Patient Gender Mismatch Warning */}
+          {selectedReturningPatient &&
+            wardGenderPolicy !== "any" &&
+            selectedReturningPatient.gender &&
+            selectedReturningPatient.gender !== wardGenderPolicy && (
+              <div className="mt-2 p-2.5 rounded-lg border border-amber-300 bg-amber-50 text-xs text-amber-900 flex items-start gap-2">
+                <span className="text-amber-600 font-bold">⚠️ Notice:</span>
+                <div>
+                  Patient #{selectedReturningPatient.id} ({selectedReturningPatient.name}) was registered as{" "}
+                  <span className="font-bold">{selectedReturningPatient.gender}</span>, but this ward only admits{" "}
+                  <span className="font-bold">{wardGenderPolicy}</span> patients. Gender is locked to{" "}
+                  <span className="font-bold">{wardGenderPolicy}</span>.
+                </div>
+              </div>
+            )}
+        </div>
+
+        {/* Gender Selection / Locked Display */}
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <label className="block text-sm font-semibold text-gray-700">
+              Gender *
+            </label>
+            {wardGenderPolicy !== "any" && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                <Lock className="w-3 h-3 text-amber-600" />
+                Locked to {wardGenderPolicy} (Ward Policy)
+              </span>
+            )}
+          </div>
+
+          {wardGenderPolicy !== "any" ? (
+            <div>
+              <div
+                className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border-2 font-semibold text-sm ${
+                  formData.gender === "Male"
+                    ? "bg-blue-50/80 border-blue-400 text-blue-900"
+                    : "bg-pink-50/80 border-pink-400 text-pink-900"
+                }`}
+              >
+                <Lock className="w-4 h-4 text-slate-500" />
+                <span>{formData.gender === "Male" ? "♂ Male (Ward Locked)" : "♀ Female (Ward Locked)"}</span>
+              </div>
+              <p className="mt-1.5 text-xs text-slate-500">
+                {wardInfo?.name || `Ward ${wardId}`} is dedicated for {wardGenderPolicy} patients only.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => setFormData((prev) => ({ ...prev, gender: "Male" }))}
+                className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border-2 font-semibold text-sm transition-all cursor-pointer ${
+                  formData.gender === "Male"
+                    ? "bg-blue-600 border-blue-600 text-white shadow-sm ring-2 ring-blue-300"
+                    : "bg-white border-gray-300 text-gray-700 hover:border-blue-400 hover:bg-blue-50"
+                }`}
+              >
+                <span>♂ Male</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setFormData((prev) => ({ ...prev, gender: "Female" }))}
+                className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border-2 font-semibold text-sm transition-all cursor-pointer ${
+                  formData.gender === "Female"
+                    ? "bg-pink-500 border-pink-500 text-white shadow-sm ring-2 ring-pink-300"
+                    : "bg-white border-gray-300 text-gray-700 hover:border-pink-400 hover:bg-pink-50"
+                }`}
+              >
+                <span>♀ Female</span>
               </button>
             </div>
           )}
@@ -736,7 +858,7 @@ export default function PatientRegistrationForm({
             wardName={`Ward ${wardId}`}
             isOpen={showEditorModal}
             onClose={() => setShowEditorModal(false)}
-            onSaved={() => loadWardFields()}
+            onSaved={() => loadWardConfigAndGender()}
           />
         )}
 

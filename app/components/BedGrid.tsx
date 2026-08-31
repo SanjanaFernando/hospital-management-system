@@ -57,7 +57,17 @@ const getShortName = (fullName?: string) => {
 };
 
 /** Small pill that indicates a bed's gender designation */
-const GenderBadge = ({ gender }: { gender: Bed["gender"] }) => {
+const GenderBadge = ({ gender, type }: { gender: Bed["gender"]; type?: Bed["type"] }) => {
+  if (type === "ICU") {
+    return (
+      <span
+        className="absolute top-1.5 right-1.5 text-[9px] font-bold px-1.5 py-0.5 rounded-full leading-none shadow-sm bg-purple-900/60 text-purple-100 border border-purple-300/40"
+        title="Unisex ICU bed"
+      >
+        ⚪ ICU
+      </span>
+    );
+  }
   if (!gender || gender === "Unisex") return null;
 
   const isMale = gender === "Male";
@@ -92,19 +102,41 @@ export default function BedGrid({
 
   const normalizedWardId = normalizeWardId(wardId);
 
-  // Count occupied beds by gender for the filter pill labels
-  const maleOccupied   = beds.filter((b) => b.patient?.gender === "Male").length;
-  const femaleOccupied = beds.filter((b) => b.patient?.gender === "Female").length;
-  const hasMale   = maleOccupied > 0;
-  const hasFemale = femaleOccupied > 0;
-  // Only show filter row when both genders are present
+  // Check bed matching for Male and Female (ICU beds only shown in All tab)
+  const isMaleBed = (b: Bed) => {
+    if (b.type === "ICU" || b.gender === "Unisex") {
+      return false;
+    }
+    if (b.patient) {
+      return b.patient.gender?.toLowerCase() === "male";
+    }
+    return b.gender === "Male";
+  };
+
+  const isFemaleBed = (b: Bed) => {
+    if (b.type === "ICU" || b.gender === "Unisex") {
+      return false;
+    }
+    if (b.patient) {
+      return b.patient.gender?.toLowerCase() === "female";
+    }
+    return b.gender === "Female";
+  };
+
+  const maleBeds = beds.filter(isMaleBed);
+  const femaleBeds = beds.filter(isFemaleBed);
+
+  const hasMale = beds.some((b) => b.type !== "ICU" && b.gender !== "Unisex" && (b.patient?.gender?.toLowerCase() === "male" || b.gender === "Male"));
+  const hasFemale = beds.some((b) => b.type !== "ICU" && b.gender !== "Unisex" && (b.patient?.gender?.toLowerCase() === "female" || b.gender === "Female"));
+  // Only show filter row when both genders are relevant in this ward
   const showGenderFilter = hasMale && hasFemale;
 
-  // Empty / maintenance beds always show; occupied beds are gender-filtered
   const filteredBeds =
     genderFilter === "all"
       ? beds
-      : beds.filter((b) => !b.patient || b.patient.gender === genderFilter);
+      : genderFilter === "Male"
+      ? maleBeds
+      : femaleBeds;
 
   const filterPill = (f: GenderFilter, label: string) => (
     <button
@@ -152,8 +184,8 @@ export default function BedGrid({
         <div className="flex items-center gap-1.5 mb-3 flex-wrap">
           <span className="text-xs text-slate-500 font-medium mr-0.5">Filter:</span>
           {filterPill("all",    `All (${beds.length})`)}
-          {hasMale   && filterPill("Male",   `♂ Male (${maleOccupied})`)}
-          {hasFemale && filterPill("Female", `♀ Female (${femaleOccupied})`)}
+          {hasMale   && filterPill("Male",   `♂ Male (${maleBeds.length})`)}
+          {hasFemale && filterPill("Female", `♀ Female (${femaleBeds.length})`)}
         </div>
       )}
 
@@ -193,7 +225,7 @@ export default function BedGrid({
             }`}
           >
             {/* Gender badge */}
-            <GenderBadge gender={bed.gender} />
+            <GenderBadge gender={bed.gender} type={bed.type} />
 
             <div className="text-center w-full min-w-0">
               <p className="text-sm font-bold truncate">
