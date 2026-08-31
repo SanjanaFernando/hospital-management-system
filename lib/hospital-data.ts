@@ -141,6 +141,14 @@ function toWardId(doc: MongoDoc): string {
   return String(doc.wardId || "");
 }
 
+function normalizeGender(val?: unknown): "Male" | "Female" | undefined {
+  if (!val) return undefined;
+  const s = String(val).trim().toLowerCase();
+  if (s === "male" || s === "m") return "Male";
+  if (s === "female" || s === "f") return "Female";
+  return undefined;
+}
+
 function normalizePatient(doc: MongoDoc): Patient {
   const serialized = serializeDoc(doc) as MongoDoc;
 
@@ -150,7 +158,7 @@ function normalizePatient(doc: MongoDoc): Patient {
     name: String(serialized.name || ""),
     age: Number(serialized.age || 0),
     ageGroup: (serialized.ageGroup as Patient["ageGroup"]) || "Adult",
-    gender: serialized.gender as Patient["gender"],
+    gender: normalizeGender(serialized.gender),
     disease: String(serialized.disease || ""),
     previousDiseases: Array.isArray(serialized.previousDiseases)
       ? (serialized.previousDiseases as string[])

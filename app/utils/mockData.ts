@@ -1,4 +1,4 @@
-import { Ward, Patient, AgeGroup, Priority, Gender } from "@/app/types";
+import { Ward, Bed, Patient, AgeGroup, Priority, Gender } from "@/app/types";
 
 const diseases = [
   "Hypertension",
@@ -286,84 +286,153 @@ export function initializeWard16(): Ward {
 }
 
 export function initializeWards(): Ward[] {
-  const wardNames = [
-    "Ward 3 - Surgical Type A",
-    "Ward 4 - Surgical Type B",
-    "Ward 5 - Surgical Type C",
-    "Ward 6 - Surgical Type D",
+  const wardConfigs = [
+    {
+      id: "ward-2",
+      name: "Ward 2 - General",
+      policy: "any" as const,
+      icuBeds: 3,
+      maleBeds: 33,
+      maleAdmitted: 30,
+      femaleBeds: 34,
+      femaleAdmitted: 30,
+      queueCount: 8,
+    },
+    {
+      id: "ward-3",
+      name: "Ward 3 - Female Medical",
+      policy: "Female" as const,
+      icuBeds: 2,
+      maleBeds: 0,
+      maleAdmitted: 0,
+      femaleBeds: 40,
+      femaleAdmitted: 36,
+      queueCount: 8,
+    },
+    {
+      id: "ward-5",
+      name: "Ward 5 - Male Surgical",
+      policy: "Male" as const,
+      icuBeds: 2,
+      maleBeds: 50,
+      maleAdmitted: 46,
+      femaleBeds: 0,
+      femaleAdmitted: 0,
+      queueCount: 10,
+    },
+    {
+      id: "ward-9",
+      name: "Ward 9 - General Medical",
+      policy: "any" as const,
+      icuBeds: 2,
+      maleBeds: 22,
+      maleAdmitted: 19,
+      femaleBeds: 22,
+      femaleAdmitted: 18,
+      queueCount: 8,
+    },
   ];
 
-  const wards: Ward[] = wardNames.map((name, wardIndex) => {
-    // Generate main ward patients (currently admitted)
+  return wardConfigs.map((cfg) => {
     const admittedPatients: Patient[] = [];
     const patientQueue: Patient[] = [];
 
-    // Create 15-18 occupied beds with patients
-    const occupiedCount = Math.floor(Math.random() * 3) + 15;
-
-    for (let i = 0; i < occupiedCount; i++) {
-      const patient = generateMockPatient(`ward${wardIndex}-patient-${i}`);
-      admittedPatients.push(patient);
+    // Admitted male patients
+    const malePatients: Patient[] = [];
+    for (let i = 0; i < cfg.maleAdmitted; i++) {
+      const p = generateMockPatient(`${cfg.id}-m-pt-${i}`);
+      p.gender = "Male";
+      p.wardId = cfg.id;
+      p.status = "admitted";
+      malePatients.push(p);
+      admittedPatients.push(p);
     }
 
-    // Create 3-7 patients in queue
-    const queueCount = Math.floor(Math.random() * 5) + 2;
-    for (let i = 0; i < queueCount; i++) {
-      const patient = generateMockPatient(`ward${wardIndex}-queue-${i}`);
-      patientQueue.push(patient);
+    // Admitted female patients
+    const femalePatients: Patient[] = [];
+    for (let i = 0; i < cfg.femaleAdmitted; i++) {
+      const p = generateMockPatient(`${cfg.id}-f-pt-${i}`);
+      p.gender = "Female";
+      p.wardId = cfg.id;
+      p.status = "admitted";
+      femalePatients.push(p);
+      admittedPatients.push(p);
     }
 
-    // Create beds
-    const beds = Array.from({ length: 25 }, (_, bedIndex) => {
-      const bedNumber = bedIndex + 1;
-      const patient = admittedPatients[bedIndex];
-      const isICU = Math.random() < 0.2; // 20% ICU beds
-      const bedType: "ICU" | "NORMAL" = isICU ? "ICU" : "NORMAL";
+    // Queue patients
+    for (let i = 0; i < cfg.queueCount; i++) {
+      const p = generateMockPatient(`${cfg.id}-q-${i}`);
+      p.gender =
+        cfg.policy === "Female"
+          ? "Female"
+          : cfg.policy === "Male"
+          ? "Male"
+          : i % 2 === 0
+          ? "Male"
+          : "Female";
+      p.wardId = cfg.id;
+      p.status = "queued";
+      patientQueue.push(p);
+    }
 
-      if (patient) {
-        return {
-          id: `${wardIndex}-${bedIndex}`,
-          bedNumber,
-          status: "occupied" as const,
-          type: bedType,
-          gender: "Unisex" as const,
-          patient,
-        };
-      }
+    const beds: Bed[] = [];
+    let currentBedNumber = 1;
 
-      // Random maintenance or available
-      const isMaintenance = Math.random() < 0.08;
-      return {
-        id: `${wardIndex}-${bedIndex}`,
-        bedNumber,
-        status: isMaintenance
-          ? ("maintenance" as const)
-          : ("available" as const),
-        type: bedType,
-        gender: "Unisex" as const,
-      };
-    });
+    // 1. ICU Beds (Unisex)
+    for (let i = 1; i <= cfg.icuBeds; i++) {
+      beds.push({
+        id: `${cfg.id}-icu-${currentBedNumber}`,
+        bedNumber: currentBedNumber,
+        status: "available",
+        type: "ICU",
+        gender: "Unisex",
+      });
+      currentBedNumber++;
+    }
+
+    // 2. Male Beds (NORMAL, Male)
+    for (let i = 0; i < cfg.maleBeds; i++) {
+      const pt = malePatients[i] || null;
+      beds.push({
+        id: `${cfg.id}-normal-${currentBedNumber}`,
+        bedNumber: currentBedNumber,
+        status: pt ? "occupied" : "available",
+        type: "NORMAL",
+        gender: "Male",
+        patient: pt || undefined,
+      });
+      currentBedNumber++;
+    }
+
+    // 3. Female Beds (NORMAL, Female)
+    for (let i = 0; i < cfg.femaleBeds; i++) {
+      const pt = femalePatients[i] || null;
+      beds.push({
+        id: `${cfg.id}-normal-${currentBedNumber}`,
+        bedNumber: currentBedNumber,
+        status: pt ? "occupied" : "available",
+        type: "NORMAL",
+        gender: "Female",
+        patient: pt || undefined,
+      });
+      currentBedNumber++;
+    }
 
     const occupiedBeds = beds.filter((b) => b.status === "occupied").length;
-    const maintenanceBeds = beds.filter(
-      (b) => b.status === "maintenance"
-    ).length;
+    const maintenanceBeds = beds.filter((b) => b.status === "maintenance").length;
     const availableBeds = beds.filter((b) => b.status === "available").length;
 
     return {
-      id: `ward-${wardIndex}`,
-      name,
+      id: cfg.id,
+      wardId: cfg.id,
+      name: cfg.name,
       beds,
       patients: admittedPatients,
       patientQueue,
-      totalBeds: 25,
+      totalBeds: beds.length,
       occupiedBeds,
       availableBeds,
       maintenanceBeds,
     };
   });
-
-  // Append Ward 16
-  wards.push(initializeWard16());
-  return wards;
 }

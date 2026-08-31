@@ -2,8 +2,9 @@
 
 import { connectToDatabase } from "@/lib/mongodb";
 import { ObjectId } from "mongodb";
-import { revalidateTag } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { UserSession } from "@/app/types";
+import { getServerSession } from "@/lib/session.server";
 import {
   assertPermission,
   canAssignOrDischargePatient,
@@ -16,17 +17,25 @@ import { createNotification } from "@/app/actions/notificationActions";
 
 export async function dischargePatientById(
   patientId: string,
-  actor: UserSession
+  actor?: UserSession,
+  dischargeNotes?: string
 ): Promise<void> {
   if (!patientId) {
     throw new Error("Patient ID is required for discharge");
   }
 
-  const session = normalizeSession(actor);
+  const serverSession = await getServerSession();
+  const session = normalizeSession(
+    actor?.role && actor.role !== "guest" ? actor : serverSession
+  );
   const { db } = await connectToDatabase();
 
-  // Find patient by custom id first, fallback to _id
+  // Find patient by custom id, number id, or ObjectId
   let patient = await db.collection("patients").findOne({ id: patientId });
+
+  if (!patient && !isNaN(Number(patientId))) {
+    patient = await db.collection("patients").findOne({ id: Number(patientId) });
+  }
 
   if (!patient && ObjectId.isValid(patientId)) {
     patient = await db.collection("patients").findOne({
@@ -44,17 +53,35 @@ export async function dischargePatientById(
     "You do not have permission to discharge this patient."
   );
 
-  const resolvedPatientId = patient.id || patientId;
+  const resolvedPatientId = patient.id !== undefined ? patient.id : patientId;
 
-  // Keep patient history and persist discharge time instead of deleting record
-  let result = await db.collection("patients").updateOne(
+  const setData: Record<string, unknown> = {
+    status: "discharged",
+    dischargeTime: new Date(),
+    updatedAt: new Date(),
+  };
+
+  if (dischargeNotes && dischargeNotes.trim()) {
+    setData.dischargeNotes = dischargeNotes.trim();
+  }
+
+  // Update patient record
+  const patientOrFilters: Array<Record<string, unknown>> = [
     { id: resolvedPatientId },
+    { id: String(resolvedPatientId) },
+    { id: patientId },
+  ];
+  if (patient._id) {
+    patientOrFilters.push({ _id: patient._id });
+  }
+  if (ObjectId.isValid(patientId)) {
+    patientOrFilters.push({ _id: new ObjectId(patientId) });
+  }
+
+  await db.collection("patients").updateMany(
+    { $or: patientOrFilters },
     {
-      $set: {
-        status: "discharged",
-        dischargeTime: new Date(),
-        updatedAt: new Date(),
-      },
+      $set: setData,
       $unset: {
         admissionTime: "",
         assignedFromWardId: "",
@@ -62,50 +89,55 @@ export async function dischargePatientById(
     }
   );
 
-  // If not found and looks like an ObjectId, try updating by _id
-  if (result.matchedCount === 0 && ObjectId.isValid(patientId)) {
-    result = await db.collection("patients").updateOne(
-      { _id: new ObjectId(patientId) },
-      {
-        $set: {
-          status: "discharged",
-          dischargeTime: new Date(),
-          updatedAt: new Date(),
-        },
-        $unset: {
-          admissionTime: "",
-          assignedFromWardId: "",
-        },
-      }
-    );
+  // Free up ANY bed currently assigned to this patient
+  const candidatePatientIds: Array<string | number | ObjectId> = [
+    resolvedPatientId,
+    patientId,
+    patient.id,
+    patient._id,
+    String(resolvedPatientId),
+    String(patientId),
+    String(patient._id),
+  ].filter((v) => v !== undefined && v !== null && v !== "");
+
+  if (!isNaN(Number(resolvedPatientId))) {
+    candidatePatientIds.push(Number(resolvedPatientId));
+  }
+  if (!isNaN(Number(patientId))) {
+    candidatePatientIds.push(Number(patientId));
+  }
+  if (ObjectId.isValid(String(patientId))) {
+    candidatePatientIds.push(new ObjectId(String(patientId)));
+  }
+  if (patient._id && ObjectId.isValid(String(patient._id))) {
+    candidatePatientIds.push(new ObjectId(String(patient._id)));
   }
 
-  if (result.matchedCount === 0) {
-    throw new Error("Patient not found");
-  }
+  await db.collection("beds").updateMany(
+    { patientId: { $in: candidatePatientIds } },
+    {
+      $set: {
+        status: "available",
+        patientId: null,
+        updatedAt: new Date(),
+      },
+    }
+  );
 
-  // Free up the bed if this patient was admitted
-  if (patient.status === "admitted") {
-    await db.collection("beds").updateOne(
-      { patientId: resolvedPatientId },
-      {
-        $set: {
-          status: "available",
-          patientId: null,
-          updatedAt: new Date(),
-        },
-      }
-    );
+  try {
+    revalidateTag("patients", "max");
+    revalidateTag("beds", "max");
+    revalidateTag("wards", "max");
+    revalidateTag("dashboard", "max");
+    revalidatePath("/wards", "layout");
+    revalidatePath("/", "layout");
+  } catch (err) {
+    console.error("Revalidation error:", err);
   }
-
-  revalidateTag("patients", "max");
-  revalidateTag("beds", "max");
-  revalidateTag("wards", "max");
-  revalidateTag("dashboard", "max");
 
   await createUserLog({
     action: "patient_discharged",
-    actor,
+    actor: session,
     wardId: patientWardId,
     targetId: resolvedPatientId,
     targetName: (patient.name as string) || resolvedPatientId,

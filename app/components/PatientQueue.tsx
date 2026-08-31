@@ -334,8 +334,8 @@ export default function PatientQueue({
   }
 
   // Gender counts for the filter pills
-  const maleCount   = patients.filter((p) => p.gender === "Male").length;
-  const femaleCount = patients.filter((p) => p.gender === "Female").length;
+  const maleCount   = patients.filter((p) => p.gender?.toLowerCase() === "male").length;
+  const femaleCount = patients.filter((p) => p.gender?.toLowerCase() === "female").length;
   const hasMale   = maleCount > 0;
   const hasFemale = femaleCount > 0;
   // Only show filter row when both genders are present in the queue
@@ -345,7 +345,7 @@ export default function PatientQueue({
   const genderFiltered =
     genderFilter === "all"
       ? patients
-      : patients.filter((p) => p.gender === genderFilter);
+      : patients.filter((p) => p.gender?.toLowerCase() === genderFilter.toLowerCase());
 
   const sortedPatients =
     queueOrderStrategy === "priority"
