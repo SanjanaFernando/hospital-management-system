@@ -16,9 +16,9 @@ export default async function ReportsPage() {
   const wards = await getWardsWithPatients();
 
   return (
-    <div className="min-h-screen bg-linear-to-br from-slate-100 via-teal-50 to-cyan-100 p-4 lg:p-8">
-      <div className="mx-auto max-w-7xl">
-        <div className="mb-6 flex items-center gap-3">
+    <div className="min-h-screen bg-linear-to-br from-slate-100 via-teal-50 to-cyan-100 p-4 lg:p-8 print:min-h-0 print:bg-white print:p-0">
+      <div className="mx-auto max-w-7xl print:mx-0 print:max-w-none">
+        <div className="mb-6 flex items-center gap-3 print:hidden">
           <Link
             href="/"
             className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-slate-900 text-white hover:bg-slate-700 transition-colors shrink-0"

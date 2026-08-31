@@ -85,7 +85,7 @@ function generatePriority() {
 }
 
 function ageGroupFromAge(age) {
-  if (age < 13) return "Child";
+  if (age < 18) return "Child";
   if (age < 60) return "Adult";
   return "Elderly";
 }
