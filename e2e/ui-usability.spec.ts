@@ -37,20 +37,10 @@ test.describe('UI/Usability — Responsive Layout', () => {
 });
 
 test.describe('UI/Usability — Error & Loading States', () => {
-  test('non-existent routes redirect to login instead of returning a proper 404', async ({ page }) => {
-    const response = await page.goto('/this-route-does-not-exist');
-
-    // FINDING: Unknown routes are redirected (307) to /login, which returns 200,
-    // instead of Next.js's own 404 page/status. Server terminal logs confirm
-    // Next.js internally resolves this route as a 404 — something in the
-    // auth/session layer (likely related to Finding #1's session-handling
-    // code) intercepts unmatched routes before the real 404 can be returned
-    // to the client. This means broken links or URL typos will appear as
-    // "successful" (200) to monitoring tools, crawlers, and any client that
-    // checks response.ok rather than the final rendered page content.
-    expect(response?.status()).toBe(200); // documents current (incorrect) behavior
-    expect(response?.url()).toContain('/login'); // confirms the redirect target
-  });
+test('shows a proper 404 for a non-existent route', async ({ page }) => {
+  const response = await page.goto('/this-route-does-not-exist');
+  expect(response?.status()).toBe(404);
+});
 
   test('loading state does not show a broken/blank page on slow navigation', async ({ page }) => {
     await page.goto('/login');
