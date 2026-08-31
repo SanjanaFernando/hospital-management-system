@@ -257,7 +257,7 @@ export default function PatientRegistrationForm({
   };
 
   const determineAgeGroup = (age: number): AgeGroup => {
-    if (age < 13) return "Child";
+    if (age < 18) return "Child";
     if (age < 60) return "Adult";
     return "Elderly";
   };
