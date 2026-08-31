@@ -15,6 +15,7 @@ import {
   Menu,
   ScrollText,
   UserPlus,
+  UserMinus,
   X,
   TriangleAlert,
   UserRound,
@@ -27,7 +28,7 @@ import { AuthSessionProvider } from "@/app/context/AuthSessionContext";
 import { useAuthSession } from "@/app/context/AuthSessionContext";
 import { getWardsWithPatients } from "@/app/actions/wardActions";
 import { Ward } from "@/app/types";
-import { ROLE_LABELS, canRegisterPatient } from "@/lib/rbac";
+import { ROLE_LABELS, canRegisterPatient, canAssignOrDischargePatient } from "@/lib/rbac";
 import { UserSession } from "@/app/types";
 import NotificationPanel from "./NotificationPanel";
 import ChatWidget from "./ChatWidget";
@@ -176,6 +177,117 @@ function formatShiftCountdown(date = new Date()): string {
   );
 }
 
+function DischargePatientDropdown({
+  dischargeableWards,
+  onNavigate,
+}: {
+  dischargeableWards: Ward[];
+  onNavigate?: () => void;
+}) {
+  const router = useRouter();
+  const [isOpen, setIsOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(event.target as Node)
+      ) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  if (dischargeableWards.length === 0) {
+    return (
+      <div className="flex w-full items-center justify-between rounded-xl bg-teal-950/40 px-3.5 py-2.5 text-sm font-semibold text-teal-300/40 border border-teal-800/30 cursor-not-allowed select-none">
+        <div className="flex items-center gap-2">
+          <UserMinus className="h-4 w-4" />
+          <span>Discharge Patient</span>
+        </div>
+        <span className="text-[11px] font-normal text-teal-400/40">No Access</span>
+      </div>
+    );
+  }
+
+  const handleSelectWard = (wardId: string) => {
+    setIsOpen(false);
+    onNavigate?.();
+    router.push(`/wards/${wardId}/patients`);
+  };
+
+  // If only 1 ward is dischargeable, direct button click without dropdown
+  if (dischargeableWards.length === 1) {
+    const singleWard = dischargeableWards[0];
+    const wId = singleWard.wardId || singleWard.id;
+    return (
+      <button
+        type="button"
+        onClick={() => handleSelectWard(wId)}
+        className="flex w-full items-center justify-between rounded-xl bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 px-3.5 py-2.5 text-sm font-bold text-white transition-all shadow-md active:scale-[0.98]"
+      >
+        <div className="flex items-center gap-2 min-w-0">
+          <UserMinus className="h-4 w-4 shrink-0" />
+          <span className="truncate">Discharge Patient</span>
+        </div>
+        <ArrowRight className="h-4 w-4 shrink-0" />
+      </button>
+    );
+  }
+
+  return (
+    <div className="relative w-full" ref={containerRef}>
+      <button
+        type="button"
+        onClick={() => setIsOpen((prev) => !prev)}
+        aria-expanded={isOpen}
+        className="flex w-full items-center justify-between rounded-xl bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 px-3.5 py-2.5 text-sm font-bold text-white transition-all shadow-md active:scale-[0.98]"
+      >
+        <div className="flex items-center gap-2 min-w-0">
+          <UserMinus className="h-4 w-4 shrink-0" />
+          <span className="truncate">Discharge Patient</span>
+        </div>
+        <ChevronDown
+          className={`h-4 w-4 shrink-0 transition-transform duration-200 ${
+            isOpen ? "rotate-180" : ""
+          }`}
+        />
+      </button>
+
+      {isOpen && (
+        <div className="absolute left-0 right-0 top-full mt-1.5 z-50 rounded-2xl border border-rose-500/25 bg-[#0a272f] p-2 shadow-2xl backdrop-blur-md animate-in fade-in-50 zoom-in-95">
+          <p className="px-2.5 py-1.5 text-[11px] font-bold uppercase tracking-wider text-rose-300/70 border-b border-white/10 mb-1">
+            Select Ward for Discharge
+          </p>
+
+          <div className="space-y-1 max-h-56 overflow-y-auto custom-scrollbar">
+            {dischargeableWards.map((w) => {
+              const wId = w.wardId || w.id;
+              return (
+                <button
+                  key={wId}
+                  type="button"
+                  onClick={() => handleSelectWard(wId)}
+                  className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-xs font-semibold text-slate-100 hover:bg-rose-500/20 hover:text-rose-200 transition-all group"
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Bed className="h-3.5 w-3.5 text-rose-400 shrink-0 group-hover:scale-110 transition-transform" />
+                    <span className="truncate">{w.name}</span>
+                  </div>
+                  <ChevronRight className="h-3.5 w-3.5 text-slate-400 opacity-0 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all shrink-0" />
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 
 function AppShellContent({ children }: PropsWithChildren) {
   const pathname = usePathname();
@@ -234,6 +346,13 @@ function AppShellContent({ children }: PropsWithChildren) {
     return wards.filter((ward) => {
       const wId = ward.wardId || ward.id;
       return canRegisterPatient(session, wId);
+    });
+  }, [wards, session]);
+
+  const dischargeableWards = useMemo(() => {
+    return wards.filter((ward) => {
+      const wId = ward.wardId || ward.id;
+      return canAssignOrDischargePatient(session, wId);
     });
   }, [wards, session]);
 
@@ -396,10 +515,14 @@ function AppShellContent({ children }: PropsWithChildren) {
                   registerableWards={registerableWards}
                   onNavigate={() => setMobileMenuOpen(false)}
                 />
+                <DischargePatientDropdown
+                  dischargeableWards={dischargeableWards}
+                  onNavigate={() => setMobileMenuOpen(false)}
+                />
                 <Link
                   href={activeWardId ? `/wards/${activeWardId}/beds` : "/"}
                   onClick={() => setMobileMenuOpen(false)}
-                  className="flex w-full items-center justify-between rounded-xl bg-white px-3 py-2.5 text-sm font-semibold text-slate-900 transition hover:bg-slate-100"
+                  className="flex w-full items-center justify-between rounded-xl bg-white px-3 py-2.5 text-sm font-semibold text-slate-900 transition hover:bg-slate-100 shadow-sm active:scale-[0.98]"
                 >
                   <span>🛏️ Assign Bed</span>
                   <ArrowRight className="h-4 w-4" />
@@ -475,9 +598,12 @@ function AppShellContent({ children }: PropsWithChildren) {
             <RegisterPatientDropdown
               registerableWards={registerableWards}
             />
+            <DischargePatientDropdown
+              dischargeableWards={dischargeableWards}
+            />
             <Link
               href={activeWardId ? `/wards/${activeWardId}/beds` : "/"}
-              className="flex w-full items-center justify-between rounded-xl bg-white px-3 py-2.5 text-sm font-semibold text-slate-900 transition hover:bg-slate-100"
+              className="flex w-full items-center justify-between rounded-xl bg-white px-3 py-2.5 text-sm font-semibold text-slate-900 transition hover:bg-slate-100 shadow-sm active:scale-[0.98]"
             >
               <span>🛏️ Assign Bed</span>
               <ArrowRight className="h-4 w-4" />

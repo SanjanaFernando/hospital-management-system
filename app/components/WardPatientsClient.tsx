@@ -72,16 +72,21 @@ export default function WardPatientsClient({
   return (
     <div className="min-h-screen bg-linear-to-br from-blue-50 to-indigo-100 p-8">
       <div className="mx-auto max-w-6xl">
-        <div className="mb-6 flex gap-8 items-center justify-between">
-          <Link
-            href={`/wards/${resolvedWardId}`}
-            className="inline-flex items-center gap-2 rounded-lg bg-gray-600 px-4 py-2 text-white transition-colors hover:bg-gray-700"
-          >
-            <ChevronLeft size={20} />
-          </Link>
-          <h1 className="text-xl text-end font-bold text-gray-800">
-            {ward.name} - Patients
-          </h1>
+        <div className="mb-6 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Link
+              href={`/wards/${resolvedWardId}`}
+              className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-slate-900 text-white hover:bg-slate-700 transition-colors shrink-0"
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </Link>
+            <div>
+              <p className="text-xs uppercase tracking-wider text-slate-500 font-semibold">{ward.name}</p>
+              <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">
+                Patients Management
+              </h1>
+            </div>
+          </div>
         </div>
 
         <div className="mb-6 flex items-center justify-between">
