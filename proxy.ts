@@ -9,6 +9,22 @@ const PUBLIC_PATHS = ["/login"];
 // API routes that don't require authentication
 const PUBLIC_API_PREFIXES = ["/api/auth"];
 
+// Known protected app routes that require authentication
+const PROTECTED_ROUTE_PREFIXES = [
+  "/admin",
+  "/wards",
+  "/patients",
+  "/reports",
+  "/change-password",
+];
+
+function isKnownProtectedRoute(pathname: string): boolean {
+  if (pathname === "/") return true;
+  return PROTECTED_ROUTE_PREFIXES.some(
+    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)
+  );
+}
+
 function base64UrlDecode(data: string): string {
   let padded = data.replace(/-/g, "+").replace(/_/g, "/");
   while (padded.length % 4 !== 0) {
@@ -79,7 +95,51 @@ export function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Check authentication
+  // For API routes, attach user headers if token is present and valid,
+  // otherwise let downstream API route handlers handle unauthenticated requests (RBAC returns 401/403)
+  if (pathname.startsWith("/api/")) {
+    const token = request.cookies.get(AUTH_COOKIE_NAME)?.value;
+    if (token) {
+      const payload = verifyTokenInProxy(token);
+      if (payload) {
+        const requestHeaders = new Headers(request.headers);
+        requestHeaders.set("x-user-id", String(payload.userId || ""));
+        requestHeaders.set("x-user-role", String(payload.role || ""));
+        requestHeaders.set("x-user-ward-id", String(payload.wardId || ""));
+        const wardIds = Array.isArray(payload.wardIds) ? payload.wardIds : (payload.wardId ? [payload.wardId] : []);
+        requestHeaders.set("x-user-ward-ids", wardIds.join(","));
+        requestHeaders.set("x-user-name", String(payload.displayName || ""));
+        return NextResponse.next({
+          request: { headers: requestHeaders },
+        });
+      }
+    }
+    return NextResponse.next();
+  }
+
+  // If path is NOT a known protected route, it is an unknown route (Finding #6).
+  // Pass through to Next.js so it responds with a genuine 404 instead of redirecting to /login.
+  if (!isKnownProtectedRoute(pathname)) {
+    const token = request.cookies.get(AUTH_COOKIE_NAME)?.value;
+    if (token) {
+      const payload = verifyTokenInProxy(token);
+      if (payload) {
+        const requestHeaders = new Headers(request.headers);
+        requestHeaders.set("x-user-id", String(payload.userId || ""));
+        requestHeaders.set("x-user-role", String(payload.role || ""));
+        requestHeaders.set("x-user-ward-id", String(payload.wardId || ""));
+        const wardIds = Array.isArray(payload.wardIds) ? payload.wardIds : (payload.wardId ? [payload.wardId] : []);
+        requestHeaders.set("x-user-ward-ids", wardIds.join(","));
+        requestHeaders.set("x-user-name", String(payload.displayName || ""));
+        return NextResponse.next({
+          request: { headers: requestHeaders },
+        });
+      }
+    }
+    return NextResponse.next();
+  }
+
+  // Known protected UI route — check authentication
   const token = request.cookies.get(AUTH_COOKIE_NAME)?.value;
 
   if (!token) {
