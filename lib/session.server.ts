@@ -9,12 +9,12 @@ export async function getServerSession(): Promise<UserSession> {
 
   if (!token) {
     // Not authenticated — return a minimal unauthenticated session
-    return { role: "admin", displayName: "Guest" };
+    return { role: "guest", displayName: "Guest" };
   }
 
   const payload = verifySessionToken(token);
   if (!payload) {
-    return { role: "admin", displayName: "Guest" };
+    return { role: "guest", displayName: "Guest" };
   }
 
   const wardIds = Array.isArray(payload.wardIds) 

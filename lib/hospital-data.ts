@@ -83,6 +83,7 @@ const BED_PROJECTION = {
   bedNumber: 1,
   status: 1,
   type: 1,
+  gender: 1,
   patientId: 1,
   createdAt: 1,
   updatedAt: 1,
@@ -195,6 +196,7 @@ function normalizeBed(doc: MongoDoc, admittedPatients: Patient[]): Bed {
     bedNumber: Number(serialized.bedNumber || 0),
     status: (serialized.status as Bed["status"]) || "available",
     type: (serialized.type as Bed["type"]) || "NORMAL",
+    gender: (serialized.gender as Bed["gender"]) || "Unisex",
     patient,
   };
 }

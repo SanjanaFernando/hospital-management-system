@@ -1,4 +1,5 @@
 export type BedStatus = "available" | "occupied" | "maintenance";
+export type BedGender = "Male" | "Female" | "Unisex";
 export type AgeGroup = "Child" | "Adult" | "Elderly";
 export type Priority =
   | "Triage 1"
@@ -12,7 +13,8 @@ export type StaffRole =
   | "sub_admin"
   | "consultant_doctor"
   | "main_sister"
-  | "main_attendant";
+  | "main_attendant"
+  | "guest";
 
 export interface UserSession {
   userId?: string;
@@ -39,7 +41,7 @@ export interface AuthUser {
 
 export interface Patient {
   _id?: string;
-  id: string; // Numerical Patient ID
+  id: string;
   name: string;
   age: number;
   ageGroup: AgeGroup;
@@ -51,47 +53,24 @@ export interface Patient {
   dischargeTime?: Date;
   queueWaitTime?: number; // in minutes
   specialRequirements?: string[];
+  customFields?: Record<string, unknown>;
   wardId?: string;
   assignedFromWardId?: string | null;
   status?: "queued" | "admitted" | "discharged";
   triageRequested?: boolean;
-  priorityScore?: number; // AI-computed priority score (0–1) from MAPPO inference
+  priorityScore?: number;
   queueReason?: string; // MAPPO explanation for this patient's queue rank, set by reorderQueueWithAi
-  queueRank?: number; // 1-indexed queue rank position
-  customFields?: Record<string, any>; // Ward-specific custom fields data
-  // Exact per-patient score decomposition from the SAME MAPPO explain call that
-  // produced priorityScore/queueRank above — carried through so the XAI modal
-  // can display the identical numbers instead of re-deriving its own.
+  queueRank?: number;
   urgencyContribution?: number;
   waitContribution?: number;
   urgencyShare?: number;
   waitShare?: number;
-  queueWaitHours?: number; // exact wait-hours value the backend used for this score
+  queueWaitHours?: number;
 }
 
-// ---------------------------------------------------------------------------
-// Ward-Specific Dynamic Registration Form Configuration
-// ---------------------------------------------------------------------------
-
-export type WardFieldType = "text" | "number" | "select" | "checkbox" | "textarea" | "date";
-
-export interface WardFormField {
-  id: string;
-  label: string;
-  type: WardFieldType;
-  required?: boolean;
-  options?: string[]; // for "select" type
-  placeholder?: string;
-  defaultValue?: string;
-  category?: "general font" | "clinical font" | "custom font";
-}
-
-export interface WardFormConfig {
-  _id?: string;
-  wardId: string;
-  fields: WardFormField[];
-  updatedAt?: Date;
-  updatedBy?: string;
+export interface QueueExplainSnapshot {
+  combinedWeights?: { w_t_urgency: number; w_w_wait: number };
+  stateVector?: Record<string, number>;
 }
 
 export interface QueuePrediction {
@@ -104,21 +83,13 @@ export interface QueuePrediction {
   surgePredicted?: boolean;
 }
 
-// Snapshot of the MAPPO negotiation output (combined policy weights + the
-// ward state vector) from the SAME /explain call that reordered the queue.
-// Carried on Ward so the XAI breakdown modal can reuse it instead of firing
-// its own separate inference call against (possibly already-changed) live data.
-export interface QueueExplainSnapshot {
-  combinedWeights?: { w_t_urgency: number; w_w_wait: number };
-  stateVector?: Record<string, number>;
-}
-
 export interface Bed {
   id: string;
   bedNumber: number;
   status: BedStatus;
   patient?: Patient;
-  type: "ICU" | "NORMAL"; 
+  type: "ICU" | "NORMAL";
+  gender: BedGender;
 }
 
 export interface Ward {
@@ -142,7 +113,7 @@ export interface Ward {
 export interface StaffMember {
   id: string;
   name: string;
-  role: Exclude<StaffRole, "admin" | "sub_admin">;
+  role: Exclude<StaffRole, "admin" | "sub_admin" | "guest">;
   wardId: string;
   createdAt: Date;
 }
@@ -194,6 +165,37 @@ export interface Notification {
   targetRole?: StaffRole;
   createdAt: Date;
   expiresAt?: Date;
+}
+
+// ---------------------------------------------------------------------------
+// Ward-Specific Dynamic Registration Form Configuration
+// ---------------------------------------------------------------------------
+
+export type WardFieldType =
+  | "text"
+  | "number"
+  | "select"
+  | "checkbox"
+  | "textarea"
+  | "date";
+
+export interface WardFormField {
+  id: string;
+  label: string;
+  type: WardFieldType;
+  required?: boolean;
+  options?: string[]; // for "select" type
+  placeholder?: string;
+  defaultValue?: string;
+  category?: "general font" | "clinical font" | "custom font";
+}
+
+export interface WardFormConfig {
+  _id?: string;
+  wardId: string;
+  fields: WardFormField[];
+  updatedAt?: Date;
+  updatedBy?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -288,6 +290,4 @@ export interface CustomRole {
   label: string;
   createdAt: Date;
   createdBy?: string;
-}
-
-
+}

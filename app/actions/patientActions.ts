@@ -156,6 +156,23 @@ export async function assignPatientToBed(
     throw new Error("Selected bed is not available");
   }
 
+  // ── Gender enforcement ──────────────────────────────────────────────────
+  // Fetch the patient early so we can check gender before continuing.
+  const bedGender = (bed.gender as string) || "Unisex";
+  if (bedGender !== "Unisex") {
+    // We need the patient's gender; do a lightweight lookup now.
+    const preCheckPatient = await db
+      .collection("patients")
+      .findOne({ id: patientId }, { projection: { gender: 1 } });
+    const patientGender = preCheckPatient?.gender as string | undefined;
+    if (patientGender && patientGender !== bedGender) {
+      throw new Error(
+        `Gender mismatch: Bed ${bed.bedId || bedId} is designated for ${bedGender} patients only. Use force-assign to override.`
+      );
+    }
+  }
+  // ────────────────────────────────────────────────────────────────────────
+
   const effectiveWardId = (bed.wardId as string) || wardId;
   const normalizedSourceWardId = normalizeWardId(sourceWardId || wardId);
 
@@ -182,6 +199,12 @@ export async function assignPatientToBed(
 
   let patient = await db.collection("patients").findOne(patientQuery);
 
+  // Fallback 1: try without wardId filter (handles wardId normalisation mismatches)
+  if (!patient && normalizedSourceWardId) {
+    patient = await db.collection("patients").findOne({ id: patientId });
+  }
+
+  // Fallback 2: try by MongoDB ObjectId
   if (!patient && ObjectId.isValid(patientId)) {
     const objectIdQuery: Record<string, unknown> = {
       _id: new ObjectId(patientId),
@@ -192,6 +215,13 @@ export async function assignPatientToBed(
     }
 
     patient = await db.collection("patients").findOne(objectIdQuery);
+
+    // Fallback 2b: ObjectId without wardId filter
+    if (!patient && normalizedSourceWardId) {
+      patient = await db
+        .collection("patients")
+        .findOne({ _id: new ObjectId(patientId) });
+    }
   }
 
   if (!patient) {
@@ -202,21 +232,24 @@ export async function assignPatientToBed(
     throw new Error("Selected patient is not in the queue");
   }
 
-  const patientWardFilter = normalizedSourceWardId || effectiveWardId;
+
+  // Use the numeric id stored on the patient doc so the bed→patient link resolves correctly
+  const resolvedPatientId = String(patient.id || patientId);
 
   await db.collection("beds").updateOne(
     { bedId: bed.bedId || bedId, wardId: effectiveWardId },
     {
       $set: {
         status: "occupied",
-        patientId,
+        patientId: resolvedPatientId,
         updatedAt: new Date(),
       },
     }
   );
 
+  // Update the patient by _id — avoids wardId normalisation mismatches
   await db.collection("patients").updateOne(
-    { id: patientId, wardId: patientWardFilter },
+    { _id: patient._id },
     {
       $set: {
         status: "admitted",
@@ -404,6 +437,12 @@ export async function forceAssignPatientToBed(
 
   let newPatient = await db.collection("patients").findOne(patientQuery);
 
+  // Fallback 1: try without wardId filter (handles wardId normalisation mismatches)
+  if (!newPatient && normalizedSourceWardId) {
+    newPatient = await db.collection("patients").findOne({ id: patientId });
+  }
+
+  // Fallback 2: try by MongoDB ObjectId
   if (!newPatient && ObjectId.isValid(patientId)) {
     const objectIdQuery: Record<string, unknown> = {
       _id: new ObjectId(patientId),
@@ -414,6 +453,13 @@ export async function forceAssignPatientToBed(
     }
 
     newPatient = await db.collection("patients").findOne(objectIdQuery);
+
+    // Fallback 2b: ObjectId without wardId filter
+    if (!newPatient && normalizedSourceWardId) {
+      newPatient = await db
+        .collection("patients")
+        .findOne({ _id: new ObjectId(patientId) });
+    }
   }
 
   if (!newPatient) {
@@ -449,19 +495,23 @@ export async function forceAssignPatientToBed(
   }
 
   // Assign new patient to bed
+  // Use the numeric id stored on the patient doc for the bed→patient link
+  const resolvedNewPatientId = String(newPatient.id || patientId);
+
   await db.collection("beds").updateOne(
     { bedId: bed.bedId || bedId, wardId: effectiveWardId },
     {
       $set: {
         status: "occupied",
-        patientId,
+        patientId: resolvedNewPatientId,
         updatedAt: new Date(),
       },
     }
   );
 
+  // Update the patient by _id — avoids wardId normalisation mismatches
   await db.collection("patients").updateOne(
-    { id: patientId, wardId: patientWardFilter },
+    { _id: newPatient._id },
     {
       $set: {
         status: "admitted",
@@ -487,7 +537,12 @@ export async function forceAssignPatientToBed(
     wardId: effectiveWardId,
     targetId: patientId,
     targetName: (newPatient.name as string) || patientId,
-    details: `Force assigned to bed ${bedId} in ${effectiveWardId}`,
+    details: `Force assigned to bed ${bedId} in ${effectiveWardId}${
+      (bed.gender as string) && (bed.gender as string) !== "Unisex" &&
+      (newPatient.gender as string) && (newPatient.gender as string) !== (bed.gender as string)
+        ? " (gender override)"
+        : ""
+    }`,
   });
 
   await createNotification({
