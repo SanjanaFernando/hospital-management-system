@@ -92,12 +92,14 @@ export default function AdminStaffPage() {
   return (
     <div className="min-h-screen bg-linear-to-br from-blue-50 to-indigo-100 p-8">
       <div className="max-w-5xl mx-auto">
-        <Link
-          href="/"
-          className="mb-6 inline-flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
-        >
-          <ChevronLeft size={20} />
-        </Link>
+        <div className="mb-6 flex items-center gap-3">
+          <Link
+            href="/"
+            className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-slate-900 text-white hover:bg-slate-700 transition-colors shrink-0"
+          >
+            <ChevronLeft className="w-5 h-5" />
+          </Link>
+        </div>
 
         <div className="bg-white rounded-lg shadow-md p-6 mb-6">
           <h1 className="text-2xl font-bold text-gray-800 mb-2">

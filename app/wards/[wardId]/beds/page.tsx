@@ -111,12 +111,14 @@ export default function WardBedsPage() {
     return (
       <div className="min-h-screen bg-linear-to-br from-blue-50 to-indigo-100 p-8">
         <div className="max-w-5xl mx-auto">
-          <Link
-            href="/"
-            className="mb-6 inline-flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
-          >
-            <ChevronLeft size={20} />s
-          </Link>
+          <div className="mb-6 flex items-center gap-3">
+            <Link
+              href="/"
+              className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-slate-900 text-white hover:bg-slate-700 transition-colors shrink-0"
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </Link>
+          </div>
           <div className="bg-white rounded-lg shadow-md p-8">
             <h1 className="text-2xl font-bold text-gray-800">Ward not found</h1>
             {error && <p className="text-gray-600 mt-2">{error}</p>}
@@ -153,15 +155,20 @@ export default function WardBedsPage() {
     <div className="min-h-screen bg-linear-to-br from-blue-50 to-indigo-100 p-8">
       <div className="max-w-6xl mx-auto">
         <div className="flex items-center justify-between mb-6">
-          <Link
-            href={`/wards/${ward.wardId || ward.id}`}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
-          >
-            <ChevronLeft size={20} />
-          </Link>
-          <h1 className="text-2xl font-bold text-gray-800">
-            {ward.name} - Beds
-          </h1>
+          <div className="flex items-center gap-3">
+            <Link
+              href={`/wards/${ward.wardId || ward.id}`}
+              className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-slate-900 text-white hover:bg-slate-700 transition-colors shrink-0"
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </Link>
+            <div>
+              <p className="text-xs uppercase tracking-wider text-slate-500 font-semibold">{ward.name}</p>
+              <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">
+                Bed Management
+              </h1>
+            </div>
+          </div>
         </div>
 
         {error && (

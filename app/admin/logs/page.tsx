@@ -192,9 +192,9 @@ export default function AdminLogsPage() {
           <div className="flex items-center gap-3">
             <Link
               href="/"
-              className="rounded-xl border border-slate-200 bg-white p-2 text-slate-600 shadow-sm transition hover:bg-slate-50 hover:text-slate-900"
+              className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-slate-900 text-white hover:bg-slate-700 transition-colors shrink-0"
             >
-              <ChevronLeft className="h-5 w-5" />
+              <ChevronLeft className="w-5 h-5" />
             </Link>
             <div>
               <h1 className="text-2xl font-bold tracking-tight text-slate-900">

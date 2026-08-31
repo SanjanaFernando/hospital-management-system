@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ChevronLeft } from "lucide-react";
 import { getPatientsPageData } from "@/lib/hospital-data";
 
 type SearchParams = Record<string, string | string[] | undefined>;
@@ -103,15 +104,19 @@ export default async function PatientsPage({
     <div className="min-h-screen bg-slate-50 px-6 py-8 text-slate-900">
       <div className="mx-auto max-w-7xl space-y-6">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-sky-700">
-              Server-rendered list
-            </p>
-            <h1 className="mt-2 text-4xl font-bold tracking-tight">Patients</h1>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-              Search and paginate on the server so the page streams quickly and
-              only ships the minimum client code.
-            </p>
+          <div className="flex items-center gap-3">
+            <Link
+              href="/"
+              className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-slate-900 text-white hover:bg-slate-700 transition-colors shrink-0"
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </Link>
+            <div>
+              <p className="text-xs uppercase tracking-wider text-slate-500 font-semibold">
+                Directory
+              </p>
+              <h1 className="text-3xl font-bold tracking-tight text-slate-900">Patients</h1>
+            </div>
           </div>
 
           <form

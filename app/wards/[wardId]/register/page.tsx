@@ -27,12 +27,14 @@ export default function RegisterPatientPage() {
   return (
     <div className="min-h-screen bg-linear-to-br from-blue-50 to-indigo-100 p-8">
       <div className="max-w-4xl mx-auto">
-        <Link
-          href={`/wards/${wardId}`}
-          className="mb-6 inline-flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
-        >
-          <ChevronLeft size={20} />
-        </Link>
+        <div className="mb-6 flex items-center gap-3">
+          <Link
+            href={`/wards/${wardId}`}
+            className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-slate-900 text-white hover:bg-slate-700 transition-colors shrink-0"
+          >
+            <ChevronLeft className="w-5 h-5" />
+          </Link>
+        </div>
 
         <div className=" flex justify-center">
           {canRegister ? (
