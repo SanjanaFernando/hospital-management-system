@@ -76,6 +76,7 @@ const ROLE_COLOR: Record<StaffRole, string> = {
   consultant_doctor: "bg-teal-500",
   main_sister: "bg-pink-500",
   main_attendant: "bg-amber-500",
+  guest: "bg-slate-500",
 };
 
 // ---------------------------------------------------------------------------

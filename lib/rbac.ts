@@ -6,6 +6,7 @@ export const ROLE_LABELS: Record<StaffRole, string> = {
   consultant_doctor: "Consultant Doctor",
   main_sister: "Main Sister",
   main_attendant: "Main Attendant",
+  guest: "Guest",
 };
 
 // ---------------------------------------------------------------------------
@@ -141,7 +142,23 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<StaffRole, RolePermissionsMap> = {
     view_logs: false,
     manage_users: false,
     manage_roles: false,
-    send_broadcast: true,
+    send_broadcast: false,
+  },
+  guest: {
+    register_patient: false,
+    admit_patient: false,
+    discharge_patient: false,
+    set_triage: false,
+    move_patient_cross_ward: false,
+    update_bed_status: false,
+    assign_bed: false,
+    view_queue: false,
+    reorder_queue: false,
+    view_reports: false,
+    view_logs: false,
+    manage_users: false,
+    manage_roles: false,
+    send_broadcast: false,
   },
 };
 
@@ -190,7 +207,7 @@ export function normalizeSession(
   input?: Partial<UserSession> | null
 ): UserSession {
   if (!input?.role) {
-    return { role: "admin", displayName: "System Admin" };
+    return { role: "guest", displayName: "Guest" };
   }
 
   const role = input.role;
@@ -199,6 +216,14 @@ export function normalizeSession(
       userId: input.userId,
       role,
       displayName: input.displayName || ROLE_LABELS[role],
+    };
+  }
+
+  if (role === "guest") {
+    return {
+      userId: input.userId,
+      role: "guest",
+      displayName: input.displayName || "Guest",
     };
   }
 
@@ -216,15 +241,34 @@ export function normalizeSession(
     role,
     wardId: wardIds[0] || undefined, // First assigned ward for backward compatibility
     wardIds,
-    displayName: input.displayName || ROLE_LABELS[role],
+    displayName: input.displayName || (role in ROLE_LABELS ? ROLE_LABELS[role] : "Guest"),
   };
 }
 
-export function canAccessWard(session: UserSession, wardId: string): boolean {
+export function canAccessWard(session: UserSession, _wardId: string): boolean {
+  if (!session || !session.role || session.role === "guest") {
+    return false;
+  }
   // All authenticated hospital staff can view/access any ward (read-only mode).
   // Management and update operations (like registering/discharging patients, updating bed status)
   // are still strictly restricted to their assigned wardIds list.
   return true;
+}
+
+export function canReorderQueue(
+  session: UserSession,
+  wardId?: string
+): boolean {
+  if (!session || !session.role || session.role === "guest") return false;
+  if (session.role === "admin" || session.role === "sub_admin") return true;
+
+  if (session.role === "consultant_doctor") {
+    if (!wardId) return true;
+    const targetWardId = normalizeWardId(wardId);
+    return Boolean(targetWardId && session.wardIds?.includes(targetWardId));
+  }
+
+  return false;
 }
 
 export function canManageStaff(session: UserSession): boolean {
