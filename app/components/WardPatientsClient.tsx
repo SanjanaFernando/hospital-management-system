@@ -11,6 +11,7 @@ import { getWardWithPatients } from "@/app/actions/wardActions";
 import { dischargePatientById } from "@/app/actions/patientActions";
 import { useAuthSession } from "@/app/context/AuthSessionContext";
 import { canAccessWard, canRegisterPatient } from "@/lib/rbac";
+import { clearClientCache } from "@/app/utils/clientCache";
 
 interface WardPatientsClientProps {
   initialWard: Ward;
@@ -29,6 +30,7 @@ export default function WardPatientsClient({
   const canRegisterInWard = canRegisterPatient(session, resolvedWardId);
 
   const refreshWard = async () => {
+    clearClientCache();
     const wardData = await getWardWithPatients(resolvedWardId);
     if (wardData) {
       setWard(wardData);

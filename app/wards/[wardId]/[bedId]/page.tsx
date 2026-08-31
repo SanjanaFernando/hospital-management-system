@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState, useCallback } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { ChevronLeft, Plus, Wrench } from "lucide-react";
 import { Bed, Ward } from "@/app/types";
 import PatientDetail from "@/app/components/PatientDetail";
@@ -20,12 +20,14 @@ import {
 } from "@/lib/rbac";
 import {
   CLIENT_CACHE_TTL,
+  clearClientCache,
   getClientCache,
   setClientCache,
 } from "@/app/utils/clientCache";
 
 export default function BedDetailPage() {
   const params = useParams<{ wardId: string; bedId: string }>();
+  const router = useRouter();
   const wardId = params?.wardId;
   const bedId = params?.bedId;
   const { session } = useAuthSession();
@@ -87,7 +89,13 @@ export default function BedDetailPage() {
   }, [loadWard]);
 
   const handleDischargeSuccess = () => {
-    loadWard();
+    clearClientCache();
+    if (wardId) {
+      router.push(`/wards/${wardId}`);
+      router.refresh();
+    } else {
+      loadWard();
+    }
   };
 
   const handleMoveToQueueSuccess = () => {

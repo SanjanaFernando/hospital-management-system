@@ -15,6 +15,7 @@ import {
   canSetTriage,
 } from "@/lib/rbac";
 import { updatePatient } from "@/app/utils/api";
+import { clearClientCache } from "@/app/utils/clientCache";
 
 interface AssignFromQueueModalProps {
   wardId: string;
@@ -200,10 +201,12 @@ export default function AssignFromQueueModal({
     setErrorMessage("");
     setIsLoading(true);
     try {
+      clearClientCache();
       await dischargePatientById(patient.id, session);
       onAssigned();
       onClose();
       router.push(`/wards/${wardId}`);
+      router.refresh();
     } catch (err) {
       setErrorMessage(
         err instanceof Error ? err.message : "Failed to discharge patient"
