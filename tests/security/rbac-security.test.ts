@@ -176,12 +176,9 @@ describe('Finding #3: main_attendant Role Permission Boundaries', () => {
     expect(DEFAULT_ROLE_PERMISSIONS.main_attendant.view_reports).toBe(false);
   });
 
-  it('FLAG: main_attendant currently HAS send_broadcast permission — review whether intended', () => {
-    // This asserts CURRENT behavior (not necessarily correct behavior).
-    // If a future fix restricts this, this test will fail loudly and force
-    // someone to consciously update it, rather than the change going unnoticed.
-    expect(DEFAULT_ROLE_PERMISSIONS.main_attendant.send_broadcast).toBe(true);
-  });
+it('main_attendant should NOT have send_broadcast permission (restricted per policy decision)', () => {
+  expect(DEFAULT_ROLE_PERMISSIONS.main_attendant.send_broadcast).toBe(false);
+});
 });
 
 // ============================================================================
