@@ -127,7 +127,11 @@ export type LogAction =
   | "staff_registered"
   | "role_switched"
   | "bed_status_updated"
-  | "notification_created";
+  | "notification_created"
+  | "ward_added"
+  | "ward_updated"
+  | "ward_deleted";
+
 
 export interface UserLog {
   _id?: string;
@@ -290,4 +294,4 @@ export interface CustomRole {
   label: string;
   createdAt: Date;
   createdBy?: string;
-}
+}
