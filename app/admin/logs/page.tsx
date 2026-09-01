@@ -17,6 +17,8 @@ import {
   ArrowLeftRight,
   Wrench,
   Bell,
+  Building2,
+  Trash2,
 } from "lucide-react";
 import { useAuthSession } from "@/app/context/AuthSessionContext";
 import { getUserLogs } from "@/app/actions/logActions";
@@ -80,6 +82,24 @@ const ACTION_CONFIG: Record<
     color: "text-pink-700",
     bgColor: "bg-pink-50 border-pink-200",
     icon: Bell,
+  },
+    ward_added: {
+    label: "Ward Added",
+    color: "text-emerald-700",
+    bgColor: "bg-emerald-50 border-emerald-200",
+    icon: Building2,
+  },
+  ward_updated: {
+    label: "Ward Updated",
+    color: "text-blue-700",
+    bgColor: "bg-blue-50 border-blue-200",
+    icon: Wrench,
+  },
+  ward_deleted: {
+    label: "Ward Deleted",
+    color: "text-red-700",
+    bgColor: "bg-red-50 border-red-200",
+    icon: Trash2,
   },
 };
 
