@@ -151,7 +151,8 @@ export default function WardManagementPage() {
       setNewWardName("");
       setNewWardId("");
       setShowAddModal(false);
-      void loadData();
+      // void loadData();
+      window.location.reload();
     } else {
       setActionError(res.error || "Failed to create ward.");
     }
@@ -198,7 +199,8 @@ export default function WardManagementPage() {
 
     if (res.success) {
       setActionSuccess(`Ward "${ward.name}" deleted.`);
-      void loadData();
+      // void loadData();
+      window.location.reload();
     } else {
       alert(res.error || "Failed to delete ward.");
     }
