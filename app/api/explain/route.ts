@@ -38,7 +38,7 @@ const SHAP_CACHE_PATH = path.join(process.cwd(), "xai", "data", "shap_summary.js
 // When running on Vercel (or any hosted env), the inference service URL is set.
 // In that case we delegate explain calls via HTTP to the FastAPI /explain endpoint
 // instead of spawning a local Python subprocess (which Vercel does not support).
-const INFERENCE_SERVICE_URL = process.env.INFERENCE_SERVICE_URL?.replace(/\/$/, "") ?? "";
+const INFERENCE_SERVICE_URL = process.env.QUEUE_AI_ENDPOINT?.replace(/\/$/, "") ?? "";
 
 
 function toTriageInt(priority: string | number): number {
