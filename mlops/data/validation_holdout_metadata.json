@@ -1,0 +1,23 @@
+{
+  "generated_at": "2026-09-02T08:58:12.911769+00:00",
+  "state_dim": 17,
+  "n_samples": 4,
+  "source": "collect_historical_data",
+  "days_collected": 30,
+  "seed": 42,
+  "max_samples": 500,
+  "samples": [
+    {
+      "queue": []
+    },
+    {
+      "queue": []
+    },
+    {
+      "queue": []
+    },
+    {
+      "queue": []
+    }
+  ]
+}
