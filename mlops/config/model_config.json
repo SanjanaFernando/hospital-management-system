@@ -11,9 +11,9 @@
     "hidden_dims": [256, 256, 128],
     "activation": "Tanh",
     "output_activation": "Linear",
-    "n_agents": null,
-    "agent_names": null,
-    "alpha_weights": null
+    "n_agents": 5,
+    "agent_names": ["Critical", "Emergent", "Urgent", "Semi-urgent", "Non-urgent"],
+    "alpha_weights": [0.40, 0.30, 0.15, 0.10, 0.05]
   },
   "features": {
     "state_features": [
