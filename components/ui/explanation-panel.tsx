@@ -42,6 +42,15 @@ type AgentVote = {
   contribution_to_combined_w_w: number;
 };
 
+type AgentConfidence = {
+  agent_index: number;
+  triage_class: string;
+  action_index: number;
+  action_confidence_0to1?: number;
+  policy_entropy: number;
+  confidence_0to1: number;
+};
+
 type ShapCache = {
   feature_names: string[];
   global_importance_per_agent: Record<string, number[]>;
@@ -55,6 +64,7 @@ type ExplainResponse = {
     w_w_wait?: number;
   };
   agent_votes?: AgentVote[];
+  agent_confidence?: AgentConfidence[];
   ranked_queue?: RankedPatient[];
   shap_global_importance_cached?: ShapCache | null;
   shap_error?: string;
@@ -215,6 +225,52 @@ export default function ExplanationPanel({
             <p className="text-sm leading-6 text-slate-700">
               {data?.explanation_text || "No explanation text was returned."}
             </p>
+            {data?.agent_confidence && data.agent_confidence.length > 0 && (
+              <div className="mt-4 rounded-xl bg-slate-50 p-3">
+                <div className="mb-3 flex items-center justify-between gap-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Action confidence
+                  </p>
+                  <p className="text-xs text-slate-500">Policy certainty by agent</p>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {data.agent_confidence.map((agent) => {
+                    const vote = data.agent_votes?.find(
+                      (candidate) => candidate.agent_index === agent.agent_index
+                    );
+                    const actionIndex = agent.action_index ?? vote?.action_index;
+                    const confidenceValue =
+                      agent.action_confidence_0to1 ?? agent.confidence_0to1;
+                    const confidence = Math.max(
+                      0,
+                      Math.min(100, confidenceValue * 100)
+                    );
+
+                    return (
+                      <div key={agent.agent_index}>
+                        <div className="mb-1 flex items-center justify-between gap-2 text-xs">
+                          <span className="font-semibold text-slate-700">
+                            {agent.triage_class}
+                          </span>
+                          <span className="font-bold text-slate-900">
+                            {formatNumber(confidence, 0)}%
+                          </span>
+                        </div>
+                        <div className="h-2 overflow-hidden rounded-full bg-slate-200">
+                          <div
+                            className="h-full rounded-full bg-emerald-500 transition-[width]"
+                            style={{ width: `${confidence}%` }}
+                          />
+                        </div>
+                        <p className="mt-1 text-[11px] text-slate-500">
+                          Selected action {actionIndex ?? "-"}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
             {topPatient && (
               <div className="mt-4 grid gap-3 sm:grid-cols-3">
                 <div className="rounded-xl bg-slate-50 p-3">

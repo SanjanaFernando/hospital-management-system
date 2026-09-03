@@ -345,7 +345,9 @@ def agent_confidence(actors, state_t):
     for i, actor in enumerate(actors):
         with torch.no_grad():
             logits = actor(state_t)
-            dist = Categorical(logits=logits)
+            probs = torch.softmax(logits, dim=-1)
+            action_index = int(torch.argmax(probs, dim=-1).item())
+            dist = Categorical(probs=probs)
             entropy = dist.entropy().item()
             # Normalize by max possible entropy (uniform over N_ACTIONS) -> [0,1]
             max_entropy = float(np.log(N_ACTIONS))
@@ -353,6 +355,8 @@ def agent_confidence(actors, state_t):
         out.append({
             "agent_index": i,
             "triage_class": TRIAGE_AGENT_NAMES[i],
+            "action_index": action_index,
+            "action_confidence_0to1": round(float(probs[0, action_index].item()), 4),
             "policy_entropy": round(entropy, 4),
             "confidence_0to1": round(float(np.clip(confidence, 0.0, 1.0)), 4),
         })
