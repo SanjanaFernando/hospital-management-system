@@ -50,9 +50,9 @@ from torch.distributions import Categorical
 #    Do NOT change these independently of the training script; the action
 #    grid, agent count and negotiation weights must match the checkpoint.
 # ============================================================
-W_T_LIST = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]   # 11 values
-W_W_LIST = [0.0, 0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7]            # 9 values
-N_ACTIONS = len(W_T_LIST) * len(W_W_LIST)                            # 99
+W_T_LIST = [0.0, 0.25, 0.5, 0.75, 1.0]
+W_W_LIST = [0.0, 0.15, 0.3, 0.5, 0.7]
+N_ACTIONS = 25
 
 N_AGENTS  = 5
 ALPHA     = [0.40, 0.30, 0.15, 0.10, 0.05]
@@ -71,6 +71,13 @@ FEATURE_NAMES = [
     "longest_wait_norm",        # longest_wait
     "predicted_arrival_load",   # pred_load from ArrivalForecaster
     "predicted_critical_share", # pred_crit from ArrivalForecaster
+]
+SHARED_FEATURE_NAMES = [
+    "bed_occupancy_rate", "male_bed_occupancy_rate", "female_bed_occupancy_rate",
+    "queue_length_norm", "male_queue_ratio", "female_queue_ratio",
+    "triage1_proportion", "triage2_proportion", "triage3_proportion",
+    "triage4_proportion", "triage5_proportion", "longest_wait_norm",
+    "average_wait_norm", "hour_sin", "hour_cos",
 ]
 assert len(FEATURE_NAMES) == STATE_DIM
 
@@ -97,6 +104,25 @@ class TriageActor(nn.Module):
             return torch.softmax(logits, dim=-1)
 
 
+
+class SharedActor(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Linear(15, 256), nn.Tanh(),
+            nn.Linear(256, 256), nn.Tanh(),
+            nn.Linear(256, 128), nn.Tanh(),
+            nn.Linear(128, N_ACTIONS),
+        )
+
+    def forward(self, x):
+        return self.net(x)
+
+    def probs(self, state_t):
+        with torch.no_grad():
+            return torch.softmax(self.forward(state_t), dim=-1)
+
+
 class CentralizedCritic(nn.Module):
     def __init__(self, state_dim=STATE_DIM, hidden=128):
         super().__init__()
@@ -114,19 +140,14 @@ def load_mappo(checkpoint_path, device="cpu"):
     """Load the 5 triage actors (+ critic, unused for explanation but loaded
     for completeness) from a best_mappo_hospital.pth checkpoint."""
     ckpt = torch.load(checkpoint_path, map_location=device)
+    if "net.6.weight" in ckpt:
+        actor = SharedActor().to(device)
+        actor.load_state_dict(ckpt)
+        actor.eval()
+        return [actor], None
     actors = [TriageActor().to(device) for _ in range(N_AGENTS)]
     for i, actor in enumerate(actors):
-        actor_state = ckpt[f"actor_{i}"]
-        if "net.0.weight" in actor_state:
-            actor_state = {
-                "body.0.weight": actor_state["net.0.weight"],
-                "body.0.bias": actor_state["net.0.bias"],
-                "body.2.weight": actor_state["net.2.weight"],
-                "body.2.bias": actor_state["net.2.bias"],
-                "head.weight": actor_state["net.4.weight"],
-                "head.bias": actor_state["net.4.bias"],
-            }
-        actor.load_state_dict(actor_state)
+        actor.load_state_dict(ckpt[f"actor_{i}"])
         actor.eval()
     critic = CentralizedCritic().to(device)
     if "critic" in ckpt:
@@ -271,6 +292,44 @@ def build_state_vector(ward_snapshot, forecaster=None, use_predictive=True):
     )
     assert state.shape[0] == STATE_DIM
     return state, enriched_queue, predictive_meta
+
+
+def build_shared_state_vector(ward_snapshot):
+    total_beds = max(int(ward_snapshot.get("totalBeds", 0)), 1)
+    occupied_beds = int(ward_snapshot.get("occupiedBeds", 0))
+    queue = ward_snapshot.get("queue", [])
+    male_beds = max(int(ward_snapshot.get("totalMaleBeds", total_beds)), 1)
+    female_beds = int(ward_snapshot.get("totalFemaleBeds", 0))
+    occupied_male = int(ward_snapshot.get("occupiedMaleBeds", occupied_beds if not female_beds else occupied_beds // 2))
+    occupied_female = int(ward_snapshot.get("occupiedFemaleBeds", 0 if not female_beds else occupied_beds // 2))
+    triage_dist = np.zeros(5, dtype=np.float32)
+    waits = []
+    male_queue = 0
+    enriched_queue = []
+    for patient in queue:
+        triage = parse_triage_level(patient.get("triageLevel", patient.get("priority")))
+        wait_hours = resolve_wait_minutes(patient) / 60.0
+        triage_dist[triage - 1] += 1
+        male_queue += int(str(patient.get("gender", "M")).strip().upper() in {"M", "MALE"})
+        waits.append(wait_hours)
+        enriched_queue.append({**patient, "waitHours": wait_hours})
+    queue_count = len(queue)
+    if queue_count:
+        triage_dist /= queue_count
+    hour = datetime.now(timezone.utc).hour + datetime.now(timezone.utc).minute / 60.0
+    state = np.array([
+        min(max(occupied_beds / total_beds, 0.0), 1.0),
+        min(max(occupied_male / male_beds, 0.0), 1.0),
+        min(max(occupied_female / max(female_beds, 1), 0.0), 1.0),
+        min(queue_count / 40.0, 1.0),
+        male_queue / queue_count if queue_count else 0.0,
+        1.0 - male_queue / queue_count if queue_count else 0.0,
+        *triage_dist,
+        min(max(waits) / 48.0, 0.0) if waits else 0.0,
+        min(float(np.mean(waits)) / 24.0, 1.0) if waits else 0.0,
+        np.sin(2 * np.pi * hour / 24), np.cos(2 * np.pi * hour / 24),
+    ], dtype=np.float32)
+    return state, enriched_queue, {"enabled": False, "pred_load": 0.0, "pred_crit": 0.0, "expected_arrivals": 0.0, "horizon_hours": 0, "surge_predicted": False}
 
 
 # ============================================================
@@ -496,10 +555,15 @@ def explain_decision(
 
     actors, _critic = load_mappo(checkpoint_path, device=device)
     forecaster = load_forecaster(ward_snapshot, profile_path=forecaster_profile_path)
-    state, enriched_queue, predictive_meta = build_state_vector(
-        ward_snapshot,
-        forecaster=forecaster,
-        use_predictive=ward_snapshot.get("usePredictive", True),
+    is_shared_actor = isinstance(actors[0], SharedActor)
+    state, enriched_queue, predictive_meta = (
+        build_shared_state_vector(ward_snapshot)
+        if is_shared_actor
+        else build_state_vector(
+            ward_snapshot,
+            forecaster=forecaster,
+            use_predictive=ward_snapshot.get("usePredictive", True),
+        )
     )
     state_t = torch.tensor(state, dtype=torch.float32).unsqueeze(0).to(device)
 
@@ -514,7 +578,10 @@ def explain_decision(
     confidences = agent_confidence(actors, state_t)
 
     result = {
-        "state_vector": {FEATURE_NAMES[i]: round(float(state[i]), 4) for i in range(STATE_DIM)},
+        "state_vector": {
+            name: round(float(state[i]), 4)
+            for i, name in enumerate(SHARED_FEATURE_NAMES if is_shared_actor else FEATURE_NAMES)
+        },
         "predictive_analytics": predictive_meta,
         "combined_weights": {"w_t_urgency": round(combined_wt, 4), "w_w_wait": round(combined_ww, 4)},
         "agent_votes": per_agent,
