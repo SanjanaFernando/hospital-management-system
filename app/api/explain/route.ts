@@ -93,6 +93,16 @@ async function buildWardSnapshot(wardId: string): Promise<WardSnapshot> {
   }
 
   const beds = await db.collection("beds").find({ wardId }).toArray();
+  const wardName = String(ward.name ?? "").toLowerCase();
+  const defaultBedGender = wardName.includes("female")
+    ? "female"
+    : wardName.includes("male")
+      ? "male"
+      : "unisex";
+  const normalizedBedGender = (bed: any) => {
+    const gender = String(bed.gender ?? defaultBedGender).toLowerCase();
+    return gender === "female" ? "female" : gender === "male" ? "male" : "unisex";
+  };
 
   const queuedPatients = await db
     .collection("patients")
@@ -119,13 +129,13 @@ async function buildWardSnapshot(wardId: string): Promise<WardSnapshot> {
   return {
     totalBeds: beds.length,
     occupiedBeds: beds.filter((bed: any) => bed.status === "occupied").length,
-    totalMaleBeds: beds.filter((bed: any) => bed.gender === "Male" || bed.gender === "Unisex").length,
-    totalFemaleBeds: beds.filter((bed: any) => bed.gender === "Female" || bed.gender === "Unisex").length,
+    totalMaleBeds: beds.filter((bed: any) => normalizedBedGender(bed) !== "female").length,
+    totalFemaleBeds: beds.filter((bed: any) => normalizedBedGender(bed) !== "male").length,
     occupiedMaleBeds: beds.filter(
-      (bed: any) => bed.status === "occupied" && (bed.gender === "Male" || bed.gender === "Unisex")
+      (bed: any) => bed.status === "occupied" && normalizedBedGender(bed) !== "female"
     ).length,
     occupiedFemaleBeds: beds.filter(
-      (bed: any) => bed.status === "occupied" && (bed.gender === "Female" || bed.gender === "Unisex")
+      (bed: any) => bed.status === "occupied" && normalizedBedGender(bed) !== "male"
     ).length,
     usePredictive: true,
     forecasterProfilePath: FORECASTER_PROFILE_PATH,
