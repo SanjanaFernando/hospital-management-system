@@ -89,9 +89,11 @@ class MAPPOActor(nn.Module):
 # Utility helpers
 # ---------------------------------------------------------------------------
 
-def parse_iso(ts: str | None) -> datetime | None:
+def parse_iso(ts: str | datetime | None) -> datetime | None:
     if not ts:
         return None
+    if isinstance(ts, datetime):
+        return ts
     try:
         if ts.endswith("Z"):
             return datetime.fromisoformat(ts.replace("Z", "+00:00"))

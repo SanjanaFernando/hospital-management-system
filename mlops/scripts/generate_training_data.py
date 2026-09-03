@@ -104,7 +104,7 @@ def collect_historical_data(days: int = 7) -> list[dict[str, Any]]:
         wards = list(db.wards.find())
         logger.info(f'Found {len(wards)} wards')
         for ward in wards:
-            ward_id = str(ward.get('_id', ward.get('wardId')))
+            ward_id = ward.get('wardId') or str(ward.get('_id'))
             patients = list(db.patients.find({
                 'wardId': ward_id,
                 'admissionTime': {'$gte': cutoff_date},
@@ -209,7 +209,7 @@ def main() -> None:
     parser.add_argument('--days', type=int, default=7, help='Number of days of history to use')
     parser.add_argument('--output', type=str, default='mlops/data/processed', help='Output directory')
     parser.add_argument('--model', type=str, default=None, help='Path to expert model (optional)')
-    parser.add_argument('--augment', type=int, default=1, help='Data augmentation factor')
+    parser.add_argument('--augment', type=int, default=50, help='Data augmentation factor')
     args = parser.parse_args()
 
     output_path = Path(args.output)
