@@ -274,9 +274,10 @@ export default function PatientFeatureContributionModal({
     matchedRankedPatient?.waitContribution ?? patientWaitHours * w_w;
   const totalScore =
     matchedRankedPatient?.priorityScore ?? urgencyContrib + waitContrib;
-  const patientAgentConfidence = data?.agent_confidence?.find(
-    (agent) => agent.agent_index === triageLevelNum - 1
-  );
+  const patientAgentConfidence =
+    data?.agent_confidence?.find(
+      (agent) => agent.agent_index === triageLevelNum - 1
+    ) ?? data?.agent_confidence?.[0];
   const confidenceScore =
     patientAgentConfidence?.action_confidence_0to1 ??
     patientAgentConfidence?.confidence_0to1;
