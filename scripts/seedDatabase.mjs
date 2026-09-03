@@ -101,11 +101,12 @@ function generatePatient(patientId, wardId, status, gender) {
   const isPediatric = wardId === "ward-2";
   const age = isPediatric ? randomInt(1, 15) : randomInt(18, 85);
 
-  // Admissions start with 2026/9/4 (September 4, 2026)
+  // Queued patients arrive on 2026/9/4; admitted patients may have arrived earlier.
   const hour = randomInt(0, 23);
   const minute = randomInt(0, 59);
   const second = randomInt(0, 59);
-  const admissionTime = new Date(2026, 8, 4, hour, minute, second);
+  const admissionDay = status === "queued" ? 4 : randomInt(1, 3);
+  const admissionTime = new Date(2026, 8, admissionDay, hour, minute, second);
 
   const includeRequirements = Math.random() < 0.35;
   const requirements = includeRequirements ? [randomItem(SPECIAL_REQUIREMENTS)] : undefined;
