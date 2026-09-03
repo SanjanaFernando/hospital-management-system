@@ -32,6 +32,10 @@ interface QueueAiInput {
   targetWardQueue: Patient[];
   targetWardOccupiedBeds?: number;
   targetWardTotalBeds?: number;
+  totalMaleBeds?: number;
+  totalFemaleBeds?: number;
+  occupiedMaleBeds?: number;
+  occupiedFemaleBeds?: number;
   wards: WardSnapshot[];
   patientHistory?: PatientHistoryEntry[];
 }
@@ -249,6 +253,10 @@ async function reorderViaHttp(input: QueueAiInput): Promise<QueueAiResult> {
   const wardSnapshot = {
     totalBeds: input.targetWardTotalBeds ?? 0,
     occupiedBeds: input.targetWardOccupiedBeds ?? 0,
+    totalMaleBeds: input.totalMaleBeds,
+    totalFemaleBeds: input.totalFemaleBeds,
+    occupiedMaleBeds: input.occupiedMaleBeds,
+    occupiedFemaleBeds: input.occupiedFemaleBeds,
     usePredictive: true,
     patientHistory: input.patientHistory,
     queue: input.targetWardQueue.map((patient, queueIndex) => ({
@@ -445,6 +453,10 @@ function reorderViaSubprocess(input: QueueAiInput): QueueAiResult {
     targetWardId: input.targetWardId,
     totalBeds: input.targetWardTotalBeds ?? 0,
     occupiedBeds: input.targetWardOccupiedBeds ?? 0,
+    totalMaleBeds: input.totalMaleBeds,
+    totalFemaleBeds: input.totalFemaleBeds,
+    occupiedMaleBeds: input.occupiedMaleBeds,
+    occupiedFemaleBeds: input.occupiedFemaleBeds,
     usePredictive: true,
     forecasterProfilePath,
     patientHistory: input.patientHistory,

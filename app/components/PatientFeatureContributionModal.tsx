@@ -511,7 +511,7 @@ export default function PatientFeatureContributionModal({
                 }`}
               >
                 <Activity className="h-4 w-4" />
-                State Vector (10 Features)
+                State Vector (15 Features)
               </button>
             </nav>
           </div>
@@ -675,7 +675,7 @@ export default function PatientFeatureContributionModal({
                   Ward State Vector at Decision Time (MAPPO Model Input)
                 </h3>
                 <span className="text-xs text-slate-500">
-                  10 Normalized Features
+                  15 Normalized Features
                 </span>
               </div>
 
