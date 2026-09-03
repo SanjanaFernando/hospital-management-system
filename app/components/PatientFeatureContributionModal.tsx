@@ -2,14 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import {
-  Activity,
-  BarChart3,
-  Brain,
-  Loader2,
-  Sparkles,
-  X,
-} from "lucide-react";
+import { Activity, BarChart3, Brain, Loader2, Sparkles, X } from "lucide-react";
 import type { Patient } from "@/app/types";
 
 export type RankedPatient = {
@@ -158,7 +151,12 @@ export default function PatientFeatureContributionModal({
           throw new Error(payload.error || "Failed to fetch model explanation");
         }
 
-        setData(payload);
+        setData({
+          ...payload,
+          ranked_queue: preloadedExplainData?.ranked_queue ?? payload.ranked_queue,
+          combined_weights:
+            preloadedExplainData?.combined_weights ?? payload.combined_weights,
+        });
       } catch (err) {
         if (!cancelled) {
           setError(
@@ -207,7 +205,8 @@ export default function PatientFeatureContributionModal({
     return (
       data.ranked_queue.find((rp) => {
         const rpId = rp.patientId ? String(rp.patientId) : null;
-        if (rpId && (rpId === targetMongoId || rpId === targetShortId)) return true;
+        if (rpId && (rpId === targetMongoId || rpId === targetShortId))
+          return true;
         if (rp.name && rp.name.trim().toLowerCase() === targetName) return true;
         return false;
       }) || null
@@ -216,9 +215,15 @@ export default function PatientFeatureContributionModal({
 
   const parsedShares = useMemo(() => {
     if (patient?.queueReason) {
-      const urgencyMatch = patient.queueReason.match(/urgency \((\d+)% of score\)/i);
-      const waitMatch = patient.queueReason.match(/waiting \((\d+)% of score\)/i);
-      const restMatch = patient.queueReason.match(/adding the rest \((\d+)%\)/i);
+      const urgencyMatch = patient.queueReason.match(
+        /urgency \((\d+)% of score\)/i
+      );
+      const waitMatch = patient.queueReason.match(
+        /waiting \((\d+)% of score\)/i
+      );
+      const restMatch = patient.queueReason.match(
+        /adding the rest \((\d+)%\)/i
+      );
 
       if (urgencyMatch) {
         const u = parseInt(urgencyMatch[1], 10);
@@ -246,11 +251,15 @@ export default function PatientFeatureContributionModal({
   const patientWaitHours =
     typeof matchedRankedPatient?.waitHours === "number"
       ? matchedRankedPatient.waitHours
-      : typeof patient.queueWaitTime === "number" && Number.isFinite(patient.queueWaitTime)
-      ? Math.max(0, patient.queueWaitTime / 60)
-      : patient.admissionTime
-      ? Math.max(0, (Date.now() - new Date(patient.admissionTime).getTime()) / 3600000)
-      : 0;
+      : typeof patient.queueWaitTime === "number" &&
+          Number.isFinite(patient.queueWaitTime)
+        ? Math.max(0, patient.queueWaitTime / 60)
+        : patient.admissionTime
+          ? Math.max(
+              0,
+              (Date.now() - new Date(patient.admissionTime).getTime()) / 3600000
+            )
+          : 0;
 
   // 2. Exact triage level number for THIS patient
   const triageLevelNum =
@@ -273,14 +282,13 @@ export default function PatientFeatureContributionModal({
   const waitContrib =
     matchedRankedPatient?.waitContribution ?? patientWaitHours * w_w;
   const totalScore =
-    matchedRankedPatient?.priorityScore ?? urgencyContrib + waitContrib;
+    matchedRankedPatient?.priorityScore ?? patient.priorityScore ?? urgencyContrib + waitContrib;
   const patientAgentConfidence =
     data?.agent_confidence?.find(
       (agent) => agent.agent_index === triageLevelNum - 1
     ) ?? data?.agent_confidence?.[0];
-  const confidenceScore =
-    patientAgentConfidence?.action_confidence_0to1 ??
-    patientAgentConfidence?.confidence_0to1;
+  const confidenceScore = patientAgentConfidence?.confidence_0to1;
+  const actionProbability = patientAgentConfidence?.action_confidence_0to1;
 
   // 5. Display-only weights for the "Formula:" lines and the Active Policy
   // tile. The backend's combined_weights field is rounded independently of
@@ -319,7 +327,7 @@ export default function PatientFeatureContributionModal({
   const waitShare =
     parsedShares?.waitShare ??
     matchedRankedPatient?.waitShare ??
-    (100 - urgencyShare);
+    100 - urgencyShare;
 
   const formatPercentageExplanation = (
     triageNum: number,
@@ -365,7 +373,8 @@ export default function PatientFeatureContributionModal({
                 </span>
                 {Boolean(patient.queueRank ?? matchedRankedPatient?.rank) && (
                   <span className="rounded-md bg-amber-500/20 px-2 py-0.5 text-xs font-semibold text-amber-300 ring-1 ring-amber-400/30">
-                    Queue Rank #{patient.queueRank ?? matchedRankedPatient?.rank}
+                    Queue Rank #
+                    {patient.queueRank ?? matchedRankedPatient?.rank}
                   </span>
                 )}
               </div>
@@ -441,7 +450,8 @@ export default function PatientFeatureContributionModal({
                 </div>
               ) : (
                 <p className="mt-1 text-xs font-mono font-semibold text-indigo-700">
-                  w_t {formatNumber(w_t_display, 3)} / w_w {formatNumber(w_w_display, 3)}
+                  w_t {formatNumber(w_t_display, 3)} / w_w{" "}
+                  {formatNumber(w_w_display, 3)}
                 </p>
               )}
             </div>
@@ -458,12 +468,20 @@ export default function PatientFeatureContributionModal({
                 <>
                   <p className="mt-1 text-lg font-bold text-emerald-700">
                     {typeof confidenceScore === "number"
-                      ? `${formatNumber(confidenceScore * 100, 0)}%`
+                      ? `${formatNumber(confidenceScore * 100, 2)}%`
                       : "-"}
                   </p>
                   <p className="mt-0.5 text-[10px] text-slate-500">
-                    Action {patientAgentConfidence?.action_index ?? "-"}
+                    Entropy-based policy confidence
                   </p>
+                  {typeof actionProbability === "number" && (
+                    <p className="mt-0.5 text-[10px] text-slate-500">
+                      Action {patientAgentConfidence?.action_index ?? "-"}: {formatNumber(
+                        actionProbability * 100,
+                        2
+                      )}% probability
+                    </p>
+                  )}
                 </>
               )}
             </div>
@@ -517,7 +535,9 @@ export default function PatientFeatureContributionModal({
                 {isLoading ? (
                   <div className="flex items-center justify-center gap-2 rounded-xl bg-slate-100 p-4 text-xs font-semibold text-indigo-600">
                     <Loader2 className="h-4 w-4 animate-spin" />
-                    <span>Calculating policy weights & contribution shares...</span>
+                    <span>
+                      Calculating policy weights & contribution shares...
+                    </span>
                   </div>
                 ) : (
                   <div className="space-y-2">
@@ -575,8 +595,8 @@ export default function PatientFeatureContributionModal({
                           +{formatNumber(urgencyContrib, 3)}
                         </p>
                         <p className="mt-1 text-xs text-slate-500">
-                          Formula: (6 - {triageLevelNum}) &times; {w_t_display.toFixed(3)} ={" "}
-                          {urgencyContrib.toFixed(3)}
+                          Formula: (6 - {triageLevelNum}) &times;{" "}
+                          {w_t_display.toFixed(3)} = {urgencyContrib.toFixed(3)}
                         </p>
                       </>
                     )}

@@ -71,6 +71,14 @@ export interface Patient {
 export interface QueueExplainSnapshot {
   combinedWeights?: { w_t_urgency: number; w_w_wait: number };
   stateVector?: Record<string, number>;
+  agentConfidence?: Array<{
+    agent_index: number;
+    triage_class: string;
+    action_index: number;
+    action_confidence_0to1?: number;
+    policy_entropy: number;
+    confidence_0to1: number;
+  }>;
 }
 
 export interface QueuePrediction {
