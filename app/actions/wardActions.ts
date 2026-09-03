@@ -59,9 +59,10 @@ export async function getWardsWithPatients(): Promise<Ward[]> {
 }
 
 export async function getWardWithPatients(
-  wardId: string
+  wardId: string,
+  bypassCache = false
 ): Promise<Ward | null> {
-  return await getWardWithPatientsData(wardId);
+  return await getWardWithPatientsData(wardId, bypassCache);
 }
 
 export async function updateBedStatus(

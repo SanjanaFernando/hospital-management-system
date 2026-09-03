@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Sparkles } from "lucide-react";
 import { Patient } from "@/app/types";
 import DischargePatient from "./DischargePatient";
@@ -53,12 +53,20 @@ export default function PatientDetail({
   const [isMovingToQueue, setIsMovingToQueue] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [isEditingTriage, setIsEditingTriage] = useState(false);
+  const [currentPriority, setCurrentPriority] = useState<Patient["priority"]>(
+    patient.priority
+  );
   const [triageDraft, setTriageDraft] = useState<Patient["priority"]>(
     patient.priority
   );
   const [isUpdatingTriage, setIsUpdatingTriage] = useState(false);
   const [triageError, setTriageError] = useState("");
   const [showExplanationModal, setShowExplanationModal] = useState(false);
+
+  useEffect(() => {
+    setCurrentPriority(patient.priority);
+    setTriageDraft(patient.priority);
+  }, [patient.priority]);
 
   const admissionDate = patient.admissionTime
     ? new Date(patient.admissionTime)
@@ -104,6 +112,7 @@ export default function PatientDetail({
         session
       );
 
+      setCurrentPriority(triageDraft);
       setIsEditingTriage(false);
       onPatientUpdated?.();
     } catch (error) {
@@ -170,7 +179,10 @@ export default function PatientDetail({
     )}h waiting (${waitPct}% of score), with Triage ${triageNum} urgency adding the rest (${urgencyPct}%).`;
   };
 
-  const patientExplanation = getExplanationWithPercentages(patient);
+  const patientExplanation = getExplanationWithPercentages({
+    ...patient,
+    priority: currentPriority,
+  });
 
   return (
     <div className="bg-linear-to-br from-blue-50 to-indigo-50 rounded-lg p-6 border border-blue-200">
@@ -183,13 +195,13 @@ export default function PatientDetail({
           {!isEditingTriage ? (
             <span
               onClick={() => canEditTriage && setIsEditingTriage(true)}
-              className={`${priorityColors[patient.priority]} text-white px-3 py-1 rounded-full text-sm font-semibold whitespace-nowrap text-center ${
+              className={`${priorityColors[currentPriority]} text-white px-3 py-1 rounded-full text-sm font-semibold whitespace-nowrap text-center ${
                 canEditTriage
                   ? "cursor-pointer hover:opacity-80 transition-opacity"
                   : ""
               }`}
             >
-              {patient.priority}
+              {currentPriority}
             </span>
           ) : (
             <div className="flex gap-2">
@@ -209,7 +221,7 @@ export default function PatientDetail({
               <button
                 type="button"
                 onClick={handleSaveTriage}
-                disabled={isUpdatingTriage || triageDraft === patient.priority}
+                disabled={isUpdatingTriage || triageDraft === currentPriority}
                 className="rounded bg-green-600 px-3 py-1 text-sm font-semibold text-white hover:bg-green-700 disabled:bg-green-300 disabled:cursor-not-allowed transition-colors"
               >
                 {isUpdatingTriage ? "..." : "✓"}
@@ -218,7 +230,7 @@ export default function PatientDetail({
                 type="button"
                 onClick={() => {
                   setIsEditingTriage(false);
-                  setTriageDraft(patient.priority);
+                  setTriageDraft(currentPriority);
                   setTriageError("");
                 }}
                 disabled={isUpdatingTriage}
@@ -389,6 +401,7 @@ export default function PatientDetail({
         <PatientFeatureContributionModal
           patient={{
             ...patient,
+            priority: currentPriority,
             queueReason: patientExplanation,
           }}
           wardId={patient.wardId || ""}

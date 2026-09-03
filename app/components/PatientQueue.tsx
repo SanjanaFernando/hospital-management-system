@@ -181,6 +181,9 @@ export default function PatientQueue({
   const [triageDraftByPatient, setTriageDraftByPatient] = useState<
     Record<string, Patient["priority"]>
   >({});
+  const [optimisticPriorities, setOptimisticPriorities] = useState<
+    Record<string, Patient["priority"]>
+  >({});
   const [isUpdatingTriageId, setIsUpdatingTriageId] = useState<string | null>(
     null
   );
@@ -193,6 +196,21 @@ export default function PatientQueue({
   );
 
   const getPatientKey = (patient: Patient): string => patient._id || patient.id;
+
+  useEffect(() => {
+    setOptimisticPriorities((prev) => {
+      const next = { ...prev };
+      let changed = false;
+      for (const p of patients) {
+        const key = p._id || p.id;
+        if (next[key] && next[key] === p.priority) {
+          delete next[key];
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [patients]);
 
   // Reuse the exact decomposition already computed by the same reorder call
   // that produced this queue's order, so the XAI modal shows the identical
@@ -284,9 +302,17 @@ export default function PatientQueue({
 
   const triageEditable = Boolean(wardId) && canSetTriage(session, wardId);
 
-  const resolveTriageDraft = (patient: Patient): Patient["priority"] => {
+  const resolvePatientPriority = (patient: Patient): Patient["priority"] => {
     const patientKey = getPatientKey(patient);
-    return triageDraftByPatient[patientKey] || patient.priority;
+    return (
+      triageDraftByPatient[patientKey] ||
+      optimisticPriorities[patientKey] ||
+      patient.priority
+    );
+  };
+
+  const resolveTriageDraft = (patient: Patient): Patient["priority"] => {
+    return resolvePatientPriority(patient);
   };
 
   const handleTriageDraftChange = (
@@ -308,6 +334,10 @@ export default function PatientQueue({
 
     setTriageError("");
     setIsUpdatingTriageId(patientKey);
+    setOptimisticPriorities((prev) => ({
+      ...prev,
+      [patientKey]: nextPriority,
+    }));
 
     try {
       await updatePatient(
@@ -320,8 +350,13 @@ export default function PatientQueue({
         delete nextDraft[patientKey];
         return nextDraft;
       });
-      onPatientAssigned?.();
+      await onPatientAssigned?.();
     } catch (error) {
+      setOptimisticPriorities((prev) => {
+        const nextDraft = { ...prev };
+        delete nextDraft[patientKey];
+        return nextDraft;
+      });
       setTriageError(
         error instanceof Error ? error.message : "Failed to update triage"
       );
@@ -361,8 +396,12 @@ export default function PatientQueue({
   const sortedPatients =
     queueOrderStrategy === "priority"
       ? [...genderFiltered].sort((a, b) => {
-          const rankA = resolvePriorityRank(a.priority);
-          const rankB = resolvePriorityRank(b.priority);
+          const rankA = resolvePriorityRank(
+            optimisticPriorities[getPatientKey(a)] || a.priority
+          );
+          const rankB = resolvePriorityRank(
+            optimisticPriorities[getPatientKey(b)] || b.priority
+          );
           if (rankA !== rankB) {
             return rankA - rankB;
           }
@@ -465,12 +504,14 @@ export default function PatientQueue({
                 now
               );
 
+              const effectivePriority = resolvePatientPriority(patient);
+
               return (
                 <div
                   key={patient.id}
                   onClick={() => handlePatientClick(patient)}
                   className={`border-l-4 rounded-lg p-3.5 ${resolvePriorityClass(
-                    patient.priority
+                    effectivePriority
                   )} ${
                     wardId && beds.length > 0 && canAssign
                       ? "cursor-pointer hover:shadow-lg transition-shadow"
@@ -576,7 +617,7 @@ export default function PatientQueue({
                       </div>
                     ) : (
                       <span className="whitespace-nowrap shrink-0 self-start text-center text-xs font-bold px-2.5 py-1 rounded-md bg-white/90 text-slate-900 ring-1 ring-black/10 shadow-2xs">
-                        {patient.priority}
+                        {effectivePriority}
                       </span>
                     )}
                   </div>

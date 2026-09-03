@@ -38,26 +38,31 @@ export default function BedDetailPage() {
   const [error, setError] = useState("");
   const [showAssignModal, setShowAssignModal] = useState(false);
 
-  const loadWard = useCallback(async () => {
+  const loadWard = useCallback(async (bypassCache = false) => {
     if (!wardId) return;
     const cacheKey = `ward:${wardId}`;
-    const cachedWard = getClientCache<Ward>(cacheKey, CLIENT_CACHE_TTL.ward);
 
-    if (cachedWard) {
-      setWard(cachedWard);
-      const cachedBed = cachedWard.beds?.find((item) => item.id === bedId);
-      if (cachedBed) {
-        setBed(cachedBed);
+    if (!bypassCache) {
+      const cachedWard = getClientCache<Ward>(cacheKey, CLIENT_CACHE_TTL.ward);
+
+      if (cachedWard) {
+        setWard(cachedWard);
+        const cachedBed = cachedWard.beds?.find((item) => item.id === bedId);
+        if (cachedBed) {
+          setBed(cachedBed);
+        }
+        setIsLoading(false);
+      } else {
+        setIsLoading(true);
       }
-      setIsLoading(false);
     } else {
-      setIsLoading(true);
+      clearClientCache();
     }
 
     setError("");
 
     try {
-      const wardData = await getWardWithPatients(wardId);
+      const wardData = await getWardWithPatients(wardId, bypassCache);
       if (!wardData) {
         throw new Error("Ward not found");
       }
@@ -73,9 +78,12 @@ export default function BedDetailPage() {
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unknown error";
 
-      if (cachedWard) {
-        setError(`Showing cached ward data - ${message}`);
-        return;
+      if (!bypassCache) {
+        const cachedWard = getClientCache<Ward>(cacheKey, CLIENT_CACHE_TTL.ward);
+        if (cachedWard) {
+          setError(`Showing cached ward data - ${message}`);
+          return;
+        }
       }
 
       setError(message);
@@ -88,18 +96,24 @@ export default function BedDetailPage() {
     void loadWard();
   }, [loadWard]);
 
+  const handlePatientUpdated = useCallback(() => {
+    clearClientCache();
+    void loadWard(true);
+  }, [loadWard]);
+
   const handleDischargeSuccess = () => {
     clearClientCache();
     if (wardId) {
       router.push(`/wards/${wardId}`);
       router.refresh();
     } else {
-      loadWard();
+      loadWard(true);
     }
   };
 
   const handleMoveToQueueSuccess = () => {
-    loadWard();
+    clearClientCache();
+    loadWard(true);
   };
 
   const handleChangeBedStatus = async (
@@ -236,6 +250,7 @@ export default function BedDetailPage() {
                   patient={bed.patient}
                   onDischargeSuccess={handleDischargeSuccess}
                   onMoveToQueueSuccess={handleMoveToQueueSuccess}
+                  onPatientUpdated={handlePatientUpdated}
                   canManageActions={canManagePatients}
                 />
               </div>

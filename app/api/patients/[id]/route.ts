@@ -1,6 +1,7 @@
 import { connectToDatabase } from "@/lib/mongodb";
 import { NextResponse, NextRequest } from "next/server";
 import { ObjectId } from "mongodb";
+import { revalidatePath, revalidateTag } from "next/cache";
 import {
   canAssignOrDischargePatient,
   canSetTriage,
@@ -17,9 +18,17 @@ export async function PUT(
     const body = await request.json();
     const { id: patientId } = await params;
 
-    const patientQuery = ObjectId.isValid(patientId)
-      ? { $or: [{ _id: new ObjectId(patientId) }, { id: patientId }] }
-      : { id: patientId };
+    const orClauses: Array<Record<string, unknown>> = [
+      { id: patientId },
+      { id: String(patientId) },
+    ];
+    if (!isNaN(Number(patientId))) {
+      orClauses.push({ id: Number(patientId) });
+    }
+    if (ObjectId.isValid(patientId)) {
+      orClauses.push({ _id: new ObjectId(patientId) });
+    }
+    const patientQuery = { $or: orClauses };
 
     const patient = await db.collection("patients").findOne(patientQuery);
 
@@ -60,6 +69,13 @@ export async function PUT(
       return NextResponse.json({ error: "Patient not found" }, { status: 404 });
     }
 
+    revalidateTag("patients", "max");
+    revalidateTag("beds", "max");
+    revalidateTag("wards", "max");
+    revalidateTag("dashboard", "max");
+    revalidatePath("/wards", "layout");
+    revalidatePath("/dashboard", "layout");
+
     return NextResponse.json(
       { message: "Patient updated successfully", result },
       { status: 200 }
@@ -82,9 +98,17 @@ export async function DELETE(
     const { db } = await connectToDatabase();
     const { id: patientId } = await params;
 
-    const patientQuery = ObjectId.isValid(patientId)
-      ? { $or: [{ _id: new ObjectId(patientId) }, { id: patientId }] }
-      : { id: patientId };
+    const orClauses: Array<Record<string, unknown>> = [
+      { id: patientId },
+      { id: String(patientId) },
+    ];
+    if (!isNaN(Number(patientId))) {
+      orClauses.push({ id: Number(patientId) });
+    }
+    if (ObjectId.isValid(patientId)) {
+      orClauses.push({ _id: new ObjectId(patientId) });
+    }
+    const patientQuery = { $or: orClauses };
 
     const patient = await db.collection("patients").findOne(patientQuery);
 
@@ -105,6 +129,13 @@ export async function DELETE(
     if (result.deletedCount === 0) {
       return NextResponse.json({ error: "Patient not found" }, { status: 404 });
     }
+
+    revalidateTag("patients", "max");
+    revalidateTag("beds", "max");
+    revalidateTag("wards", "max");
+    revalidateTag("dashboard", "max");
+    revalidatePath("/wards", "layout");
+    revalidatePath("/dashboard", "layout");
 
     return NextResponse.json(
       { message: "Patient deleted successfully" },
