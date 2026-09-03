@@ -9,6 +9,7 @@ import BedGrid from "@/app/components/BedGrid";
 import PatientQueue from "@/app/components/PatientQueue";
 import PredictiveQueueRecommendationCard from "@/app/components/PredictiveQueueRecommendationCard";
 import { addBedToWard, getWardWithPatients } from "@/app/actions/wardActions";
+import { clearClientCache } from "@/app/utils/clientCache";
 import { useAuthSession } from "@/app/context/AuthSessionContext";
 import {
   canAccessWard,
@@ -124,7 +125,8 @@ export default function WardOverviewClient({
   };
 
   const refreshWard = useCallback(async () => {
-    const wardData = await getWardWithPatients(resolvedWardId);
+    clearClientCache();
+    const wardData = await getWardWithPatients(resolvedWardId, true);
     if (wardData) setWard(wardData);
   }, [resolvedWardId]);
 

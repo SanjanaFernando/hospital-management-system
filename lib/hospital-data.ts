@@ -699,8 +699,12 @@ export async function getWardsWithPatientsData(): Promise<Ward[]> {
 }
 
 export async function getWardWithPatientsData(
-  wardId: string
+  wardId: string,
+  bypassCache = false
 ): Promise<Ward | null> {
+  if (bypassCache) {
+    return queryWardWithPatients(wardId);
+  }
   return cachedWardWithPatients(wardId);
 }
 
