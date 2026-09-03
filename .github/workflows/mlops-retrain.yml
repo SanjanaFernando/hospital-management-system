@@ -38,7 +38,8 @@ jobs:
           # Generate training data from last 7 days
           python mlops/scripts/generate_training_data.py \
             --days 7 \
-            --output $MODEL_DIR
+            --output $MODEL_DIR \
+            --augment 50
       
       - name: Train new model
         run: |
@@ -66,9 +67,9 @@ jobs:
           
           # Get current active model performance
           if [ -f mlops/models/active_version.json ]; then
-            ACTIVE_MODEL=$(jq -r '.model_path' mlops/models/active_version.json)
-            ACTIVE_DIR=$(dirname $ACTIVE_MODEL)
-            ACTIVE_FAIRNESS=$(jq '.metrics.fairness_score' $ACTIVE_DIR/performance.json 2>/dev/null || echo "0")
+          ACTIVE_VERSION=$(jq -r '.version' mlops/models/active_version.json)
+          ACTIVE_DIR="mlops/models/$ACTIVE_VERSION"
+          ACTIVE_FAIRNESS=$(jq '.metrics.fairness_score' $ACTIVE_DIR/performance.json 2>/dev/null || echo "0")
           else
             ACTIVE_FAIRNESS="0"
           fi

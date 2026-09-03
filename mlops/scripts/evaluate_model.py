@@ -313,8 +313,8 @@ def load_holdout_samples(holdout_path: Path) -> tuple[np.ndarray, list[dict]]:
             ]
 
     return states, [
-        {'state': state, 'queue': queue}
-        for state, queue in zip(states, queue_samples)
+        {'state': state, 'queue': qs.get('queue', [])}
+        for state, qs in zip(states, queue_samples)
     ]
 
 
