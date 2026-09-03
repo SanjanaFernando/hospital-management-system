@@ -563,6 +563,16 @@ def explain_decision(
             use_predictive=ward_snapshot.get("usePredictive", True),
         )
     )
+    if is_shared_actor and ward_snapshot.get("usePredictive", True):
+        prediction = forecaster.predict_details()
+        predictive_meta.update({
+            "enabled": True,
+            "pred_load": round(float(prediction.get("pred_load", 0.0)), 4),
+            "pred_crit": round(float(prediction.get("pred_crit", 0.0)), 4),
+            "expected_arrivals": round(float(prediction.get("expected_arrivals", 0.0)), 2),
+            "horizon_hours": int(prediction.get("horizon_hours", 0)),
+            "surge_predicted": bool(prediction.get("surge_predicted", False)),
+        })
     state_t = torch.tensor(state, dtype=torch.float32).unsqueeze(0).to(device)
 
     actions = []
