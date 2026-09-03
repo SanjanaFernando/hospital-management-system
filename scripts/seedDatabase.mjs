@@ -98,8 +98,15 @@ function generatePatient(patientId, wardId, status, gender) {
     ? randomItem(MALE_FIRST_NAMES)
     : randomItem(FEMALE_FIRST_NAMES);
   const lastName = randomItem(LAST_NAMES);
-  const age = randomInt(5, 90);
-  const admissionTime = new Date(Date.now() - randomInt(5, 72) * 60 * 60 * 1000);
+  const isPediatric = wardId === "ward-2";
+  const age = isPediatric ? randomInt(1, 15) : randomInt(18, 85);
+
+  // Queued patients arrive on 2026/9/4; admitted patients may have arrived earlier.
+  const hour = randomInt(0, 23);
+  const minute = randomInt(0, 59);
+  const second = randomInt(0, 59);
+  const admissionDay = status === "queued" ? 4 : randomInt(1, 3);
+  const admissionTime = new Date(2026, 8, admissionDay, hour, minute, second);
 
   const includeRequirements = Math.random() < 0.35;
   const requirements = includeRequirements ? [randomItem(SPECIAL_REQUIREMENTS)] : undefined;
@@ -123,23 +130,23 @@ function generatePatient(patientId, wardId, status, gender) {
     admissionTime,
     queueWaitTime: randomInt(10, 480),
     specialRequirements: requirements,
-    createdAt: new Date(),
-    updatedAt: new Date(),
+    createdAt: admissionTime,
+    updatedAt: admissionTime,
   };
 }
 
 // ---------------------------------------------------------------------------
 // Ward configurations strictly following bed allocation specifications:
-// - Ward 2: ICU 3 (Beds 1-3), Male 33 (Beds 4-36, 30 occ, 3 free), Female 34 (Beds 37-70, 30 occ, 4 free)
-// - Ward 9: ICU 2 (Beds 1-2), Male 22 (Beds 3-24, 19 occ, 3 free), Female 22 (Beds 25-46, 18 occ, 4 free)
-// - Ward 3: Female Medical (ICU 2, Female 40)
-// - Ward 5: Male Surgical (ICU 2, Male 50)
+// - Ward 2: Pediatric (ICU 3, Male 33, Female 34)
+// - Ward 3: Surgical Female (ICU 2, Female 40)
+// - Ward 5: Surgical Male (ICU 2, Male 50)
+// - Ward 9: Surgical General (ICU 2, Male 22, Female 22)
 // ---------------------------------------------------------------------------
 function makeWardConfigs() {
   return [
     {
       wardId:         "ward-2",
-      name:           "Ward 2 - General",
+      name:           "Ward 2 - Pediatric",
       icuBeds:        3,
       maleBeds:       33,
       maleAdmitted:   30,  // last 3 beds (34-36) free
@@ -149,7 +156,7 @@ function makeWardConfigs() {
     },
     {
       wardId:         "ward-3",
-      name:           "Ward 3 - Female Medical",
+      name:           "Ward 3 - Surgical Female",
       icuBeds:        2,
       maleBeds:       0,
       maleAdmitted:   0,
@@ -159,7 +166,7 @@ function makeWardConfigs() {
     },
     {
       wardId:         "ward-5",
-      name:           "Ward 5 - Male Surgical",
+      name:           "Ward 5 - Surgical Male",
       icuBeds:        2,
       maleBeds:       50,
       maleAdmitted:   46,  // last 4 beds (49-52) free
@@ -169,7 +176,7 @@ function makeWardConfigs() {
     },
     {
       wardId:         "ward-9",
-      name:           "Ward 9 - General Medical",
+      name:           "Ward 9 - Surgical General",
       icuBeds:        2,
       maleBeds:       22,
       maleAdmitted:   19,  // last 3 beds (22-24) free

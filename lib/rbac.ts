@@ -173,7 +173,6 @@ const WARD_LETTER_TO_INDEX: Record<string, string> = {
 const LEGACY_WARD_ID_MAP: Record<string, string> = {
   "ward-0": "ward-3",
   "ward-1": "ward-4",
-  "ward-2": "ward-5",
 };
 
 export function normalizeWardId(wardId?: string): string | undefined {

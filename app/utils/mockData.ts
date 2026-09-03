@@ -98,7 +98,12 @@ export function generateMockPatient(patientId: string): Patient {
   else priority = "Triage 5";
 
   const admissionTime = new Date(
-    Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000
+    2026,
+    8,
+    4,
+    Math.floor(Math.random() * 24),
+    Math.floor(Math.random() * 60),
+    Math.floor(Math.random() * 60)
   );
 
   const queueWaitTime = Math.floor(Math.random() * 480) + 15; // 15 mins to 8 hours
@@ -289,7 +294,7 @@ export function initializeWards(): Ward[] {
   const wardConfigs = [
     {
       id: "ward-2",
-      name: "Ward 2 - General",
+      name: "Ward 2 - Pediatric",
       policy: "any" as const,
       icuBeds: 3,
       maleBeds: 33,
@@ -300,7 +305,7 @@ export function initializeWards(): Ward[] {
     },
     {
       id: "ward-3",
-      name: "Ward 3 - Female Medical",
+      name: "Ward 3 - Surgical Female",
       policy: "Female" as const,
       icuBeds: 2,
       maleBeds: 0,
@@ -311,7 +316,7 @@ export function initializeWards(): Ward[] {
     },
     {
       id: "ward-5",
-      name: "Ward 5 - Male Surgical",
+      name: "Ward 5 - Surgical Male",
       policy: "Male" as const,
       icuBeds: 2,
       maleBeds: 50,
@@ -322,7 +327,7 @@ export function initializeWards(): Ward[] {
     },
     {
       id: "ward-9",
-      name: "Ward 9 - General Medical",
+      name: "Ward 9 - Surgical General",
       policy: "any" as const,
       icuBeds: 2,
       maleBeds: 22,
@@ -344,6 +349,10 @@ export function initializeWards(): Ward[] {
       p.gender = "Male";
       p.wardId = cfg.id;
       p.status = "admitted";
+      if (cfg.id === "ward-2") {
+        p.age = Math.floor(Math.random() * 15) + 1;
+        p.ageGroup = "Child";
+      }
       malePatients.push(p);
       admittedPatients.push(p);
     }
@@ -355,6 +364,10 @@ export function initializeWards(): Ward[] {
       p.gender = "Female";
       p.wardId = cfg.id;
       p.status = "admitted";
+      if (cfg.id === "ward-2") {
+        p.age = Math.floor(Math.random() * 15) + 1;
+        p.ageGroup = "Child";
+      }
       femalePatients.push(p);
       admittedPatients.push(p);
     }
@@ -372,6 +385,10 @@ export function initializeWards(): Ward[] {
           : "Female";
       p.wardId = cfg.id;
       p.status = "queued";
+      if (cfg.id === "ward-2") {
+        p.age = Math.floor(Math.random() * 15) + 1;
+        p.ageGroup = "Child";
+      }
       patientQueue.push(p);
     }
 
