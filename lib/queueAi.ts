@@ -73,8 +73,11 @@ function buildRankedEntryMaps(rankedQueue: RankedEntry[]) {
 function extractExplainSnapshot(parsed: {
   combined_weights?: { w_t_urgency?: number; w_w_wait?: number };
   state_vector?: Record<string, number>;
+  agent_confidence?: QueueExplainSnapshot["agentConfidence"];
 }): QueueExplainSnapshot | undefined {
-  if (!parsed.combined_weights && !parsed.state_vector) return undefined;
+  if (!parsed.combined_weights && !parsed.state_vector && !parsed.agent_confidence) {
+    return undefined;
+  }
   return {
     combinedWeights:
       typeof parsed.combined_weights?.w_t_urgency === "number" &&
@@ -85,6 +88,7 @@ function extractExplainSnapshot(parsed: {
           }
         : undefined,
     stateVector: parsed.state_vector,
+    agentConfidence: parsed.agent_confidence,
   };
 }
 
@@ -269,6 +273,7 @@ async function reorderViaHttp(input: QueueAiInput): Promise<QueueAiResult> {
     ranked_queue?: RankedEntry[];
     combined_weights?: { w_t_urgency?: number; w_w_wait?: number };
     state_vector?: Record<string, number>;
+    agent_confidence?: QueueExplainSnapshot["agentConfidence"];
     predictive_analytics?: {
       enabled?: boolean;
       surge_predicted?: boolean;
@@ -434,6 +439,7 @@ function reorderViaSubprocess(input: QueueAiInput): QueueAiResult {
         ranked_queue?: RankedEntry[];
         combined_weights?: { w_t_urgency?: number; w_w_wait?: number };
         state_vector?: Record<string, number>;
+        agent_confidence?: QueueExplainSnapshot["agentConfidence"];
         predictive_analytics?: {
           enabled?: boolean;
           surge_predicted?: boolean;
@@ -537,8 +543,10 @@ function reorderViaSubprocess(input: QueueAiInput): QueueAiResult {
  */
 export async function reorderQueueWithAi(input: QueueAiInput): Promise<QueueAiResult> {
   const endpoint = process.env.QUEUE_AI_ENDPOINT;
+  const useLocalXai =
+    process.env.NODE_ENV === "development" || process.env.XAI_USE_LOCAL === "true";
 
-  if (endpoint) {
+  if (endpoint && !useLocalXai) {
     return reorderViaHttp(input);
   }
 
