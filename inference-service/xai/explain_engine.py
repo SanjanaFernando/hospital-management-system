@@ -115,7 +115,17 @@ def load_mappo(checkpoint_path, device="cpu"):
     ckpt = torch.load(checkpoint_path, map_location=device, weights_only=False)
     actors = [TriageActor().to(device) for _ in range(N_AGENTS)]
     for i, actor in enumerate(actors):
-        actor.load_state_dict(ckpt[f"actor_{i}"])
+        actor_state = ckpt[f"actor_{i}"]
+        if "net.0.weight" in actor_state:
+            actor_state = {
+                "body.0.weight": actor_state["net.0.weight"],
+                "body.0.bias": actor_state["net.0.bias"],
+                "body.2.weight": actor_state["net.2.weight"],
+                "body.2.bias": actor_state["net.2.bias"],
+                "head.weight": actor_state["net.4.weight"],
+                "head.bias": actor_state["net.4.bias"],
+            }
+        actor.load_state_dict(actor_state)
         actor.eval()
     critic = CentralizedCritic().to(device)
     if "critic" in ckpt:
