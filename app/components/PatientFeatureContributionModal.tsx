@@ -474,9 +474,6 @@ export default function PatientFeatureContributionModal({
                       ? `${formatNumber(confidenceScore * 100, 2)}%`
                       : "-"}
                   </p>
-                  <p className="mt-0.5 text-[10px] text-slate-500">
-                    Entropy-based policy confidence
-                  </p>
                   {typeof actionProbability === "number" && (
                     <p className="mt-0.5 text-[10px] text-slate-500">
                       Action {patientAgentConfidence?.action_index ?? "-"}:{" "}
