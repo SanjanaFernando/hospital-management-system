@@ -90,7 +90,7 @@ def main():
     }
     metadata_path = output_path.with_name(output_path.stem + '_metadata.json')
     with metadata_path.open('w', encoding='utf-8') as f:
-        json.dump(metadata, f, indent=2)
+       json.dump(metadata, f, indent=2, default=str)
 
     print(f'Saved real validation holdout to {output_path}')
     print(f'Shape: {states.shape}, dtype: {states.dtype}')
