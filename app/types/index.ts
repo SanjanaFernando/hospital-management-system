@@ -140,7 +140,6 @@ export type LogAction =
   | "ward_updated"
   | "ward_deleted";
 
-
 export interface UserLog {
   _id?: string;
   id: string;

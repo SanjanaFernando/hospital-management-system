@@ -1,8 +1,15 @@
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { existsSync } from "node:fs";
-import type { Patient, QueuePrediction, QueueExplainSnapshot } from "@/app/types";
-import { resolveForecasterProfilePath, resolveMappoModelPath } from "@/lib/get-mappo-model";
+import type {
+  Patient,
+  QueuePrediction,
+  QueueExplainSnapshot,
+} from "@/app/types";
+import {
+  resolveForecasterProfilePath,
+  resolveMappoModelPath,
+} from "@/lib/get-mappo-model";
 import { pythonCommandCandidates } from "@/lib/resolve-python-bin";
 
 interface WardSnapshot {
@@ -75,7 +82,11 @@ function extractExplainSnapshot(parsed: {
   state_vector?: Record<string, number>;
   agent_confidence?: QueueExplainSnapshot["agentConfidence"];
 }): QueueExplainSnapshot | undefined {
-  if (!parsed.combined_weights && !parsed.state_vector && !parsed.agent_confidence) {
+  if (
+    !parsed.combined_weights &&
+    !parsed.state_vector &&
+    !parsed.agent_confidence
+  ) {
     return undefined;
   }
   return {
@@ -116,16 +127,22 @@ function resolvePriorityRank(priority: string): number {
   return Number.MAX_SAFE_INTEGER;
 }
 
-function computeFallbackPriorityScore(patient: Patient, nowMs: number = Date.now()): number {
+function computeFallbackPriorityScore(
+  patient: Patient,
+  nowMs: number = Date.now()
+): number {
   const triageNum =
     typeof patient.priority === "string"
       ? parseInt(patient.priority.replace(/\D/g, ""), 10) || 5
       : typeof patient.priority === "number"
-      ? patient.priority
-      : 5;
+        ? patient.priority
+        : 5;
 
   let waitMinutes = 0;
-  if (typeof patient.queueWaitTime === "number" && Number.isFinite(patient.queueWaitTime)) {
+  if (
+    typeof patient.queueWaitTime === "number" &&
+    Number.isFinite(patient.queueWaitTime)
+  ) {
     waitMinutes = Math.max(0, patient.queueWaitTime);
   } else if (patient.admissionTime) {
     const arr = new Date(patient.admissionTime).getTime();
@@ -185,7 +202,10 @@ function runPythonCommand(command: string[], input: string) {
   });
 }
 
-function getPatientRank(orderMap: Map<string, number>, patient: Patient): number {
+function getPatientRank(
+  orderMap: Map<string, number>,
+  patient: Patient
+): number {
   if (patient._id && orderMap.has(String(patient._id))) {
     return orderMap.get(String(patient._id))!;
   }
@@ -319,7 +339,9 @@ async function reorderViaHttp(input: QueueAiInput): Promise<QueueAiResult> {
         (nameLower ? entryByName.get(nameLower) : undefined);
       return { patient, entry };
     })
-    .sort((a, b) => (b.entry?.priorityScore ?? 0) - (a.entry?.priorityScore ?? 0))
+    .sort(
+      (a, b) => (b.entry?.priorityScore ?? 0) - (a.entry?.priorityScore ?? 0)
+    )
     .map(({ patient, entry }, idx) => ({
       ...patient,
       queueRank: idx + 1,
@@ -338,18 +360,34 @@ async function reorderViaHttp(input: QueueAiInput): Promise<QueueAiResult> {
   const queuePrediction = predictive?.enabled
     ? {
         enabled: true,
-        load: typeof predictive.pred_load === "number" ? predictive.pred_load : undefined,
-        criticalShare: typeof predictive.pred_crit === "number" ? predictive.pred_crit : undefined,
-        expectedArrivals: typeof predictive.expected_arrivals === "number" ? predictive.expected_arrivals : undefined,
-        expectedCriticalPatients: typeof predictive.expected_critical_patients === "number" ? predictive.expected_critical_patients : undefined,
-        horizonHours: typeof predictive.horizon_hours === "number" ? predictive.horizon_hours : undefined,
+        load:
+          typeof predictive.pred_load === "number"
+            ? predictive.pred_load
+            : undefined,
+        criticalShare:
+          typeof predictive.pred_crit === "number"
+            ? predictive.pred_crit
+            : undefined,
+        expectedArrivals:
+          typeof predictive.expected_arrivals === "number"
+            ? predictive.expected_arrivals
+            : undefined,
+        expectedCriticalPatients:
+          typeof predictive.expected_critical_patients === "number"
+            ? predictive.expected_critical_patients
+            : undefined,
+        horizonHours:
+          typeof predictive.horizon_hours === "number"
+            ? predictive.horizon_hours
+            : undefined,
         surgePredicted: Boolean(predictive.surge_predicted),
       }
     : undefined;
 
-  const forecastMessage = queuePrediction?.expectedArrivals !== undefined
-    ? ` Expected ${queuePrediction.expectedArrivals} patients in the next ${queuePrediction.horizonHours ?? 6} hours; approximately ${queuePrediction.expectedCriticalPatients ?? 0} critical.`
-    : "";
+  const forecastMessage =
+    queuePrediction?.expectedArrivals !== undefined
+      ? ` Expected ${queuePrediction.expectedArrivals} patients in the next ${queuePrediction.horizonHours ?? 6} hours; approximately ${queuePrediction.expectedCriticalPatients ?? 0} critical.`
+      : "";
 
   return {
     orderedPatients,
@@ -428,10 +466,22 @@ function reorderViaSubprocess(input: QueueAiInput): QueueAiResult {
   for (const cmd of attempts) {
     const result = runPythonCommand(cmd, payload);
 
-    if (result.error) { lastError = result.error.message; continue; }
-    if (result.signal) { lastError = `process killed (${result.signal})`; continue; }
-    if (result.status !== 0) { lastError = result.stderr?.trim() || `exit code ${result.status}`; continue; }
-    if (!result.stdout?.trim()) { lastError = result.stderr?.trim() || "empty stdout"; continue; }
+    if (result.error) {
+      lastError = result.error.message;
+      continue;
+    }
+    if (result.signal) {
+      lastError = `process killed (${result.signal})`;
+      continue;
+    }
+    if (result.status !== 0) {
+      lastError = result.stderr?.trim() || `exit code ${result.status}`;
+      continue;
+    }
+    if (!result.stdout?.trim()) {
+      lastError = result.stderr?.trim() || "empty stdout";
+      continue;
+    }
 
     try {
       const parsed = parseExplainJson(result.stdout) as {
@@ -451,7 +501,10 @@ function reorderViaSubprocess(input: QueueAiInput): QueueAiResult {
         };
       };
 
-      if (parsed.error) { lastError = parsed.error; continue; }
+      if (parsed.error) {
+        lastError = parsed.error;
+        continue;
+      }
 
       const rankedQueue = parsed.ranked_queue || [];
 
@@ -469,10 +522,12 @@ function reorderViaSubprocess(input: QueueAiInput): QueueAiResult {
           const entry =
             entryByIdx.get(queueIndex) ??
             (nameLower ? entryByName.get(nameLower) : undefined);
-          const score = entry?.priorityScore ?? computeFallbackPriorityScore(patient, now.getTime());
+          const score =
+            entry?.priorityScore ??
+            computeFallbackPriorityScore(patient, now.getTime());
           return { patient, entry, score };
         })
-        .sort((a, b) => b.score - a.score)  // Highest priority score first
+        .sort((a, b) => b.score - a.score) // Highest priority score first
         .map(({ patient, entry, score }, idx) => ({
           ...patient,
           queueRank: idx + 1,
@@ -491,10 +546,26 @@ function reorderViaSubprocess(input: QueueAiInput): QueueAiResult {
       const queuePrediction: QueuePrediction | undefined = predictive?.enabled
         ? {
             enabled: true,
-            load: typeof predictive.pred_load === "number" && Number.isFinite(predictive.pred_load) ? predictive.pred_load : undefined,
-            criticalShare: typeof predictive.pred_crit === "number" && Number.isFinite(predictive.pred_crit) ? predictive.pred_crit : undefined,
-            expectedArrivals: typeof predictive.expected_arrivals === "number" && Number.isFinite(predictive.expected_arrivals) ? predictive.expected_arrivals : undefined,
-            horizonHours: typeof predictive.horizon_hours === "number" && Number.isFinite(predictive.horizon_hours) ? predictive.horizon_hours : undefined,
+            load:
+              typeof predictive.pred_load === "number" &&
+              Number.isFinite(predictive.pred_load)
+                ? predictive.pred_load
+                : undefined,
+            criticalShare:
+              typeof predictive.pred_crit === "number" &&
+              Number.isFinite(predictive.pred_crit)
+                ? predictive.pred_crit
+                : undefined,
+            expectedArrivals:
+              typeof predictive.expected_arrivals === "number" &&
+              Number.isFinite(predictive.expected_arrivals)
+                ? predictive.expected_arrivals
+                : undefined,
+            horizonHours:
+              typeof predictive.horizon_hours === "number" &&
+              Number.isFinite(predictive.horizon_hours)
+                ? predictive.horizon_hours
+                : undefined,
             surgePredicted: Boolean(predictive.surge_predicted),
           }
         : undefined;
@@ -502,8 +573,8 @@ function reorderViaSubprocess(input: QueueAiInput): QueueAiResult {
       const predictiveNote = queuePrediction?.surgePredicted
         ? " Predictive analytics expects heavier critical arrivals; keep the front of the queue ready."
         : queuePrediction
-        ? " Predictive analytics updated the queue recommendation."
-        : "";
+          ? " Predictive analytics updated the queue recommendation."
+          : "";
 
       return {
         orderedPatients,
@@ -515,7 +586,10 @@ function reorderViaSubprocess(input: QueueAiInput): QueueAiResult {
         queueExplainSnapshot,
       };
     } catch (error) {
-      lastError = error instanceof Error ? error.message : result.stderr?.trim() || "failed to parse explain.py output";
+      lastError =
+        error instanceof Error
+          ? error.message
+          : result.stderr?.trim() || "failed to parse explain.py output";
     }
   }
 
@@ -541,10 +615,13 @@ function reorderViaSubprocess(input: QueueAiInput): QueueAiResult {
  *
  * Always falls back to priority-based sorting if the AI path fails.
  */
-export async function reorderQueueWithAi(input: QueueAiInput): Promise<QueueAiResult> {
+export async function reorderQueueWithAi(
+  input: QueueAiInput
+): Promise<QueueAiResult> {
   const endpoint = process.env.QUEUE_AI_ENDPOINT;
   const useLocalXai =
-    process.env.NODE_ENV === "development" || process.env.XAI_USE_LOCAL === "true";
+    process.env.NODE_ENV === "development" ||
+    process.env.XAI_USE_LOCAL === "true";
 
   if (endpoint && !useLocalXai) {
     return reorderViaHttp(input);

@@ -27,8 +27,9 @@ from queue_reorder_lib import load_model, run_inference
 
 MODEL_PATH = os.environ.get(
     "MODEL_PATH",
-    "./model/best_mappo_hospital.pth",
+    "./model/best_mappo_shared.pth",
 )
+SHARED_MODEL_PATH = "./model/best_mappo_shared.pth"
 
 # Separate checkpoint used by the /explain endpoint (MAPPO 5-actor checkpoint).
 # Set MAPPO_EXPLAIN_CHECKPOINT_PATH in Render env vars to point at the file
@@ -36,8 +37,10 @@ MODEL_PATH = os.environ.get(
 # model directory as MODEL_PATH.
 EXPLAIN_CHECKPOINT_PATH = os.environ.get(
     "MAPPO_EXPLAIN_CHECKPOINT_PATH",
-    str(Path(MODEL_PATH).parent / "best_mappo_hospital.pth"),
+    SHARED_MODEL_PATH,
 )
+if Path(EXPLAIN_CHECKPOINT_PATH).name == "best_mappo_hospital.pth":
+    EXPLAIN_CHECKPOINT_PATH = SHARED_MODEL_PATH
 
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
 logging.basicConfig(level=getattr(logging, LOG_LEVEL, logging.INFO))
@@ -53,6 +56,7 @@ _model_state: dict[str, Any] = {}
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Load the model on startup; release resources on shutdown."""
+    global MODEL_PATH
     model_path = Path(MODEL_PATH)
     logger.info("Loading model from %s …", MODEL_PATH)
     logger.info("Model file exists: %s", model_path.exists())
@@ -62,6 +66,20 @@ async def lifespan(app: FastAPI):
 
     try:
         model, meta = load_model(MODEL_PATH)
+    except Exception as first_error:
+        fallback_path = Path(SHARED_MODEL_PATH)
+        if MODEL_PATH == SHARED_MODEL_PATH or not fallback_path.exists():
+            raise first_error
+        logger.warning(
+            "Configured model %s failed to load (%s); falling back to %s",
+            MODEL_PATH,
+            first_error,
+            SHARED_MODEL_PATH,
+        )
+        MODEL_PATH = SHARED_MODEL_PATH
+        model, meta = load_model(MODEL_PATH)
+
+    try:
         _model_state["model"] = model
         _model_state["meta"] = meta
         _model_state["load_error"] = None

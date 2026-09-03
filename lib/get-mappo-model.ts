@@ -10,10 +10,7 @@ const PREDICTIVE_CANDIDATES = [
   "mappo_predictive.pth",
 ];
 
-const BASELINE_CANDIDATES = [
-  "best_mappo_hospital.pth",
-  "mappo_baseline.pth",
-];
+const BASELINE_CANDIDATES = ["best_mappo_hospital.pth", "mappo_baseline.pth"];
 
 export function resolveMappoModelPath(preferPredictive = true): string | null {
   const ordered = preferPredictive

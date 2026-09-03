@@ -15,17 +15,15 @@ const REASON_SPLIT_PATTERN = /(#\d+|\d+(?:\.\d+)?%|\d+(?:\.\d+)?h\b)/g;
 const REASON_TOKEN_PATTERN = /^(#\d+|\d+(?:\.\d+)?%|\d+(?:\.\d+)?h)$/;
 
 function renderReasonText(reason: string) {
-  return reason
-    .split(REASON_SPLIT_PATTERN)
-    .map((part, index) =>
-      REASON_TOKEN_PATTERN.test(part) ? (
-        <span key={index} className="font-semibold text-slate-800">
-          {part}
-        </span>
-      ) : (
-        <span key={index}>{part}</span>
-      )
-    );
+  return reason.split(REASON_SPLIT_PATTERN).map((part, index) =>
+    REASON_TOKEN_PATTERN.test(part) ? (
+      <span key={index} className="font-semibold text-slate-800">
+        {part}
+      </span>
+    ) : (
+      <span key={index}>{part}</span>
+    )
+  );
 }
 
 interface PatientQueueProps {
@@ -53,8 +51,8 @@ const priorityColors: Record<string, string> = {
   "Triage 4": "bg-lime-100 border-lime-500 text-lime-800",
   "Triage 5": "bg-blue-100 border-blue-500 text-blue-800",
   // Legacy aliases — map to same color as their triage equivalent
-  "Critical":   "bg-red-100 border-red-500 text-red-800",
-  "Urgent":     "bg-yellow-100 border-yellow-500 text-yellow-800",
+  Critical: "bg-red-100 border-red-500 text-red-800",
+  Urgent: "bg-yellow-100 border-yellow-500 text-yellow-800",
   "Non-urgent": "bg-blue-100 border-blue-500 text-blue-800",
 };
 
@@ -190,7 +188,9 @@ export default function PatientQueue({
   const [isOpen, setIsOpen] = useState(false);
   const [selectedExplanationPatient, setSelectedExplanationPatient] =
     useState<Patient | null>(null);
-  const [genderFilter, setGenderFilter] = useState<"all" | "Male" | "Female">("all");
+  const [genderFilter, setGenderFilter] = useState<"all" | "Male" | "Female">(
+    "all"
+  );
 
   const getPatientKey = (patient: Patient): string => patient._id || patient.id;
 
@@ -200,7 +200,11 @@ export default function PatientQueue({
   // call against ward data that may have moved on since the list was ranked.
   const explanationPreloadData: ExplainResponse | null = useMemo(() => {
     const patient = selectedExplanationPatient;
-    if (!patient || !queueExplainSnapshot || typeof patient.priorityScore !== "number") {
+    if (
+      !patient ||
+      !queueExplainSnapshot ||
+      typeof patient.priorityScore !== "number"
+    ) {
       return null;
     }
 
@@ -335,9 +339,13 @@ export default function PatientQueue({
   }
 
   // Gender counts for the filter pills
-  const maleCount   = patients.filter((p) => p.gender?.toLowerCase() === "male").length;
-  const femaleCount = patients.filter((p) => p.gender?.toLowerCase() === "female").length;
-  const hasMale   = maleCount > 0;
+  const maleCount = patients.filter(
+    (p) => p.gender?.toLowerCase() === "male"
+  ).length;
+  const femaleCount = patients.filter(
+    (p) => p.gender?.toLowerCase() === "female"
+  ).length;
+  const hasMale = maleCount > 0;
   const hasFemale = femaleCount > 0;
   // Only show filter row when both genders are present in the queue
   const showGenderFilter = hasMale && hasFemale;
@@ -346,7 +354,9 @@ export default function PatientQueue({
   const genderFiltered =
     genderFilter === "all"
       ? patients
-      : patients.filter((p) => p.gender?.toLowerCase() === genderFilter.toLowerCase());
+      : patients.filter(
+          (p) => p.gender?.toLowerCase() === genderFilter.toLowerCase()
+        );
 
   const sortedPatients =
     queueOrderStrategy === "priority"
@@ -373,8 +383,8 @@ export default function PatientQueue({
           ? f === "Male"
             ? "bg-blue-600 border-blue-600 text-white shadow-sm"
             : f === "Female"
-            ? "bg-pink-500 border-pink-500 text-white shadow-sm"
-            : "bg-slate-700 border-slate-700 text-white shadow-sm"
+              ? "bg-pink-500 border-pink-500 text-white shadow-sm"
+              : "bg-slate-700 border-slate-700 text-white shadow-sm"
           : "bg-white border-slate-300 text-slate-500 hover:border-slate-400 hover:bg-slate-50"
       }`}
     >
@@ -409,9 +419,11 @@ export default function PatientQueue({
       {/* Gender filter pills — only shown when queue has both genders */}
       {showGenderFilter && (
         <div className="flex items-center gap-1.5 mb-3 flex-wrap">
-          <span className="text-xs text-slate-500 font-medium mr-0.5">Filter:</span>
-          {genderPill("all",    `All (${patients.length})`)}
-          {hasMale   && genderPill("Male",   `♂ Male (${maleCount})`)}
+          <span className="text-xs text-slate-500 font-medium mr-0.5">
+            Filter:
+          </span>
+          {genderPill("all", `All (${patients.length})`)}
+          {hasMale && genderPill("Male", `♂ Male (${maleCount})`)}
           {hasFemale && genderPill("Female", `♀ Female (${femaleCount})`)}
         </div>
       )}
@@ -444,7 +456,7 @@ export default function PatientQueue({
               No {genderFilter !== "all" ? genderFilter : ""} patients in queue.
             </p>
           ) : null}
-          {displayPatients.map((patient, index) => (
+          {displayPatients.map((patient, index) =>
             (() => {
               const patientKey = getPatientKey(patient);
               const patientReason = getPatientExplanationWithPercentages(
@@ -454,159 +466,174 @@ export default function PatientQueue({
               );
 
               return (
-            <div
-              key={patient.id}
-              onClick={() => handlePatientClick(patient)}
-              className={`border-l-4 rounded-lg p-3.5 ${resolvePriorityClass(
-                patient.priority
-              )} ${
-                wardId && beds.length > 0 && canAssign
-                  ? "cursor-pointer hover:shadow-lg transition-shadow"
-                  : ""
-              }`}
-            >
-              {/* Header Row: Name & Badges on Left, Interactive Triage Button/Selector on Right */}
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0 flex-1">
-                  <p className="font-semibold flex items-center gap-1.5 flex-wrap text-slate-900">
-                    <span>{index + 1}. {patient.name}</span>
-                    {patient.priorityScore !== undefined && (
-                      <span
-                        className="text-xs font-bold text-white bg-indigo-500 px-1.5 py-0.5 rounded-full ring-1 ring-indigo-600/30"
-                        title="AI priority score"
-                      >
-                        {patient.priorityScore.toFixed(3)}
-                      </span>
-                    )}
-                    <span className="text-xs font-mono font-semibold text-slate-500 bg-white/80 px-1.5 py-0.5 rounded ring-1 ring-black/5">
-                      #{patient.id}
-                    </span>
-                  </p>
-                  <p className="text-sm flex flex-wrap gap-1.5 mt-1">
-                    <span
-                      className={`px-2 py-0.5 rounded text-xs font-medium ${ageGroupBadgeColors[patient.ageGroup]}`}
-                    >
-                      {patient.ageGroup} ({patient.age}y)
-                    </span>
-                    {patient.gender && (
-                      <span
-                        className={`px-2 py-0.5 rounded text-xs font-semibold ${
-                          patient.gender === "Male"
-                            ? "bg-blue-100 text-blue-800"
-                            : "bg-pink-100 text-pink-800"
-                        }`}
-                      >
-                        {patient.gender === "Male" ? "♂" : "♀"} {patient.gender}
-                      </span>
-                    )}
-                    <span className="px-2 py-0.5 rounded text-xs font-medium bg-gray-200">
-                      {patient.disease}
-                    </span>
-                    {patient.previousDiseases && patient.previousDiseases.length > 0 && (
-                      <span className="px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800" title={`Previous history: ${patient.previousDiseases.join(", ")}`}>
-                        History: {patient.previousDiseases.slice(0, 2).join(", ")}{patient.previousDiseases.length > 2 ? "..." : ""}
-                      </span>
-                    )}
-                    {patient.triageRequested && (
-                      <span className="px-2 py-0.5 rounded text-xs font-semibold bg-amber-200 text-amber-900 animate-pulse">
-                        Doctor Triage Needed
-                      </span>
-                    )}
-                  </p>
-                </div>
+                <div
+                  key={patient.id}
+                  onClick={() => handlePatientClick(patient)}
+                  className={`border-l-4 rounded-lg p-3.5 ${resolvePriorityClass(
+                    patient.priority
+                  )} ${
+                    wardId && beds.length > 0 && canAssign
+                      ? "cursor-pointer hover:shadow-lg transition-shadow"
+                      : ""
+                  }`}
+                >
+                  {/* Header Row: Name & Badges on Left, Interactive Triage Button/Selector on Right */}
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <p className="font-semibold flex items-center gap-1.5 flex-wrap text-slate-900">
+                        <span>
+                          {index + 1}. {patient.name}
+                        </span>
+                        {patient.priorityScore !== undefined && (
+                          <span
+                            className="text-xs font-bold text-white bg-indigo-500 px-1.5 py-0.5 rounded-full ring-1 ring-indigo-600/30"
+                            title="AI priority score"
+                          >
+                            {patient.priorityScore.toFixed(3)}
+                          </span>
+                        )}
+                        <span className="text-xs font-mono font-semibold text-slate-500 bg-white/80 px-1.5 py-0.5 rounded ring-1 ring-black/5">
+                          #{patient.id}
+                        </span>
+                      </p>
+                      <p className="text-sm flex flex-wrap gap-1.5 mt-1">
+                        <span
+                          className={`px-2 py-0.5 rounded text-xs font-medium ${ageGroupBadgeColors[patient.ageGroup]}`}
+                        >
+                          {patient.ageGroup} ({patient.age}y)
+                        </span>
+                        {patient.gender && (
+                          <span
+                            className={`px-2 py-0.5 rounded text-xs font-semibold ${
+                              patient.gender === "Male"
+                                ? "bg-blue-100 text-blue-800"
+                                : "bg-pink-100 text-pink-800"
+                            }`}
+                          >
+                            {patient.gender === "Male" ? "♂" : "♀"}{" "}
+                            {patient.gender}
+                          </span>
+                        )}
+                        <span className="px-2 py-0.5 rounded text-xs font-medium bg-gray-200">
+                          {patient.disease}
+                        </span>
+                        {patient.previousDiseases &&
+                          patient.previousDiseases.length > 0 && (
+                            <span
+                              className="px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800"
+                              title={`Previous history: ${patient.previousDiseases.join(", ")}`}
+                            >
+                              History:{" "}
+                              {patient.previousDiseases.slice(0, 2).join(", ")}
+                              {patient.previousDiseases.length > 2 ? "..." : ""}
+                            </span>
+                          )}
+                        {patient.triageRequested && (
+                          <span className="px-2 py-0.5 rounded text-xs font-semibold bg-amber-200 text-amber-900 animate-pulse">
+                            Doctor Triage Needed
+                          </span>
+                        )}
+                      </p>
+                    </div>
 
-                {/* Triage Level Display / Edit Button */}
-                {triageEditable ? (
-                  <div
-                    className="relative shrink-0 flex items-center gap-1"
-                    onClick={(e) => e.stopPropagation()}
-                    title="Click to edit patient triage level"
-                  >
-                    <select
-                      value={resolveTriageDraft(patient)}
-                      disabled={isUpdatingTriageId === patientKey}
-                      onChange={async (e) => {
-                        const nextPriority = e.target.value as Patient["priority"];
-                        handleTriageDraftChange(patientKey, nextPriority);
-                        await handleSaveTriage(patient, nextPriority);
-                      }}
-                      className={`cursor-pointer rounded-md border px-2.5 py-1 text-xs font-bold shadow-2xs transition-all focus:outline-none focus:ring-2 ${
-                        patient.triageRequested
-                          ? "border-amber-400 bg-amber-100 text-amber-950 ring-amber-400 animate-pulse"
-                          : "border-slate-300 bg-white/95 text-slate-900 hover:border-slate-400 hover:bg-slate-50"
-                      }`}
-                    >
-                      <option value="Triage 1">Triage 1 (Critical)</option>
-                      <option value="Triage 2">Triage 2 (Emergent)</option>
-                      <option value="Triage 3">Triage 3 (Urgent)</option>
-                      <option value="Triage 4">Triage 4 (Semi-urgent)</option>
-                      <option value="Triage 5">Triage 5 (Non-urgent)</option>
-                    </select>
-                    {isUpdatingTriageId === patientKey && (
-                      <span className="text-[10px] text-slate-500 font-semibold animate-pulse">
-                        Saving...
+                    {/* Triage Level Display / Edit Button */}
+                    {triageEditable ? (
+                      <div
+                        className="relative shrink-0 flex items-center gap-1"
+                        onClick={(e) => e.stopPropagation()}
+                        title="Click to edit patient triage level"
+                      >
+                        <select
+                          value={resolveTriageDraft(patient)}
+                          disabled={isUpdatingTriageId === patientKey}
+                          onChange={async (e) => {
+                            const nextPriority = e.target
+                              .value as Patient["priority"];
+                            handleTriageDraftChange(patientKey, nextPriority);
+                            await handleSaveTriage(patient, nextPriority);
+                          }}
+                          className={`cursor-pointer rounded-md border px-2.5 py-1 text-xs font-bold shadow-2xs transition-all focus:outline-none focus:ring-2 ${
+                            patient.triageRequested
+                              ? "border-amber-400 bg-amber-100 text-amber-950 ring-amber-400 animate-pulse"
+                              : "border-slate-300 bg-white/95 text-slate-900 hover:border-slate-400 hover:bg-slate-50"
+                          }`}
+                        >
+                          <option value="Triage 1">Triage 1 (Critical)</option>
+                          <option value="Triage 2">Triage 2 (Emergent)</option>
+                          <option value="Triage 3">Triage 3 (Urgent)</option>
+                          <option value="Triage 4">
+                            Triage 4 (Semi-urgent)
+                          </option>
+                          <option value="Triage 5">
+                            Triage 5 (Non-urgent)
+                          </option>
+                        </select>
+                        {isUpdatingTriageId === patientKey && (
+                          <span className="text-[10px] text-slate-500 font-semibold animate-pulse">
+                            Saving...
+                          </span>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="whitespace-nowrap shrink-0 self-start text-center text-xs font-bold px-2.5 py-1 rounded-md bg-white/90 text-slate-900 ring-1 ring-black/10 shadow-2xs">
+                        {patient.priority}
                       </span>
                     )}
                   </div>
-                ) : (
-                  <span className="whitespace-nowrap shrink-0 self-start text-center text-xs font-bold px-2.5 py-1 rounded-md bg-white/90 text-slate-900 ring-1 ring-black/10 shadow-2xs">
-                    {patient.priority}
-                  </span>
-                )}
-              </div>
 
-              {/* Full Width Explanation Card */}
-              <div className="mt-2.5 flex w-full items-center justify-between gap-1.5 rounded-md bg-white/85 px-2.5 py-1.5 ring-1 ring-black/5 shadow-2xs">
-                <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                  <Sparkles className="h-3.5 w-3.5 shrink-0 text-indigo-500" />
-                  <p className="min-w-0 flex-1 text-xs leading-relaxed text-slate-700 font-medium">
-                    {renderReasonText(patientReason)}
-                  </p>
+                  {/* Full Width Explanation Card */}
+                  <div className="mt-2.5 flex w-full items-center justify-between gap-1.5 rounded-md bg-white/85 px-2.5 py-1.5 ring-1 ring-black/5 shadow-2xs">
+                    <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                      <Sparkles className="h-3.5 w-3.5 shrink-0 text-indigo-500" />
+                      <p className="min-w-0 flex-1 text-xs leading-relaxed text-slate-700 font-medium">
+                        {renderReasonText(patientReason)}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedExplanationPatient({
+                          ...patient,
+                          queueRank: index + 1,
+                          queueReason: patientReason,
+                        });
+                      }}
+                      className="ml-2 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-500 text-[11px] font-black text-white hover:bg-amber-600 hover:scale-110 transition-all shadow-xs cursor-pointer"
+                      title="View XAI Feature Contribution Breakdown"
+                    >
+                      !
+                    </button>
+                  </div>
+
+                  {patient.admissionTime && (
+                    <p className="text-xs mt-2">
+                      Arrival:{" "}
+                      {new Date(patient.admissionTime).toLocaleString()}
+                    </p>
+                  )}
+
+                  {(() => {
+                    const waitMinutes = resolveWaitMinutes(patient);
+                    if (waitMinutes === null) return null;
+                    return (
+                      <p className="text-xs mt-1 font-semibold">
+                        Waiting: {waitMinutes} mins
+                      </p>
+                    );
+                  })()}
+
+                  {patient.specialRequirements &&
+                    patient.specialRequirements.length > 0 && (
+                      <p className="text-xs mt-2">
+                        <span className="font-semibold">Special needs:</span>{" "}
+                        {patient.specialRequirements.join(", ")}
+                      </p>
+                    )}
                 </div>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setSelectedExplanationPatient({
-                      ...patient,
-                      queueRank: index + 1,
-                      queueReason: patientReason,
-                    });
-                  }}
-                  className="ml-2 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-500 text-[11px] font-black text-white hover:bg-amber-600 hover:scale-110 transition-all shadow-xs cursor-pointer"
-                  title="View XAI Feature Contribution Breakdown"
-                >
-                  !
-                </button>
-              </div>
-
-              {patient.admissionTime && (
-                <p className="text-xs mt-2">
-                  Arrival: {new Date(patient.admissionTime).toLocaleString()}
-                </p>
-              )}
-
-              {(() => {
-                const waitMinutes = resolveWaitMinutes(patient);
-                if (waitMinutes === null) return null;
-                return (
-                  <p className="text-xs mt-1 font-semibold">
-                    Waiting: {waitMinutes} mins
-                  </p>
-                );
-              })()}
-
-              {patient.specialRequirements &&
-                patient.specialRequirements.length > 0 && (
-                  <p className="text-xs mt-2">
-                    <span className="font-semibold">Special needs:</span>{" "}
-                    {patient.specialRequirements.join(", ")}
-                  </p>
-                )}
-            </div>
               );
             })()
-          ))}
+          )}
         </div>
       </div>
 
