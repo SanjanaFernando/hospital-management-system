@@ -427,6 +427,14 @@ async function queryWardWithPatients(wardId: string): Promise<Ward | null> {
       normalizeBed(bedDoc, admittedPatients)
     )
   );
+  const wardNameLower = String(ward.name || "").toLowerCase();
+  const defaultBedGender = wardNameLower.includes("female")
+    ? "Female"
+    : wardNameLower.includes("male")
+      ? "Male"
+      : "Unisex";
+  const stateBedGender = (bed: Bed) =>
+    bed.gender === "Unisex" ? defaultBedGender : bed.gender;
 
   let queueResult;
   if (queuedPatients.length === 0) {
@@ -444,6 +452,14 @@ async function queryWardWithPatients(wardId: string): Promise<Ward | null> {
       targetWardOccupiedBeds: beds.filter((bed) => bed.status === "occupied")
         .length,
       targetWardTotalBeds: beds.length,
+      totalMaleBeds: beds.filter((bed) => stateBedGender(bed) !== "Female").length,
+      totalFemaleBeds: beds.filter((bed) => stateBedGender(bed) !== "Male").length,
+      occupiedMaleBeds: beds.filter(
+        (bed) => bed.status === "occupied" && stateBedGender(bed) !== "Female"
+      ).length,
+      occupiedFemaleBeds: beds.filter(
+        (bed) => bed.status === "occupied" && stateBedGender(bed) !== "Male"
+      ).length,
       wards: [],
       patientHistory: (patientDocs as MongoDoc[]).map((patientDoc) => ({
         admissionTime: patientDoc.admissionTime as string | Date | undefined,
