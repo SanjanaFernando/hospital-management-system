@@ -64,6 +64,10 @@ function toTriageInt(priority: string | number): number {
 interface WardSnapshot {
   totalBeds: number;
   occupiedBeds: number;
+  totalMaleBeds: number;
+  totalFemaleBeds: number;
+  occupiedMaleBeds: number;
+  occupiedFemaleBeds: number;
   usePredictive: boolean;
   forecasterProfilePath: string;
   patientHistory?: Array<{
@@ -115,6 +119,14 @@ async function buildWardSnapshot(wardId: string): Promise<WardSnapshot> {
   return {
     totalBeds: beds.length,
     occupiedBeds: beds.filter((bed: any) => bed.status === "occupied").length,
+    totalMaleBeds: beds.filter((bed: any) => bed.gender === "Male" || bed.gender === "Unisex").length,
+    totalFemaleBeds: beds.filter((bed: any) => bed.gender === "Female" || bed.gender === "Unisex").length,
+    occupiedMaleBeds: beds.filter(
+      (bed: any) => bed.status === "occupied" && (bed.gender === "Male" || bed.gender === "Unisex")
+    ).length,
+    occupiedFemaleBeds: beds.filter(
+      (bed: any) => bed.status === "occupied" && (bed.gender === "Female" || bed.gender === "Unisex")
+    ).length,
     usePredictive: true,
     forecasterProfilePath: FORECASTER_PROFILE_PATH,
     patientHistory: historicalPatients.map((p: any) => ({
