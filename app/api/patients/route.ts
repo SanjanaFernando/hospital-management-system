@@ -79,15 +79,53 @@ export async function POST(request: NextRequest) {
     const { db } = await connectToDatabase();
     const body = await request.json();
 
-    // Validate required fields
-    if (!body.name || !body.age || !body.disease) {
+    // Validate request body structure
+    if (!body || typeof body !== "object") {
       return NextResponse.json(
-        { error: "Missing required fields: name, age, disease" },
+        { error: "Invalid request payload" },
         { status: 400 }
       );
     }
 
-    if (!body.wardId) {
+    // Strict type, length, and content validation for name (Finding #4)
+    if (
+      typeof body.name !== "string" ||
+      !body.name.trim() ||
+      body.name.length > 500
+    ) {
+      return NextResponse.json(
+        { error: "Invalid patient name. Name must be a non-empty string under 500 characters." },
+        { status: 400 }
+      );
+    }
+
+    // Strict type and range validation for age (Finding #4)
+    if (
+      typeof body.age !== "number" ||
+      Number.isNaN(body.age) ||
+      !Number.isFinite(body.age) ||
+      body.age < 0 ||
+      body.age > 150
+    ) {
+      return NextResponse.json(
+        { error: "Invalid patient age. Age must be a number between 0 and 150." },
+        { status: 400 }
+      );
+    }
+
+    // Strict type, length, and content validation for disease
+    if (
+      typeof body.disease !== "string" ||
+      !body.disease.trim() ||
+      body.disease.length > 500
+    ) {
+      return NextResponse.json(
+        { error: "Invalid disease. Disease must be a non-empty string under 500 characters." },
+        { status: 400 }
+      );
+    }
+
+    if (typeof body.wardId !== "string" || !body.wardId.trim()) {
       return NextResponse.json(
         { error: "Ward ID is required" },
         { status: 400 }
@@ -158,10 +196,16 @@ export async function POST(request: NextRequest) {
       ? new Date(body.admissionTime)
       : new Date();
 
+    const normalizedGender =
+      body.gender === "Female" || String(body.gender).toLowerCase() === "female"
+        ? "Female"
+        : "Male";
+
     const result = await db.collection("patients").insertOne({
       ...body,
       id: patientId,
       name: patientName || body.name,
+      gender: normalizedGender,
       previousDiseases: accumulatedPreviousDiseases,
       admissionTime,
       createdAt: new Date(),

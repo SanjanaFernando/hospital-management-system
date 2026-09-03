@@ -196,7 +196,10 @@ def build_state_vector(ward_snapshot, forecaster=None, use_predictive=True):
     }
     Returns (state: np.ndarray[10], queue_with_wait_hours: list[dict], predictive_meta: dict)
     """
+    if "totalBeds" not in ward_snapshot:
+         raise ValueError("Missing required field: totalBeds")
     total_beds = max(int(ward_snapshot["totalBeds"]), 1)
+    # total_beds = max(int(ward_snapshot["totalBeds"]), 1)
     occ = min(int(ward_snapshot["occupiedBeds"]) / total_beds, 1.0)
 
     queue = ward_snapshot.get("queue", [])
@@ -345,7 +348,9 @@ def agent_confidence(actors, state_t):
     for i, actor in enumerate(actors):
         with torch.no_grad():
             logits = actor(state_t)
-            dist = Categorical(logits=logits)
+            probs = torch.softmax(logits, dim=-1)
+            action_index = int(torch.argmax(probs, dim=-1).item())
+            dist = Categorical(probs=probs)
             entropy = dist.entropy().item()
             # Normalize by max possible entropy (uniform over N_ACTIONS) -> [0,1]
             max_entropy = float(np.log(N_ACTIONS))
@@ -353,6 +358,8 @@ def agent_confidence(actors, state_t):
         out.append({
             "agent_index": i,
             "triage_class": TRIAGE_AGENT_NAMES[i],
+            "action_index": action_index,
+            "action_confidence_0to1": round(float(probs[0, action_index].item()), 4),
             "policy_entropy": round(entropy, 4),
             "confidence_0to1": round(float(np.clip(confidence, 0.0, 1.0)), 4),
         })

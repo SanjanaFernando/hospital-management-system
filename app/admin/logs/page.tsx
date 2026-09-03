@@ -17,6 +17,8 @@ import {
   ArrowLeftRight,
   Wrench,
   Bell,
+  Building2,
+  Trash2,
 } from "lucide-react";
 import { useAuthSession } from "@/app/context/AuthSessionContext";
 import { getUserLogs } from "@/app/actions/logActions";
@@ -80,6 +82,24 @@ const ACTION_CONFIG: Record<
     color: "text-pink-700",
     bgColor: "bg-pink-50 border-pink-200",
     icon: Bell,
+  },
+    ward_added: {
+    label: "Ward Added",
+    color: "text-emerald-700",
+    bgColor: "bg-emerald-50 border-emerald-200",
+    icon: Building2,
+  },
+  ward_updated: {
+    label: "Ward Updated",
+    color: "text-blue-700",
+    bgColor: "bg-blue-50 border-blue-200",
+    icon: Wrench,
+  },
+  ward_deleted: {
+    label: "Ward Deleted",
+    color: "text-red-700",
+    bgColor: "bg-red-50 border-red-200",
+    icon: Trash2,
   },
 };
 
@@ -192,9 +212,9 @@ export default function AdminLogsPage() {
           <div className="flex items-center gap-3">
             <Link
               href="/"
-              className="rounded-xl border border-slate-200 bg-white p-2 text-slate-600 shadow-sm transition hover:bg-slate-50 hover:text-slate-900"
+              className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-slate-900 text-white hover:bg-slate-700 transition-colors shrink-0"
             >
-              <ChevronLeft className="h-5 w-5" />
+              <ChevronLeft className="w-5 h-5" />
             </Link>
             <div>
               <h1 className="text-2xl font-bold tracking-tight text-slate-900">

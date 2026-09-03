@@ -15,6 +15,7 @@ import {
   canSetTriage,
 } from "@/lib/rbac";
 import { updatePatient } from "@/app/utils/api";
+import { clearClientCache } from "@/app/utils/clientCache";
 
 interface AssignFromQueueModalProps {
   wardId: string;
@@ -200,10 +201,12 @@ export default function AssignFromQueueModal({
     setErrorMessage("");
     setIsLoading(true);
     try {
+      clearClientCache();
       await dischargePatientById(patient.id, session);
       onAssigned();
       onClose();
       router.push(`/wards/${wardId}`);
+      router.refresh();
     } catch (err) {
       setErrorMessage(
         err instanceof Error ? err.message : "Failed to discharge patient"
@@ -214,6 +217,16 @@ export default function AssignFromQueueModal({
   };
 
   const selectedBed = selectedBeds.find((b) => b.id === selectedBedId);
+
+  // ── Gender mismatch check ─────────────────────────────────────────────
+  const bedGenderMismatch = (() => {
+    if (!selectedBed) return false;
+    const bedGender = selectedBed.gender ?? "Unisex";
+    if (bedGender === "Unisex") return false;
+    if (!patient.gender) return false;
+    return patient.gender !== bedGender;
+  })();
+  // ─────────────────────────────────────────────────────────────────────
 
   if (!isMounted) return null;
 
@@ -344,20 +357,48 @@ export default function AssignFromQueueModal({
               Available Beds in {selectedWard?.name || wardName} ({availableBeds.length})
             </h4>
             <div className="grid grid-cols-3 gap-2">
-              {availableBeds.map((bed) => (
-                <button
-                  key={bed.id}
-                  onClick={() => setSelectedBedId(bed.id)}
-                  className={`p-3 border rounded ${selectedBedId === bed.id ? "border-green-600 bg-green-50" : "border-gray-200"}`}
-                >
-                  <div className="font-semibold text-black">
-                    {bed.type === "ICU"
-                      ? `ICU Bed ${bed.bedNumber}`
-                      : `Bed ${bed.bedNumber}`}
-                  </div>
-                  <div className="text-xs text-green-600">Available</div>
-                </button>
-              ))}
+              {availableBeds.map((bed) => {
+                const bedGender = bed.gender ?? "Unisex";
+                const isMaleBed = bedGender === "Male";
+                const isFemaleBed = bedGender === "Female";
+                const mismatch =
+                  bedGender !== "Unisex" &&
+                  patient.gender &&
+                  patient.gender !== bedGender;
+                return (
+                  <button
+                    key={bed.id}
+                    onClick={() => setSelectedBedId(bed.id)}
+                    className={`p-3 border rounded relative ${
+                      selectedBedId === bed.id
+                        ? "border-green-600 bg-green-50"
+                        : mismatch
+                        ? "border-amber-400 bg-amber-50"
+                        : "border-gray-200"
+                    }`}
+                  >
+                    {bedGender !== "Unisex" && (
+                      <span
+                        className={`absolute top-1 right-1 text-[9px] font-bold px-1 py-0.5 rounded-full ${
+                          isMaleBed
+                            ? "bg-blue-100 text-blue-700"
+                            : "bg-pink-100 text-pink-700"
+                        }`}
+                      >
+                        {isMaleBed ? "♂ M" : "♀ F"}
+                      </span>
+                    )}
+                    <div className="font-semibold text-black">
+                      {bed.type === "ICU"
+                        ? `ICU Bed ${bed.bedNumber}`
+                        : `Bed ${bed.bedNumber}`}
+                    </div>
+                    <div className={`text-xs ${mismatch ? "text-amber-600" : "text-green-600"}`}>
+                      {mismatch ? "⚠ Gender" : "Available"}
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           </div>
         )}
@@ -397,6 +438,21 @@ export default function AssignFromQueueModal({
         {availableBeds.length === 0 && occupiedBeds.length === 0 && (
           <div className="bg-yellow-50 border rounded p-4 mb-6">
             No beds available in {selectedWard?.name || wardName}.
+          </div>
+        )}
+
+        {/* Gender mismatch warning */}
+        {bedGenderMismatch && selectedBed && (
+          <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 mb-4 flex items-start gap-2">
+            <span className="text-amber-500 text-base leading-none mt-0.5">⚠</span>
+            <p className="text-sm text-amber-800">
+              <span className="font-semibold">Gender mismatch:</span> Bed{" "}
+              {selectedBed.bedNumber} is designated for{" "}
+              <span className="font-semibold">{selectedBed.gender}</span> patients,
+              but {patient.name} is{" "}
+              <span className="font-semibold">{patient.gender}</span>. Use{" "}
+              <span className="font-semibold">Force Assign</span> to override.
+            </p>
           </div>
         )}
 

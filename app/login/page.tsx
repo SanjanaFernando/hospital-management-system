@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { loginUser } from "@/app/actions/userActions";
-import { ShieldCheck, Eye, EyeOff, Loader2 } from "lucide-react";
+import { Hospital, Eye, EyeOff, Loader2 } from "lucide-react";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -97,7 +97,7 @@ export default function LoginPage() {
           {/* Hospital Logo / Brand */}
           <div className="text-center mb-8">
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-teal-400 to-cyan-500 shadow-lg shadow-teal-500/25 mb-4">
-              <ShieldCheck className="w-8 h-8 text-white" />
+              <Hospital className="w-8 h-8 text-white" />
             </div>
             <h1 className="text-2xl font-bold text-white tracking-tight">
               Karapitiya Teaching Hospital
@@ -192,17 +192,17 @@ export default function LoginPage() {
             </button>
           </form>
 
-          {/* Info text */}
-          <p className="mt-6 text-center text-xs text-white/30">
-            Your temporary password was sent to your email.
+          {/* Info notice */}
+          <p className="mt-6 text-center text-xs text-white/40 leading-relaxed">
+            Authorized hospital personnel only.
             <br />
-            Contact your admin if you need access.
+            For account assistance or access requests, contact IT Administration.
           </p>
         </div>
 
         {/* Footer */}
-        <p className="text-center text-[11px] text-white/20 mt-6">
-          © 2026 Karapitiya Teaching Hospital — Secure Access
+        <p className="text-center text-[11px] text-white/30 mt-6">
+          © 2026 A Project of Faculty of Engineering, UOR
         </p>
       </div>
 

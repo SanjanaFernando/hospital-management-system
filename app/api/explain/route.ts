@@ -24,6 +24,7 @@ import fs from "fs/promises";
 import { connectToDatabase } from "@/lib/mongodb";
 import { resolveForecasterProfilePath } from "@/lib/get-mappo-model";
 import { resolvePythonBin } from "@/lib/resolve-python-bin";
+import { getSessionFromHeaders, canReorderQueue } from "@/lib/rbac";
 
 const PYTHON_BIN = resolvePythonBin();
 const CHECKPOINT_PATH =
@@ -37,7 +38,10 @@ const SHAP_CACHE_PATH = path.join(process.cwd(), "xai", "data", "shap_summary.js
 // When running on Vercel (or any hosted env), the inference service URL is set.
 // In that case we delegate explain calls via HTTP to the FastAPI /explain endpoint
 // instead of spawning a local Python subprocess (which Vercel does not support).
-const INFERENCE_SERVICE_URL = process.env.INFERENCE_SERVICE_URL?.replace(/\/$/, "") ?? "";
+const USE_LOCAL_XAI = process.env.XAI_USE_LOCAL === "true";
+const INFERENCE_SERVICE_URL = USE_LOCAL_XAI
+  ? ""
+  : process.env.QUEUE_AI_ENDPOINT?.replace(/\/$/, "") ?? "";
 
 
 function toTriageInt(priority: string | number): number {
@@ -272,9 +276,25 @@ async function handle(wardId: string | null, withShap: boolean, persist: boolean
 
 
 export async function GET(request: NextRequest) {
+  const session = getSessionFromHeaders(request.headers);
+  if (!session || session.role === "guest") {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const { searchParams } = new URL(request.url);
   const wardId = searchParams.get("wardId");
   const withShap = searchParams.get("withShap") === "1";
+
+  if (!wardId) {
+    return NextResponse.json({ error: "wardId is required" }, { status: 400 });
+  }
+
+  if (!canReorderQueue(session, wardId)) {
+    return NextResponse.json(
+      { error: "Forbidden: You do not have reorder_queue permission for this ward" },
+      { status: 403 }
+    );
+  }
 
   try {
     const explanation = await handle(wardId, withShap, false);
@@ -285,8 +305,24 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const session = getSessionFromHeaders(request.headers);
+  if (!session || session.role === "guest") {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   try {
     const body = await request.json();
+    if (!body?.wardId) {
+      return NextResponse.json({ error: "wardId is required" }, { status: 400 });
+    }
+
+    if (!canReorderQueue(session, body.wardId)) {
+      return NextResponse.json(
+        { error: "Forbidden: You do not have reorder_queue permission for this ward" },
+        { status: 403 }
+      );
+    }
+
     const explanation = await handle(body.wardId, Boolean(body.withShap), Boolean(body.persist));
     return NextResponse.json(explanation);
   } catch (err: any) {

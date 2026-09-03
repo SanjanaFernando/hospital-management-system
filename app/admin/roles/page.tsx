@@ -61,6 +61,7 @@ const BUILT_IN_STYLE: Record<StaffRole, { dot: string; bg: string; text: string;
   consultant_doctor:{ dot: "bg-teal-500",   bg: "bg-teal-50",   text: "text-teal-700",   border: "border-teal-200"   },
   main_sister:      { dot: "bg-pink-500",   bg: "bg-pink-50",   text: "text-pink-700",   border: "border-pink-200"   },
   main_attendant:   { dot: "bg-amber-500",  bg: "bg-amber-50",  text: "text-amber-700",  border: "border-amber-200"  },
+  guest:            { dot: "bg-slate-500",  bg: "bg-slate-50",  text: "text-slate-700",  border: "border-slate-200"  },
 };
 const CUSTOM_STYLE = { dot: "bg-slate-500", bg: "bg-slate-50", text: "text-slate-700", border: "border-slate-200" };
 

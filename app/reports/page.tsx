@@ -3,7 +3,7 @@ import { Metadata } from "next";
 import { getServerSession } from "@/lib/session.server";
 import { getWardsWithPatients } from "@/app/actions/wardActions";
 import { ROLE_LABELS } from "@/lib/rbac";
-import { ArrowLeft } from "lucide-react";
+import { ChevronLeft } from "lucide-react";
 import ReportsTabs from "@/app/components/ReportsTabs";
 
 export const metadata: Metadata = {
@@ -16,27 +16,24 @@ export default async function ReportsPage() {
   const wards = await getWardsWithPatients();
 
   return (
-    <div className="min-h-screen bg-linear-to-br from-slate-100 via-teal-50 to-cyan-100 p-4 lg:p-8">
-      <div className="mx-auto max-w-7xl">
-        <div className="mb-6 flex items-center justify-between gap-4">
+    <div className="min-h-screen bg-linear-to-br from-slate-100 via-teal-50 to-cyan-100 p-4 lg:p-8 print:min-h-0 print:bg-white print:p-0">
+      <div className="mx-auto max-w-7xl print:mx-0 print:max-w-none">
+        <div className="mb-6 flex items-center gap-3 print:hidden">
+          <Link
+            href="/"
+            className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-slate-900 text-white hover:bg-slate-700 transition-colors shrink-0"
+          >
+            <ChevronLeft className="w-5 h-5" />
+          </Link>
           <div>
-            <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-teal-700">
-              Reports
-            </p>
             <h1 className="text-3xl font-bold text-slate-900">
               Hospital Reports
             </h1>
-            <p className="mt-2 text-sm text-slate-600">
+            <p className="mt-1 text-sm text-slate-600">
               Role: {ROLE_LABELS[session.role]}{" "}
               {session.wardId ? `- Ward ${session.wardId}` : ""}
             </p>
           </div>
-          <Link
-            href="/"
-            className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800"
-          >
-            <ArrowLeft className="h-4 w-4" />
-          </Link>
         </div>
 
         <ReportsTabs

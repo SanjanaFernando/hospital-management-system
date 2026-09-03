@@ -2,7 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { Bed, Patient } from "@/app/types";
-import { assignPatientToBed } from "@/app/actions/patientActions";
+import {
+  assignPatientToBed,
+  forceAssignPatientToBed,
+} from "@/app/actions/patientActions";
 import { useAuthSession } from "@/app/context/AuthSessionContext";
 import { canSetTriage } from "@/lib/rbac";
 import { updatePatient } from "@/app/utils/api";
@@ -14,6 +17,15 @@ interface AssignPatientModalProps {
   onAssigned: () => void;
   onTriageUpdated?: () => void;
   onCancel: () => void;
+}
+
+/** Returns true when patient gender conflicts with the bed's designated gender */
+function hasGenderMismatch(bed: Bed, patient: Patient | undefined): boolean {
+  if (!patient) return false;
+  const bedGender = bed.gender ?? "Unisex";
+  if (bedGender === "Unisex") return false;
+  if (!patient.gender) return false;
+  return patient.gender !== bedGender;
 }
 
 export default function AssignPatientModal({
@@ -39,11 +51,14 @@ export default function AssignPatientModal({
 
   const selectedPatient = queue.find((p) => p.id === selectedPatientId);
   const canEditTriage = Boolean(wardId) && canSetTriage(session, wardId);
+  const genderMismatch = hasGenderMismatch(bed, selectedPatient);
+  const bedGenderLabel = bed.gender && bed.gender !== "Unisex" ? bed.gender : "";
 
   useEffect(() => {
     setTriageDraft(selectedPatient?.priority || null);
     setIsEditingTriage(false);
     setTriageError("");
+    setErrorMessage("");
   }, [selectedPatient?.id, selectedPatient?.priority]);
 
   const handleSaveTriage = async () => {
@@ -74,7 +89,8 @@ export default function AssignPatientModal({
       setIsUpdatingTriage(false);
     }
   };
-  const handleAssign = async () => {
+
+  const handleAssign = async (force = false) => {
     if (!selectedPatientId) {
       setErrorMessage("Please select a patient from the queue");
       return;
@@ -84,12 +100,21 @@ export default function AssignPatientModal({
     setIsLoading(true);
 
     try {
-      await assignPatientToBed({
-        wardId,
-        bedId: bed.id,
-        patientId: selectedPatientId,
-        actor: session,
-      });
+      if (force) {
+        await forceAssignPatientToBed({
+          wardId,
+          bedId: bed.id,
+          patientId: selectedPatientId,
+          actor: session,
+        });
+      } else {
+        await assignPatientToBed({
+          wardId,
+          bedId: bed.id,
+          patientId: selectedPatientId,
+          actor: session,
+        });
+      }
       onAssigned();
     } catch (error) {
       const message =
@@ -106,6 +131,17 @@ export default function AssignPatientModal({
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-bold text-gray-800">
             Assign Patient to Bed {bed.bedNumber}
+            {bedGenderLabel && (
+              <span
+                className={`ml-2 text-sm font-semibold px-2 py-0.5 rounded-full ${
+                  bed.gender === "Male"
+                    ? "bg-blue-100 text-blue-700"
+                    : "bg-pink-100 text-pink-700"
+                }`}
+              >
+                {bed.gender === "Male" ? "♂" : "♀"} {bed.gender}
+              </span>
+            )}
           </h3>
           <button
             onClick={onCancel}
@@ -133,6 +169,7 @@ export default function AssignPatientModal({
               {queue.map((patient) => (
                 <option key={patient.id} value={patient.id}>
                   {patient.name} - {patient.priority}
+                  {patient.gender ? ` (${patient.gender})` : ""}
                 </option>
               ))}
             </select>
@@ -146,6 +183,18 @@ export default function AssignPatientModal({
                   <span className="px-2 py-1 rounded text-xs text-gray-600 font-medium bg-gray-200">
                     {selectedPatient.age}y - {selectedPatient.ageGroup}
                   </span>
+                  {selectedPatient.gender && (
+                    <span
+                      className={`px-2 py-1 rounded text-xs font-medium ${
+                        selectedPatient.gender === "Male"
+                          ? "bg-blue-100 text-blue-700"
+                          : "bg-pink-100 text-pink-700"
+                      }`}
+                    >
+                      {selectedPatient.gender === "Male" ? "♂" : "♀"}{" "}
+                      {selectedPatient.gender}
+                    </span>
+                  )}
                   <span className="px-2 py-1 rounded text-xs font-medium bg-orange-200 text-orange-800">
                     {selectedPatient.disease}
                   </span>
@@ -211,6 +260,22 @@ export default function AssignPatientModal({
                 )}
               </div>
             )}
+
+            {/* Gender mismatch warning */}
+            {genderMismatch && (
+              <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 flex items-start gap-2">
+                <span className="text-amber-500 text-base leading-none mt-0.5">⚠</span>
+                <p className="text-sm text-amber-800">
+                  <span className="font-semibold">Gender mismatch:</span> This
+                  bed is designated for{" "}
+                  <span className="font-semibold">{bed.gender}</span> patients.
+                  Normal assignment is blocked. Use{" "}
+                  <span className="font-semibold">Force Assign</span> to
+                  override.
+                </p>
+              </div>
+            )}
+
             {errorMessage && (
               <div className="rounded-lg border border-red-200 bg-red-50 p-3">
                 <p className="text-sm font-semibold text-red-700">
@@ -220,13 +285,23 @@ export default function AssignPatientModal({
             )}
 
             <div className="flex gap-3">
-              <button
-                onClick={handleAssign}
-                disabled={isLoading}
-                className="flex-1 rounded-lg bg-green-600 px-4 py-2 text-white font-semibold hover:bg-green-700 disabled:bg-green-300"
-              >
-                {isLoading ? "Assigning..." : "Assign Patient"}
-              </button>
+              {!genderMismatch ? (
+                <button
+                  onClick={() => handleAssign(false)}
+                  disabled={isLoading}
+                  className="flex-1 rounded-lg bg-green-600 px-4 py-2 text-white font-semibold hover:bg-green-700 disabled:bg-green-300"
+                >
+                  {isLoading ? "Assigning..." : "Assign Patient"}
+                </button>
+              ) : (
+                <button
+                  onClick={() => handleAssign(true)}
+                  disabled={isLoading}
+                  className="flex-1 rounded-lg bg-amber-600 px-4 py-2 text-white font-semibold hover:bg-amber-700 disabled:bg-amber-300"
+                >
+                  {isLoading ? "Assigning..." : "⚠ Force Assign"}
+                </button>
+              )}
               <button
                 onClick={onCancel}
                 className="flex-1 rounded-lg bg-gray-300 px-4 py-2 text-gray-800 font-semibold hover:bg-gray-400"

@@ -85,7 +85,7 @@ function generatePriority() {
 }
 
 function ageGroupFromAge(age) {
-  if (age < 13) return "Child";
+  if (age < 18) return "Child";
   if (age < 60) return "Adult";
   return "Elderly";
 }
@@ -129,47 +129,53 @@ function generatePatient(patientId, wardId, status, gender) {
 }
 
 // ---------------------------------------------------------------------------
-// Ward configurations
-// Free beds graduate from tightest (Ward 2, min 2) to most available (Ward 9, 10).
-// ICU beds are 2-3 random per ward.
+// Ward configurations strictly following bed allocation specifications:
+// - Ward 2: ICU 3 (Beds 1-3), Male 33 (Beds 4-36, 30 occ, 3 free), Female 34 (Beds 37-70, 30 occ, 4 free)
+// - Ward 9: ICU 2 (Beds 1-2), Male 22 (Beds 3-24, 19 occ, 3 free), Female 22 (Beds 25-46, 18 occ, 4 free)
+// - Ward 3: Female Medical (ICU 2, Female 40)
+// - Ward 5: Male Surgical (ICU 2, Male 50)
 // ---------------------------------------------------------------------------
 function makeWardConfigs() {
   return [
     {
       wardId:         "ward-2",
       name:           "Ward 2 - General",
-      maleAdmitted:   35,
-      femaleAdmitted: 35,
-      queuePatients:  8,
-      icuBeds:        randomInt(2, 3),
-      freeBeds:       randomInt(2, 4),   // starts from 2 — tightest ward
+      icuBeds:        3,
+      maleBeds:       33,
+      maleAdmitted:   30,  // last 3 beds (34-36) free
+      femaleBeds:     34,
+      femaleAdmitted: 30,  // last 4 beds (67-70) free
+      queueCount:     8,
     },
     {
       wardId:         "ward-3",
       name:           "Ward 3 - Female Medical",
+      icuBeds:        2,
+      maleBeds:       0,
       maleAdmitted:   0,
-      femaleAdmitted: 42,
-      queuePatients:  10,
-      icuBeds:        randomInt(2, 3),
-      freeBeds:       randomInt(3, 5),   // slightly more slack
+      femaleBeds:     40,
+      femaleAdmitted: 36,  // last 4 beds (39-42) free
+      queueCount:     8,
     },
     {
       wardId:         "ward-5",
       name:           "Ward 5 - Male Surgical",
-      maleAdmitted:   55,
+      icuBeds:        2,
+      maleBeds:       50,
+      maleAdmitted:   46,  // last 4 beds (49-52) free
+      femaleBeds:     0,
       femaleAdmitted: 0,
-      queuePatients:  12,
-      icuBeds:        randomInt(2, 3),
-      freeBeds:       randomInt(5, 7),   // more relaxed
+      queueCount:     10,
     },
     {
       wardId:         "ward-9",
       name:           "Ward 9 - General Medical",
-      maleAdmitted:   23,
-      femaleAdmitted: 23,
-      queuePatients:  9,
-      icuBeds:        randomInt(2, 3),
-      freeBeds:       10,                // most available — fixed at 10
+      icuBeds:        2,
+      maleBeds:       22,
+      maleAdmitted:   19,  // last 3 beds (22-24) free
+      femaleBeds:     22,
+      femaleAdmitted: 18,  // last 4 beds (43-46) free
+      queueCount:     8,
     },
   ];
 }
@@ -200,73 +206,103 @@ async function resetDatabase() {
     let totalBeds = 0;
 
     for (const cfg of wardConfigs) {
-      const { wardId, name, maleAdmitted, femaleAdmitted, queuePatients, icuBeds, freeBeds } = cfg;
-      const totalAdmitted = maleAdmitted + femaleAdmitted;
-
-      // Normal beds = total admitted + free slots (all remaining beds beyond admitted patients)
-      const normalBeds = totalAdmitted + freeBeds;
-      const bedCount   = normalBeds + icuBeds;
+      const {
+        wardId,
+        name,
+        icuBeds,
+        maleBeds,
+        maleAdmitted,
+        femaleBeds,
+        femaleAdmitted,
+        queueCount,
+      } = cfg;
 
       // ---------------------------------------------------------------
-      // Admitted patients — exact gender split
+      // Admitted patients — strictly separated by gender
       // ---------------------------------------------------------------
-      const admitted = [];
+      const malePatients = [];
       for (let i = 0; i < maleAdmitted; i++) {
-        admitted.push(generatePatient(`${wardId}-m-${i + 1}`, wardId, "admitted", "Male"));
+        malePatients.push(generatePatient(`${wardId}-m-${i + 1}`, wardId, "admitted", "Male"));
       }
+
+      const femalePatients = [];
       for (let i = 0; i < femaleAdmitted; i++) {
-        admitted.push(generatePatient(`${wardId}-f-${i + 1}`, wardId, "admitted", "Female"));
+        femalePatients.push(generatePatient(`${wardId}-f-${i + 1}`, wardId, "admitted", "Female"));
       }
 
       // ---------------------------------------------------------------
-      // Queued patients — gender matches ward style
+      // Queued patients — matching ward gender policy
       // ---------------------------------------------------------------
       const queued = [];
-      for (let i = 0; i < queuePatients; i++) {
+      for (let i = 0; i < queueCount; i++) {
         let qGender;
-        if (maleAdmitted > 0 && femaleAdmitted === 0)      qGender = "Male";
-        else if (femaleAdmitted > 0 && maleAdmitted === 0) qGender = "Female";
-        else                                                qGender = Math.random() < 0.5 ? "Male" : "Female";
+        if (maleBeds > 0 && femaleBeds === 0)      qGender = "Male";
+        else if (femaleBeds > 0 && maleBeds === 0) qGender = "Female";
+        else                                       qGender = i % 2 === 0 ? "Male" : "Female";
         queued.push(generatePatient(`${wardId}-q-${i + 1}`, wardId, "queued", qGender));
       }
 
       // ---------------------------------------------------------------
-      // Beds — normal beds first, then ICU beds
+      // Beds:
+      // 1..icuBeds: ICU Beds (Unisex)
+      // Next maleBeds: Male Beds (type NORMAL, gender Male)
+      // Next femaleBeds: Female Beds (type NORMAL, gender Female)
       // ---------------------------------------------------------------
       const beds = [];
+      let currentBedNumber = 1;
 
-      for (let n = 1; n <= normalBeds; n++) {
-        const admittedPt = admitted[n - 1] || null;
+      // 1. ICU Beds (Unisex)
+      for (let i = 1; i <= icuBeds; i++) {
         beds.push({
-          bedId:     `${wardId}-normal-${n}`,
+          bedId:     `${wardId}-icu-${currentBedNumber}`,
           wardId,
-          bedNumber: n,
-          type:      "NORMAL",
-          status:    admittedPt ? "occupied" : "available",
-          patientId: admittedPt ? admittedPt.id : null,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        });
-      }
-
-      // ICU beds: randomly occupy exactly 1 to make it realistic
-      const icuOccupiedIndex = randomInt(0, icuBeds - 1);
-      for (let n = 1; n <= icuBeds; n++) {
-        const isOccupied = (n - 1) === icuOccupiedIndex;
-        beds.push({
-          bedId:     `${wardId}-icu-${n}`,
-          wardId,
-          bedNumber: normalBeds + n,
+          bedNumber: currentBedNumber,
           type:      "ICU",
-          status:    isOccupied ? "occupied" : "available",
+          gender:    "Unisex",
+          status:    "available",
           patientId: null,
           createdAt: new Date(),
           updatedAt: new Date(),
         });
+        currentBedNumber++;
+      }
+
+      // 2. Male Beds (NORMAL, Male)
+      for (let i = 0; i < maleBeds; i++) {
+        const pt = malePatients[i] || null;
+        beds.push({
+          bedId:     `${wardId}-normal-${currentBedNumber}`,
+          wardId,
+          bedNumber: currentBedNumber,
+          type:      "NORMAL",
+          gender:    "Male",
+          status:    pt ? "occupied" : "available",
+          patientId: pt ? pt.id : null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        });
+        currentBedNumber++;
+      }
+
+      // 3. Female Beds (NORMAL, Female)
+      for (let i = 0; i < femaleBeds; i++) {
+        const pt = femalePatients[i] || null;
+        beds.push({
+          bedId:     `${wardId}-normal-${currentBedNumber}`,
+          wardId,
+          bedNumber: currentBedNumber,
+          type:      "NORMAL",
+          gender:    "Female",
+          status:    pt ? "occupied" : "available",
+          patientId: pt ? pt.id : null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        });
+        currentBedNumber++;
       }
 
       // ---------------------------------------------------------------
-      // Insert
+      // Insert to Database
       // ---------------------------------------------------------------
       await db.collection("wards").insertOne({
         wardId,
@@ -275,21 +311,23 @@ async function resetDatabase() {
         updatedAt: new Date(),
       });
 
-      if (admitted.length + queued.length > 0) {
-        await db.collection("patients").insertMany([...admitted, ...queued]);
+      const allPatients = [...malePatients, ...femalePatients, ...queued];
+      if (allPatients.length > 0) {
+        await db.collection("patients").insertMany(allPatients);
       }
 
       await db.collection("beds").insertMany(beds);
 
-      totalPatients += admitted.length + queued.length;
+      totalPatients += allPatients.length;
       totalBeds     += beds.length;
 
       const freeCount = beds.filter(b => b.status === "available").length;
       console.log(
         `✅ Seeded ${name}:\n` +
-        `   Admitted → Male: ${maleAdmitted}, Female: ${femaleAdmitted}` +
-        `  |  Queued: ${queuePatients}` +
-        `  |  Beds: ${bedCount} total (${freeCount} free, ${icuBeds} ICU)`
+        `   ICU Beds: 1-${icuBeds} (Unisex)\n` +
+        `   Male Beds: ${maleBeds > 0 ? `${icuBeds + 1}-${icuBeds + maleBeds} (${maleAdmitted} occ, ${maleBeds - maleAdmitted} free)` : "None"}\n` +
+        `   Female Beds: ${femaleBeds > 0 ? `${icuBeds + maleBeds + 1}-${beds.length} (${femaleAdmitted} occ, ${femaleBeds - femaleAdmitted} free)` : "None"}\n` +
+        `   Total: ${beds.length} beds (${freeCount} free) | Patients: ${allPatients.length} (${queued.length} in queue)`
       );
     }
 

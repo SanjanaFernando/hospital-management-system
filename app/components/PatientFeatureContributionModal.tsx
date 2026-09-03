@@ -41,6 +41,8 @@ export type AgentVote = {
 export type AgentConfidence = {
   agent_index: number;
   triage_class: string;
+  action_index: number;
+  action_confidence_0to1?: number;
   policy_entropy: number;
   confidence_0to1: number;
 };
@@ -272,6 +274,12 @@ export default function PatientFeatureContributionModal({
     matchedRankedPatient?.waitContribution ?? patientWaitHours * w_w;
   const totalScore =
     matchedRankedPatient?.priorityScore ?? urgencyContrib + waitContrib;
+  const patientAgentConfidence = data?.agent_confidence?.find(
+    (agent) => agent.agent_index === triageLevelNum - 1
+  );
+  const confidenceScore =
+    patientAgentConfidence?.action_confidence_0to1 ??
+    patientAgentConfidence?.confidence_0to1;
 
   // 5. Display-only weights for the "Formula:" lines and the Active Policy
   // tile. The backend's combined_weights field is rounded independently of
@@ -389,7 +397,7 @@ export default function PatientFeatureContributionModal({
           </div>
 
           {/* Quick Metrics Bar */}
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
             <div className="rounded-xl bg-slate-50 p-3 border border-slate-100">
               <p className="text-[11px] font-semibold uppercase text-slate-500 tracking-wider">
                 Priority Score
@@ -434,6 +442,28 @@ export default function PatientFeatureContributionModal({
                 <p className="mt-1 text-xs font-mono font-semibold text-indigo-700">
                   w_t {formatNumber(w_t_display, 3)} / w_w {formatNumber(w_w_display, 3)}
                 </p>
+              )}
+            </div>
+            <div className="rounded-xl bg-slate-50 p-3 border border-slate-100">
+              <p className="text-[11px] font-semibold uppercase text-slate-500 tracking-wider">
+                Confidence Score
+              </p>
+              {isLoading ? (
+                <div className="mt-2 flex items-center gap-1.5 text-xs font-semibold text-indigo-600">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  <span>Loading...</span>
+                </div>
+              ) : (
+                <>
+                  <p className="mt-1 text-lg font-bold text-emerald-700">
+                    {typeof confidenceScore === "number"
+                      ? `${formatNumber(confidenceScore * 100, 0)}%`
+                      : "-"}
+                  </p>
+                  <p className="mt-0.5 text-[10px] text-slate-500">
+                    Action {patientAgentConfidence?.action_index ?? "-"}
+                  </p>
+                </>
               )}
             </div>
           </div>

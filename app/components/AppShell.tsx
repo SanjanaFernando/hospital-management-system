@@ -1,18 +1,21 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { PropsWithChildren, useEffect, useMemo, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { PropsWithChildren, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Activity,
   ArrowRight,
   Bed,
+  ChevronDown,
+  ChevronRight,
   ClipboardPlus,
   ClipboardSignature,
   Gauge,
   LogOut,
   Menu,
   ScrollText,
+  UserPlus,
+  UserMinus,
   X,
   TriangleAlert,
   UserRound,
@@ -25,7 +28,7 @@ import { AuthSessionProvider } from "@/app/context/AuthSessionContext";
 import { useAuthSession } from "@/app/context/AuthSessionContext";
 import { getWardsWithPatients } from "@/app/actions/wardActions";
 import { Ward } from "@/app/types";
-import { ROLE_LABELS } from "@/lib/rbac";
+import { ROLE_LABELS, canRegisterPatient, canAssignOrDischargePatient } from "@/lib/rbac";
 import { UserSession } from "@/app/types";
 import NotificationPanel from "./NotificationPanel";
 import ChatWidget from "./ChatWidget";
@@ -63,6 +66,229 @@ function formatShiftCountdown(date = new Date()): string {
 
   return `${shiftLabel} · Ends in ${hours}h ${minutes}m`;
 }
+
+function RegisterPatientDropdown({
+  registerableWards,
+  onNavigate,
+}: {
+  registerableWards: Ward[];
+  onNavigate?: () => void;
+}) {
+  const router = useRouter();
+  const [isOpen, setIsOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(event.target as Node)
+      ) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  if (registerableWards.length === 0) {
+    return (
+      <div className="flex w-full items-center justify-between rounded-xl bg-teal-950/40 px-3.5 py-2.5 text-sm font-semibold text-teal-300/40 border border-teal-800/30 cursor-not-allowed select-none">
+        <div className="flex items-center gap-2">
+          <UserPlus className="h-4 w-4" />
+          <span>Register Patient</span>
+        </div>
+        <span className="text-[11px] font-normal text-teal-400/40">No Access</span>
+      </div>
+    );
+  }
+
+  const handleSelectWard = (wardId: string) => {
+    setIsOpen(false);
+    onNavigate?.();
+    router.push(`/wards/${wardId}/register`);
+  };
+
+  // If only 1 ward is registerable, direct button click without dropdown
+  if (registerableWards.length === 1) {
+    const singleWard = registerableWards[0];
+    const wId = singleWard.wardId || singleWard.id;
+    return (
+      <button
+        type="button"
+        onClick={() => handleSelectWard(wId)}
+        className="flex w-full items-center justify-between rounded-xl bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-400 hover:to-emerald-400 px-3.5 py-2.5 text-sm font-bold text-slate-950 transition-all shadow-md active:scale-[0.98]"
+      >
+        <div className="flex items-center gap-2 min-w-0">
+          <UserPlus className="h-4 w-4 shrink-0" />
+          <span className="truncate">Register Patient</span>
+        </div>
+        <ArrowRight className="h-4 w-4 shrink-0" />
+      </button>
+    );
+  }
+
+  return (
+    <div className="relative w-full" ref={containerRef}>
+      <button
+        type="button"
+        onClick={() => setIsOpen((prev) => !prev)}
+        aria-expanded={isOpen}
+        className="flex w-full items-center justify-between rounded-xl bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-400 hover:to-emerald-400 px-3.5 py-2.5 text-sm font-bold text-slate-950 transition-all shadow-md active:scale-[0.98]"
+      >
+        <div className="flex items-center gap-2 min-w-0">
+          <UserPlus className="h-4 w-4 shrink-0" />
+          <span className="truncate">Register Patient</span>
+        </div>
+        <ChevronDown
+          className={`h-4 w-4 shrink-0 transition-transform duration-200 ${
+            isOpen ? "rotate-180" : ""
+          }`}
+        />
+      </button>
+
+      {isOpen && (
+        <div className="absolute left-0 right-0 top-full mt-1.5 z-50 rounded-2xl border border-teal-500/25 bg-[#0a272f] p-2 shadow-2xl backdrop-blur-md animate-in fade-in-50 zoom-in-95">
+          <p className="px-2.5 py-1.5 text-[11px] font-bold uppercase tracking-wider text-teal-300/70 border-b border-white/10 mb-1">
+            Select Ward for Registration
+          </p>
+
+          <div className="space-y-1 max-h-56 overflow-y-auto custom-scrollbar">
+            {registerableWards.map((w) => {
+              const wId = w.wardId || w.id;
+              return (
+                <button
+                  key={wId}
+                  type="button"
+                  onClick={() => handleSelectWard(wId)}
+                  className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-xs font-semibold text-slate-100 hover:bg-teal-500/20 hover:text-teal-200 transition-all group"
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Bed className="h-3.5 w-3.5 text-teal-400 shrink-0 group-hover:scale-110 transition-transform" />
+                    <span className="truncate">{w.name}</span>
+                  </div>
+                  <ChevronRight className="h-3.5 w-3.5 text-slate-400 opacity-0 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all shrink-0" />
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DischargePatientDropdown({
+  dischargeableWards,
+  onNavigate,
+}: {
+  dischargeableWards: Ward[];
+  onNavigate?: () => void;
+}) {
+  const router = useRouter();
+  const [isOpen, setIsOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(event.target as Node)
+      ) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  if (dischargeableWards.length === 0) {
+    return (
+      <div className="flex w-full items-center justify-between rounded-xl bg-teal-950/40 px-3.5 py-2.5 text-sm font-semibold text-teal-300/40 border border-teal-800/30 cursor-not-allowed select-none">
+        <div className="flex items-center gap-2">
+          <UserMinus className="h-4 w-4" />
+          <span>Discharge Patient</span>
+        </div>
+        <span className="text-[11px] font-normal text-teal-400/40">No Access</span>
+      </div>
+    );
+  }
+
+  const handleSelectWard = (wardId: string) => {
+    setIsOpen(false);
+    onNavigate?.();
+    router.push(`/wards/${wardId}/patients`);
+  };
+
+  // If only 1 ward is dischargeable, direct button click without dropdown
+  if (dischargeableWards.length === 1) {
+    const singleWard = dischargeableWards[0];
+    const wId = singleWard.wardId || singleWard.id;
+    return (
+      <button
+        type="button"
+        onClick={() => handleSelectWard(wId)}
+        className="flex w-full items-center justify-between rounded-xl bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 px-3.5 py-2.5 text-sm font-bold text-white transition-all shadow-md active:scale-[0.98]"
+      >
+        <div className="flex items-center gap-2 min-w-0">
+          <UserMinus className="h-4 w-4 shrink-0" />
+          <span className="truncate">Discharge Patient</span>
+        </div>
+        <ArrowRight className="h-4 w-4 shrink-0" />
+      </button>
+    );
+  }
+
+  return (
+    <div className="relative w-full" ref={containerRef}>
+      <button
+        type="button"
+        onClick={() => setIsOpen((prev) => !prev)}
+        aria-expanded={isOpen}
+        className="flex w-full items-center justify-between rounded-xl bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 px-3.5 py-2.5 text-sm font-bold text-white transition-all shadow-md active:scale-[0.98]"
+      >
+        <div className="flex items-center gap-2 min-w-0">
+          <UserMinus className="h-4 w-4 shrink-0" />
+          <span className="truncate">Discharge Patient</span>
+        </div>
+        <ChevronDown
+          className={`h-4 w-4 shrink-0 transition-transform duration-200 ${
+            isOpen ? "rotate-180" : ""
+          }`}
+        />
+      </button>
+
+      {isOpen && (
+        <div className="absolute left-0 right-0 top-full mt-1.5 z-50 rounded-2xl border border-rose-500/25 bg-[#0a272f] p-2 shadow-2xl backdrop-blur-md animate-in fade-in-50 zoom-in-95">
+          <p className="px-2.5 py-1.5 text-[11px] font-bold uppercase tracking-wider text-rose-300/70 border-b border-white/10 mb-1">
+            Select Ward for Discharge
+          </p>
+
+          <div className="space-y-1 max-h-56 overflow-y-auto custom-scrollbar">
+            {dischargeableWards.map((w) => {
+              const wId = w.wardId || w.id;
+              return (
+                <button
+                  key={wId}
+                  type="button"
+                  onClick={() => handleSelectWard(wId)}
+                  className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-xs font-semibold text-slate-100 hover:bg-rose-500/20 hover:text-rose-200 transition-all group"
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Bed className="h-3.5 w-3.5 text-rose-400 shrink-0 group-hover:scale-110 transition-transform" />
+                    <span className="truncate">{w.name}</span>
+                  </div>
+                  <ChevronRight className="h-3.5 w-3.5 text-slate-400 opacity-0 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all shrink-0" />
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 
 function AppShellContent({ children }: PropsWithChildren) {
   const pathname = usePathname();
@@ -117,6 +343,20 @@ function AppShellContent({ children }: PropsWithChildren) {
     });
   }, [activeWardId, session.role, session.wardIds, wards]);
 
+  const registerableWards = useMemo(() => {
+    return wards.filter((ward) => {
+      const wId = ward.wardId || ward.id;
+      return canRegisterPatient(session, wId);
+    });
+  }, [wards, session]);
+
+  const dischargeableWards = useMemo(() => {
+    return wards.filter((ward) => {
+      const wId = ward.wardId || ward.id;
+      return canAssignOrDischargePatient(session, wId);
+    });
+  }, [wards, session]);
+
   const availableBeds = scopedWards.reduce(
     (sum, ward) => sum + ward.availableBeds,
     0
@@ -126,19 +366,12 @@ function AppShellContent({ children }: PropsWithChildren) {
     0
   );
 
-
-
   const navItems: SidebarItem[] = [
     { label: "Dashboard", href: "/", icon: Gauge },
     {
       label: "Wards",
       href: activeWardId ? `/wards/${activeWardId}` : "/",
       icon: Bed,
-    },
-    {
-      label: "Discharges",
-      href: activeWardId ? `/wards/${activeWardId}/patients` : "/",
-      icon: Activity,
     },
     { label: "Reports", href: "/reports", icon: ClipboardSignature },
     { label: "User Management", href: "/admin/users", icon: Users, adminOnly: true },
@@ -174,26 +407,6 @@ function AppShellContent({ children }: PropsWithChildren) {
   if (!isMounted) {
     return <>{children}</>;
   }
-
-  const quickLinks = [
-    {
-      label: "Register a patient",
-      href: activeWardId ? `/wards/${activeWardId}/register` : "/",
-      className:
-        "bg-teal-500 text-teal-950 hover:bg-teal-400 border-teal-300/20",
-    },
-    {
-      label: "Discharge patient",
-      href: activeWardId ? `/wards/${activeWardId}/patients` : "/",
-      className:
-        "bg-cyan-400 text-slate-900 hover:bg-cyan-300 border-cyan-200/20",
-    },
-    {
-      label: "Assign Bed",
-      href: activeWardId ? `/wards/${activeWardId}/beds` : "/",
-      className: "bg-white text-slate-900 hover:bg-slate-100 border-white/40",
-    },
-  ];
 
   const renderNavLinks = (compact = false, onNavigate?: () => void) =>
     navItems.map((item) => {
@@ -240,9 +453,9 @@ function AppShellContent({ children }: PropsWithChildren) {
   }
 
   return (
-    <div className="min-h-screen bg-linear-to-br from-slate-100 via-teal-50 to-cyan-100">
-      <div className="mx-auto flex max-w-412.5 flex-col gap-4 p-4 lg:flex-row lg:gap-6 lg:p-6">
-        <header className="sticky top-0 z-20 -mx-4 -mt-4 border-b border-teal-900/10 bg-[#0b2b33]/96 px-4 py-3 text-slate-100 shadow-[0_20px_45px_rgba(3,17,26,0.18)] backdrop-blur lg:hidden">
+    <div className="min-h-screen bg-linear-to-br from-slate-100 via-teal-50 to-cyan-100 print:min-h-0 print:bg-white">
+      <div className="mx-auto flex max-w-412.5 flex-col gap-4 p-4 lg:flex-row lg:gap-6 lg:p-6 print:block print:max-w-none print:gap-0 print:p-0">
+        <header className="sticky top-0 z-20 -mx-4 -mt-4 border-b border-teal-900/10 bg-[#0b2b33]/96 px-4 py-3 text-slate-100 shadow-[0_20px_45px_rgba(3,17,26,0.18)] backdrop-blur print:hidden lg:hidden">
           <div className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
             <div className="min-w-0 flex-1">
               <h1 className="truncate text-base font-bold tracking-tight text-white">
@@ -299,47 +512,29 @@ function AppShellContent({ children }: PropsWithChildren) {
               </div>
 
               <div className="mt-3 space-y-2">
-                {quickLinks.map((item) => (
-                  <Link
-                    key={item.label}
-                    href={item.href}
-                    onClick={() => setMobileMenuOpen(false)}
-                    className={`flex items-center justify-between rounded-xl border px-3 py-2.5 text-sm font-semibold transition ${item.className}`}
-                  >
-                    <span>{item.label}</span>
-                    <ArrowRight className="h-4 w-4" />
-                  </Link>
-                ))}
+                <RegisterPatientDropdown
+                  registerableWards={registerableWards}
+                  onNavigate={() => setMobileMenuOpen(false)}
+                />
+                <DischargePatientDropdown
+                  dischargeableWards={dischargeableWards}
+                  onNavigate={() => setMobileMenuOpen(false)}
+                />
+                <Link
+                  href={activeWardId ? `/wards/${activeWardId}/beds` : "/"}
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="flex w-full items-center justify-between rounded-xl bg-white px-3 py-2.5 text-sm font-semibold text-slate-900 transition hover:bg-slate-100 shadow-sm active:scale-[0.98]"
+                >
+                  <span>🛏️ Assign Bed</span>
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
               </div>
 
               <nav className="mt-3 grid gap-2">
                 {renderNavLinks(false, () => setMobileMenuOpen(false))}
               </nav>
 
-
-
-
-              <div className="mt-3 flex items-center justify-between gap-3 border-t border-white/10 pt-3">
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    className="rounded-md border border-white/20 px-2 py-1 text-xs font-semibold text-white hover:bg-white/10"
-                  >
-                    EN
-                  </button>
-                  <button
-                    type="button"
-                    className="rounded-md border border-white/20 px-2 py-1 text-xs font-semibold text-white hover:bg-white/10"
-                  >
-                    සිං
-                  </button>
-                  <button
-                    type="button"
-                    className="rounded-md border border-white/20 px-2 py-1 text-xs font-semibold text-white hover:bg-white/10"
-                  >
-                    த
-                  </button>
-                </div>
+              <div className="mt-3 flex items-center justify-end gap-3 border-t border-white/10 pt-3">
                 <button
                   type="button"
                   onClick={handleSignOut}
@@ -353,7 +548,7 @@ function AppShellContent({ children }: PropsWithChildren) {
           )}
         </header>
 
-        <aside className="hidden w-full max-w-[300px] rounded-3xl border border-teal-800/10 bg-[#0b2b33] p-5 text-slate-100 shadow-[0_20px_45px_rgba(3,17,26,0.25)] lg:sticky lg:top-4 lg:h-[calc(100vh-2rem)] lg:w-85 lg:overflow-y-auto lg:block xl:max-w-full">
+        <aside className="sidebar-scroll hidden w-full max-w-[300px] rounded-3xl border border-teal-800/10 bg-[#0b2b33] p-5 text-slate-100 shadow-[0_20px_45px_rgba(3,17,26,0.25)] print:hidden lg:sticky lg:top-4 lg:h-[calc(100vh-2rem)] lg:w-85 lg:overflow-y-auto lg:block xl:max-w-full">
           <div className="border-b border-white/15 pb-4">
             <h1 className="text-xl font-bold tracking-tight text-white">
               Karapitiya National Hospital
@@ -401,23 +596,15 @@ function AppShellContent({ children }: PropsWithChildren) {
           </div>
 
           <div className="mt-5 space-y-2">
-            <Link
-              href={activeWardId ? `/wards/${activeWardId}/register` : "/"}
-              className="flex w-full items-center justify-between rounded-xl bg-teal-500 px-3 py-2.5 text-sm font-semibold text-teal-950 transition hover:bg-teal-400"
-            >
-              <span>➕Register a patients</span>
-              <ArrowRight className="h-4 w-4" />
-            </Link>
-            <Link
-              href={activeWardId ? `/wards/${activeWardId}/patients` : "/"}
-              className="flex w-full items-center justify-between rounded-xl bg-cyan-400 px-3 py-2.5 text-sm font-semibold text-slate-900 transition hover:bg-cyan-300"
-            >
-              <span>Discharge patient</span>
-              <ArrowRight className="h-4 w-4" />
-            </Link>
+            <RegisterPatientDropdown
+              registerableWards={registerableWards}
+            />
+            <DischargePatientDropdown
+              dischargeableWards={dischargeableWards}
+            />
             <Link
               href={activeWardId ? `/wards/${activeWardId}/beds` : "/"}
-              className="flex w-full items-center justify-between rounded-xl bg-white px-3 py-2.5 text-sm font-semibold text-slate-900 transition hover:bg-slate-100"
+              className="flex w-full items-center justify-between rounded-xl bg-white px-3 py-2.5 text-sm font-semibold text-slate-900 transition hover:bg-slate-100 shadow-sm active:scale-[0.98]"
             >
               <span>🛏️ Assign Bed</span>
               <ArrowRight className="h-4 w-4" />
@@ -462,26 +649,6 @@ function AppShellContent({ children }: PropsWithChildren) {
 
 
           <div className="mt-5 border-t border-white/15 pt-4">
-            <div className="mb-3 flex items-center gap-2">
-              <button
-                type="button"
-                className="rounded-md border border-white/20 px-2 py-1 text-xs font-semibold text-white hover:bg-white/10"
-              >
-                EN
-              </button>
-              <button
-                type="button"
-                className="rounded-md border border-white/20 px-2 py-1 text-xs font-semibold text-white hover:bg-white/10"
-              >
-                සිං
-              </button>
-              <button
-                type="button"
-                className="rounded-md border border-white/20 px-2 py-1 text-xs font-semibold text-white hover:bg-white/10"
-              >
-                த
-              </button>
-            </div>
             <button
               type="button"
               onClick={handleSignOut}
@@ -493,7 +660,7 @@ function AppShellContent({ children }: PropsWithChildren) {
           </div>
         </aside>
 
-        <main className="min-w-0 flex-1">
+        <main className="min-w-0 flex-1 print:block">
           {children}
         </main>
       </div>
