@@ -239,8 +239,8 @@ export default function ExplanationPanel({
                       (candidate) => candidate.agent_index === agent.agent_index
                     );
                     const actionIndex = agent.action_index ?? vote?.action_index;
-                    const confidenceValue =
-                      agent.action_confidence_0to1 ?? agent.confidence_0to1;
+                    const confidenceValue = agent.confidence_0to1;
+                    const actionProbability = agent.action_confidence_0to1;
                     const confidence = Math.max(
                       0,
                       Math.min(100, confidenceValue * 100)
@@ -265,6 +265,11 @@ export default function ExplanationPanel({
                         <p className="mt-1 text-[11px] text-slate-500">
                           Selected action {actionIndex ?? "-"}
                         </p>
+                        {typeof actionProbability === "number" && (
+                          <p className="text-[11px] text-slate-500">
+                            Action probability {formatNumber(actionProbability * 100, 2)}%
+                          </p>
+                        )}
                       </div>
                     );
                   })}

@@ -29,20 +29,30 @@ import { getSessionFromHeaders, canReorderQueue } from "@/lib/rbac";
 const PYTHON_BIN = resolvePythonBin();
 const CHECKPOINT_PATH =
   process.env.MAPPO_EXPLAIN_CHECKPOINT_PATH ||
-  path.join(process.cwd(), "model", "best_mappo_hospital.pth");
+  path.join(process.cwd(), "model", "best_mappo_shared.pth");
 const FORECASTER_PROFILE_PATH =
   process.env.FORECASTER_PROFILE_PATH || resolveForecasterProfilePath();
-const EXPLAIN_SCRIPT_PATH = path.join(process.cwd(), "xai", "scripts", "explain.py");
-const SHAP_CACHE_PATH = path.join(process.cwd(), "xai", "data", "shap_summary.json");
+const EXPLAIN_SCRIPT_PATH = path.join(
+  process.cwd(),
+  "xai",
+  "scripts",
+  "explain.py"
+);
+const SHAP_CACHE_PATH = path.join(
+  process.cwd(),
+  "xai",
+  "data",
+  "shap_summary.json"
+);
 
 // When running on Vercel (or any hosted env), the inference service URL is set.
 // In that case we delegate explain calls via HTTP to the FastAPI /explain endpoint
 // instead of spawning a local Python subprocess (which Vercel does not support).
-const USE_LOCAL_XAI = process.env.XAI_USE_LOCAL === "true";
+const USE_LOCAL_XAI =
+  process.env.NODE_ENV === "development" || process.env.XAI_USE_LOCAL === "true";
 const INFERENCE_SERVICE_URL = USE_LOCAL_XAI
   ? ""
   : process.env.QUEUE_AI_ENDPOINT?.replace(/\/$/, "") ?? "";
-
 
 function toTriageInt(priority: string | number): number {
   if (typeof priority === "number") return priority;
@@ -137,8 +147,8 @@ function runExplainSubprocess(
       return reject(
         new Error(
           `Python executable not found (${PYTHON_BIN}). ` +
-          "Set INFERENCE_SERVICE_URL to your Render service URL so the hosted " +
-          "environment delegates XAI to the inference service instead of a local subprocess."
+            "Set INFERENCE_SERVICE_URL to your Render service URL so the hosted " +
+            "environment delegates XAI to the inference service instead of a local subprocess."
         )
       );
     }
@@ -154,8 +164,8 @@ function runExplainSubprocess(
         reject(
           new Error(
             `Python executable not found (${PYTHON_BIN}). ` +
-            "Set INFERENCE_SERVICE_URL to your Render service URL so the hosted " +
-            "environment delegates XAI to the inference service instead of a local subprocess."
+              "Set INFERENCE_SERVICE_URL to your Render service URL so the hosted " +
+              "environment delegates XAI to the inference service instead of a local subprocess."
           )
         );
       } else {
@@ -185,7 +195,6 @@ function runExplainSubprocess(
     child.stdin?.end();
   });
 }
-
 
 async function loadShapCache() {
   try {
@@ -230,8 +239,11 @@ async function runExplainViaHttp(wardSnapshot: WardSnapshot): Promise<any> {
   return data;
 }
 
-
-async function handle(wardId: string | null, withShap: boolean, persist: boolean) {
+async function handle(
+  wardId: string | null,
+  withShap: boolean,
+  persist: boolean
+) {
   if (!wardId) {
     return NextResponse.json({ error: "wardId is required" }, { status: 400 });
   }
@@ -257,23 +269,20 @@ async function handle(wardId: string | null, withShap: boolean, persist: boolean
 
   if (persist) {
     const { db } = await connectToDatabase();
-    await db
-      .collection("wards")
-      .updateOne(
-        { wardId },
-        {
-          $set: {
-            queueOrderMessage: explanation.explanation_text,
-            queueOrderStrategy: "ai",
-            updatedAt: new Date(),
-          },
-        }
-      );
+    await db.collection("wards").updateOne(
+      { wardId },
+      {
+        $set: {
+          queueOrderMessage: explanation.explanation_text,
+          queueOrderStrategy: "ai",
+          updatedAt: new Date(),
+        },
+      }
+    );
   }
 
   return explanation;
 }
-
 
 export async function GET(request: NextRequest) {
   const session = getSessionFromHeaders(request.headers);
@@ -291,7 +300,10 @@ export async function GET(request: NextRequest) {
 
   if (!canReorderQueue(session, wardId)) {
     return NextResponse.json(
-      { error: "Forbidden: You do not have reorder_queue permission for this ward" },
+      {
+        error:
+          "Forbidden: You do not have reorder_queue permission for this ward",
+      },
       { status: 403 }
     );
   }
@@ -313,17 +325,27 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     if (!body?.wardId) {
-      return NextResponse.json({ error: "wardId is required" }, { status: 400 });
+      return NextResponse.json(
+        { error: "wardId is required" },
+        { status: 400 }
+      );
     }
 
     if (!canReorderQueue(session, body.wardId)) {
       return NextResponse.json(
-        { error: "Forbidden: You do not have reorder_queue permission for this ward" },
+        {
+          error:
+            "Forbidden: You do not have reorder_queue permission for this ward",
+        },
         { status: 403 }
       );
     }
 
-    const explanation = await handle(body.wardId, Boolean(body.withShap), Boolean(body.persist));
+    const explanation = await handle(
+      body.wardId,
+      Boolean(body.withShap),
+      Boolean(body.persist)
+    );
     return NextResponse.json(explanation);
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
