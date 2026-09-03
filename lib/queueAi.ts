@@ -374,7 +374,7 @@ function reorderViaSubprocess(input: QueueAiInput): QueueAiResult {
   // shared-actor checkpoint (best_mappo_shared_predictive.pth) uses net.*.weight
   // keys and cannot be loaded by load_mappo() — passing it would silently fall
   // through to fallbackPrioritySort without any warning.
-  const modelPath = resolveMappoModelPath(false); // false = prefer best_mappo_hospital.pth
+  const modelPath = resolveMappoModelPath(true); // prefer the shared 25-action checkpoint
   const forecasterProfilePath = resolveForecasterProfilePath();
   const scriptPath = path.join(process.cwd(), "xai", "scripts", "explain.py");
 
