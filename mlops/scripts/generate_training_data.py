@@ -109,6 +109,10 @@ def collect_historical_data(days: int = 7) -> list[dict[str, Any]]:
                 'wardId': ward_id,
                 'admissionTime': {'$gte': cutoff_date},
             }))
+            queued_patients = list(db.patients.find({
+                 'wardId': ward_id,
+                 'status': 'queued',
+            }))
             snapshot = {
                 'wardId': ward_id,
                 'name': ward.get('name', f'Ward {ward_id}'),
@@ -117,7 +121,7 @@ def collect_historical_data(days: int = 7) -> list[dict[str, Any]]:
                 'queue': [],
                 'timestamp': datetime.now(timezone.utc),
             }
-            for patient in patients:
+            for patient in queued_patients:
                 snapshot['queue'].append({
                     'id': str(patient.get('_id')),
                     'name': patient.get('name', 'Unknown'),
