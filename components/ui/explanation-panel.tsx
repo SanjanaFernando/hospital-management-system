@@ -90,15 +90,22 @@ function normalizeShapRows(shapCache?: ShapCache | null) {
   return Object.entries(shapCache.global_importance_per_agent).map(
     ([agentKey, values]) => {
       const maxAbs = Math.max(...values.map((value) => Math.abs(value)), 1e-9);
-      const features = (shapCache.feature_names || []).map((feature, index) => ({
-        feature,
-        value: values[index] ?? 0,
-      }));
+      const features = (shapCache.feature_names || []).map(
+        (feature, index) => ({
+          feature,
+          value: values[index] ?? 0,
+        })
+      );
 
       return {
         agentKey,
         features: features
-          .filter((entry) => entry.feature && entry.feature !== "pad_0" && entry.feature !== "pad_1")
+          .filter(
+            (entry) =>
+              entry.feature &&
+              entry.feature !== "pad_0" &&
+              entry.feature !== "pad_1"
+          )
           .sort((left, right) => Math.abs(right.value) - Math.abs(left.value))
           .slice(0, 4)
           .map((entry) => ({
@@ -119,7 +126,8 @@ export default function ExplanationPanel({
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
   const [showShap, setShowShap] = useState(false);
-  const [selectedPatientModal, setSelectedPatientModal] = useState<Patient | null>(null);
+  const [selectedPatientModal, setSelectedPatientModal] =
+    useState<Patient | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -177,7 +185,10 @@ export default function ExplanationPanel({
     }));
   }, [data]);
 
-  const shapRows = useMemo(() => normalizeShapRows(data?.shap_global_importance_cached), [data]);
+  const shapRows = useMemo(
+    () => normalizeShapRows(data?.shap_global_importance_cached),
+    [data]
+  );
 
   const topPatient = data?.ranked_queue?.[0];
   const combinedWeights = data?.combined_weights;
@@ -193,7 +204,10 @@ export default function ExplanationPanel({
             Why this queue is ordered this way
           </h2>
           <p className="mt-1 text-sm text-slate-600">
-            {wardName} {queueCount > 0 ? `- ${queueCount} patients in queue` : "- queue empty"}
+            {wardName}{" "}
+            {queueCount > 0
+              ? `- ${queueCount} patients in queue`
+              : "- queue empty"}
           </p>
         </div>
         <div className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-700 ring-1 ring-slate-200">
@@ -218,7 +232,8 @@ export default function ExplanationPanel({
               <span>Natural language summary</span>
               {combinedWeights && (
                 <span className="rounded-full bg-slate-100 px-2 py-1 text-[11px] uppercase tracking-wide text-slate-700">
-                  w_t {formatNumber(combinedWeights.w_t_urgency)} / w_w {formatNumber(combinedWeights.w_w_wait)}
+                  w_t {formatNumber(combinedWeights.w_t_urgency)} / w_w{" "}
+                  {formatNumber(combinedWeights.w_w_wait)}
                 </span>
               )}
             </div>
@@ -231,14 +246,17 @@ export default function ExplanationPanel({
                   <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                     Action confidence
                   </p>
-                  <p className="text-xs text-slate-500">Policy certainty by agent</p>
+                  <p className="text-xs text-slate-500">
+                    Policy certainty by agent
+                  </p>
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                   {data.agent_confidence.map((agent) => {
                     const vote = data.agent_votes?.find(
                       (candidate) => candidate.agent_index === agent.agent_index
                     );
-                    const actionIndex = agent.action_index ?? vote?.action_index;
+                    const actionIndex =
+                      agent.action_index ?? vote?.action_index;
                     const confidenceValue = agent.confidence_0to1;
                     const actionProbability = agent.action_confidence_0to1;
                     const confidence = Math.max(
@@ -267,7 +285,8 @@ export default function ExplanationPanel({
                         </p>
                         {typeof actionProbability === "number" && (
                           <p className="text-[11px] text-slate-500">
-                            Action probability {formatNumber(actionProbability * 100, 2)}%
+                            Action probability{" "}
+                            {formatNumber(actionProbability * 100, 2)}%
                           </p>
                         )}
                       </div>
@@ -283,7 +302,8 @@ export default function ExplanationPanel({
                     Top patient
                   </p>
                   <p className="mt-1 text-sm font-semibold text-slate-900">
-                    {topPatient.rank ? `#${topPatient.rank} ` : ""}{topPatient.name || "Unknown"}
+                    {topPatient.rank ? `#${topPatient.rank} ` : ""}
+                    {topPatient.name || "Unknown"}
                   </p>
                 </div>
                 <div className="rounded-xl bg-slate-50 p-3">
@@ -331,15 +351,28 @@ export default function ExplanationPanel({
                 </thead>
                 <tbody>
                   {(data?.ranked_queue || []).map((patient) => (
-                    <tr key={patient.patientId || `${patient.rank}-${patient.name}`} className="rounded-xl bg-slate-50 text-slate-700">
-                      <td className="px-3 py-3 font-semibold text-slate-900">#{patient.rank ?? "-"}</td>
+                    <tr
+                      key={
+                        patient.patientId || `${patient.rank}-${patient.name}`
+                      }
+                      className="rounded-xl bg-slate-50 text-slate-700"
+                    >
+                      <td className="px-3 py-3 font-semibold text-slate-900">
+                        #{patient.rank ?? "-"}
+                      </td>
                       <td className="px-3 py-3">{patient.name || "Unknown"}</td>
-                      <td className="px-3 py-3">Triage {patient.triageLevel ?? "-"}</td>
+                      <td className="px-3 py-3">
+                        Triage {patient.triageLevel ?? "-"}
+                      </td>
                       <td className="px-3 py-3 font-semibold text-slate-900">
                         {formatNumber(patient.priorityScore)}
                       </td>
-                      <td className="px-3 py-3">{formatNumber(patient.urgencyShare, 1)}%</td>
-                      <td className="px-3 py-3">{formatNumber(patient.waitShare, 1)}%</td>
+                      <td className="px-3 py-3">
+                        {formatNumber(patient.urgencyShare, 1)}%
+                      </td>
+                      <td className="px-3 py-3">
+                        {formatNumber(patient.waitShare, 1)}%
+                      </td>
                       <td className="px-3 py-3 text-center">
                         <button
                           type="button"
@@ -348,11 +381,14 @@ export default function ExplanationPanel({
                               id: patient.patientId || "",
                               _id: patient.patientId,
                               name: patient.name || "Unknown",
-                              priority: `Triage ${patient.triageLevel ?? 5}` as any,
+                              priority:
+                                `Triage ${patient.triageLevel ?? 5}` as any,
                               age: 0,
                               ageGroup: "Adult",
                               disease: "Emergency",
-                              admissionTime: new Date(Date.now() - (patient.waitHours || 0) * 3600000),
+                              admissionTime: new Date(
+                                Date.now() - (patient.waitHours || 0) * 3600000
+                              ),
                             })
                           }
                           className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-amber-500 text-[11px] font-black text-white hover:bg-amber-600 hover:scale-110 transition-all shadow-xs cursor-pointer"

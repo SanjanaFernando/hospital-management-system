@@ -2,7 +2,7 @@ services:
   - type: web
     name: hospital-ai-inference
     runtime: python
-    rootDir: inference-service   # Render deploys from this subdirectory
+    rootDir: inference-service # Render deploys from this subdirectory
     # Install CPU-only PyTorch first (saves ~1.5 GB vs the CUDA build),
     # then install the remaining requirements.
     buildCommand: >

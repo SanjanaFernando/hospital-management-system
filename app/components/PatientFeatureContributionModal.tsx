@@ -153,7 +153,8 @@ export default function PatientFeatureContributionModal({
 
         setData({
           ...payload,
-          ranked_queue: preloadedExplainData?.ranked_queue ?? payload.ranked_queue,
+          ranked_queue:
+            preloadedExplainData?.ranked_queue ?? payload.ranked_queue,
           combined_weights:
             preloadedExplainData?.combined_weights ?? payload.combined_weights,
         });
@@ -282,7 +283,9 @@ export default function PatientFeatureContributionModal({
   const waitContrib =
     matchedRankedPatient?.waitContribution ?? patientWaitHours * w_w;
   const totalScore =
-    matchedRankedPatient?.priorityScore ?? patient.priorityScore ?? urgencyContrib + waitContrib;
+    matchedRankedPatient?.priorityScore ??
+    patient.priorityScore ??
+    urgencyContrib + waitContrib;
   const patientAgentConfidence =
     data?.agent_confidence?.find(
       (agent) => agent.agent_index === triageLevelNum - 1
@@ -476,10 +479,8 @@ export default function PatientFeatureContributionModal({
                   </p>
                   {typeof actionProbability === "number" && (
                     <p className="mt-0.5 text-[10px] text-slate-500">
-                      Action {patientAgentConfidence?.action_index ?? "-"}: {formatNumber(
-                        actionProbability * 100,
-                        2
-                      )}% probability
+                      Action {patientAgentConfidence?.action_index ?? "-"}:{" "}
+                      {formatNumber(actionProbability * 100, 2)}% probability
                     </p>
                   )}
                 </>
