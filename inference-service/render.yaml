@@ -15,7 +15,7 @@ services:
     healthCheckPath: /health
     envVars:
       - key: MODEL_PATH
-        value: ./model/best_mappo_shared_predictive.pth
+        value: ./model/best_mappo_shared.pth
       - key: LOG_LEVEL
         value: INFO
     # Free tier is sufficient for this lightweight CPU-only service.

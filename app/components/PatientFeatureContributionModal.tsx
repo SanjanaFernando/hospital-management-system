@@ -132,7 +132,7 @@ export default function PatientFeatureContributionModal({
   }, []);
 
   useEffect(() => {
-    if (preloadedExplainData) {
+    if (preloadedExplainData?.agent_confidence?.length) {
       setData(preloadedExplainData);
       setIsLoading(false);
       return;
