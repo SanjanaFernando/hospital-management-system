@@ -1,16 +1,16 @@
 {
   "model": {
-    "name": "MAPPO Hospital Queue Optimizer",
+    "name": "MAPPO Shared Predictive Queue Reorderer",
     "type": "MAPPO",
-    "description": "Multi-Agent Proximal Policy Optimization for fair patient queue reordering",
+    "description": "Single shared actor for predictive queue reordering using 17-dim ward state and 25-action triage/wait grid",
     "version": "1.0.0"
   },
   "architecture": {
-    "state_dim": 10,
-    "action_dim": 99,
-    "hidden_dims": [128, 128],
-    "activation": "ReLU",
-    "output_activation": "Softmax",
+    "state_dim": 17,
+    "action_dim": 25,
+    "hidden_dims": [256, 256, 128],
+    "activation": "Tanh",
+    "output_activation": "Linear",
     "n_agents": 5,
     "agent_names": ["Critical", "Emergent", "Urgent", "Semi-urgent", "Non-urgent"],
     "alpha_weights": [0.40, 0.30, 0.15, 0.10, 0.05]
@@ -18,29 +18,38 @@
   "features": {
     "state_features": [
       "bed_occupancy_rate",
+      "male_bed_occupancy_rate",
+      "female_bed_occupancy_rate",
       "queue_length_norm",
+      "male_queue_ratio",
+      "female_queue_ratio",
       "triage1_proportion",
       "triage2_proportion",
       "triage3_proportion",
       "triage4_proportion",
       "triage5_proportion",
       "longest_wait_norm",
+      "avg_wait_norm",
+      "hour_sin",
+      "hour_cos",
       "predicted_arrival_load",
       "predicted_critical_share"
     ],
     "normalization": "minmax",
     "feature_scaling": {
       "occupancy_rate": [0, 1],
-      "queue_length": [0, 30],
+      "queue_length": [0, 40],
       "wait_hours": [0, 48],
-      "triage_proportion": [0, 1]
+      "triage_proportion": [0, 1],
+      "predicted_arrival_load": [0, 1],
+      "predicted_critical_share": [0, 1]
     }
   },
   "actions": {
-    "total": 99,
-    "description": "11 triage weights × 9 wait weights grid",
-    "w_triage_values": [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
-    "w_wait_values": [0.0, 0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7]
+    "total": 25,
+    "description": "5 triage weights × 5 wait weights grid",
+    "w_triage_values": [0.0, 0.25, 0.5, 0.75, 1.0],
+    "w_wait_values": [0.0, 0.15, 0.3, 0.5, 0.7]
   },
   "performance_targets": {
     "fairness_score": 0.85,

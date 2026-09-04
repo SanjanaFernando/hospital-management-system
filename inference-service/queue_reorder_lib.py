@@ -89,9 +89,11 @@ class MAPPOActor(nn.Module):
 # Utility helpers
 # ---------------------------------------------------------------------------
 
-def parse_iso(ts: str | None) -> datetime | None:
+def parse_iso(ts: str | datetime | None) -> datetime | None:
     if not ts:
         return None
+    if isinstance(ts, datetime):
+        return ts
     try:
         if ts.endswith("Z"):
             return datetime.fromisoformat(ts.replace("Z", "+00:00"))
@@ -334,11 +336,12 @@ def build_state(payload: dict[str, Any], state_dim: int, action_dim: int) -> np.
 # ---------------------------------------------------------------------------
 
 # MAPPO 5×5 action grid — must match W_T_LIST / W_W_LIST in train.py exactly
-_MAPPO_W_T_LIST = [0.0, 0.25, 0.5, 0.75, 1.0]
+MIN_TRIAGE_WEIGHT = 0.01
+_MAPPO_W_T_LIST = [MIN_TRIAGE_WEIGHT, 0.25, 0.5, 0.75, 1.0]
 _MAPPO_W_W_LIST = [0.0, 0.15, 0.3,  0.5,  0.7]
 
 # Legacy DDQN action grids
-_W_T_LIST = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]  # 11 values
+_W_T_LIST = [MIN_TRIAGE_WEIGHT, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]  # 11 values
 _W_W_LIST = [0.0, 0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7]             # 9 values
 
 
@@ -668,7 +671,10 @@ def run_inference(
     now2 = datetime.now(timezone.utc)
     sorted_queue = sorted(
         queue,
-        key=lambda p: patient_score(p, now2, weights, action_dim),
+        key=lambda p: (
+            patient_score(p, now2, weights, action_dim),
+            normalized_wait_hours(p, now2),
+        ),
         reverse=True,
     )
 

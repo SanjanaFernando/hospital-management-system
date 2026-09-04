@@ -50,7 +50,8 @@ from torch.distributions import Categorical
 #    Do NOT change these independently of the training script; the action
 #    grid, agent count and negotiation weights must match the checkpoint.
 # ============================================================
-W_T_LIST = [0.0, 0.25, 0.5, 0.75, 1.0]
+MIN_TRIAGE_WEIGHT = 0.01
+W_T_LIST = [MIN_TRIAGE_WEIGHT, 0.25, 0.5, 0.75, 1.0]
 W_W_LIST = [0.0, 0.15, 0.3, 0.5, 0.7]
 N_ACTIONS = 25
 
@@ -394,7 +395,10 @@ def decompose_queue(queue_with_wait_hours, combined_wt, combined_ww):
         if "__queueIndex" in p and p["__queueIndex"] is not None:
             entry["__queueIndex"] = p["__queueIndex"]
         ranked.append(entry)
-    ranked.sort(key=lambda r: r["priorityScore"], reverse=True)
+    ranked.sort(
+        key=lambda r: (r["priorityScore"], r["waitHours"]),
+        reverse=True,
+    )
     for rank, r in enumerate(ranked, start=1):
         r["rank"] = rank
         r["reason"] = r["reason"].replace("{rank}", str(rank))

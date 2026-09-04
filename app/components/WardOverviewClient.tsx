@@ -3,12 +3,13 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronLeft } from "lucide-react";
+import { ArrowRightLeft, ChevronLeft, ExternalLink } from "lucide-react";
 import { Bed, Patient, Ward } from "@/app/types";
 import BedGrid from "@/app/components/BedGrid";
 import PatientQueue from "@/app/components/PatientQueue";
 import PredictiveQueueRecommendationCard from "@/app/components/PredictiveQueueRecommendationCard";
 import { addBedToWard, getWardWithPatients } from "@/app/actions/wardActions";
+import { clearClientCache } from "@/app/utils/clientCache";
 import { useAuthSession } from "@/app/context/AuthSessionContext";
 import {
   canAccessWard,
@@ -124,7 +125,8 @@ export default function WardOverviewClient({
   };
 
   const refreshWard = useCallback(async () => {
-    const wardData = await getWardWithPatients(resolvedWardId);
+    clearClientCache();
+    const wardData = await getWardWithPatients(resolvedWardId, true);
     if (wardData) setWard(wardData);
   }, [resolvedWardId]);
 
@@ -254,58 +256,41 @@ export default function WardOverviewClient({
 
             {/* Transferred Out Patients Section */}
             {specialAssigns.length > 0 && (
-              <div className="mt-6 rounded-xl border border-cyan-200 bg-gradient-to-br from-cyan-50 via-sky-50 to-indigo-50 p-4 shadow-sm">
-                <div className="flex items-center justify-between mb-3">
+              <div className="mt-6 rounded-xl border border-cyan-200 bg-linear-to-br from-cyan-50 via-sky-50 to-indigo-50 p-4 shadow-sm">
+                <div className="mb-3 flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-cyan-600 text-white text-xs font-bold">
-                      ⇄
+                    <span className="flex h-7 w-7 items-center justify-center rounded-full bg-cyan-600 text-white">
+                      <ArrowRightLeft className="h-3.5 w-3.5" />
                     </span>
                     <h3 className="text-sm font-bold text-cyan-950">
                       Patients Transferred to Other Wards ({specialAssigns.length})
                     </h3>
                   </div>
-                  <span className="text-[11px] text-cyan-700 font-medium">
-                    Originated from this ward
-                  </span>
                 </div>
                 <div className="space-y-2">
                   {specialAssigns.map(({ patient, targetWardId, targetWardName, targetBed }) => (
                     <div
                       key={patient.id || patient._id}
-                      className="flex items-center justify-between rounded-lg border border-cyan-100 bg-white p-3 shadow-xs hover:border-cyan-300 transition-colors"
+                      className="flex flex-col gap-3 rounded-lg border border-cyan-100 bg-white p-3 shadow-xs transition-colors hover:border-cyan-300 sm:flex-row sm:items-center sm:justify-between"
                     >
-                      <div className="flex items-center gap-3">
-                        <div className="h-8 w-8 rounded-full bg-cyan-100 text-cyan-800 flex items-center justify-center font-bold text-xs">
-                          {patient.name.charAt(0)}
-                        </div>
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-gray-900">{patient.name}</p>
                         <div>
-                          <div className="flex items-center gap-2">
-                            <p className="text-sm font-semibold text-gray-900">{patient.name}</p>
-                            <span className="rounded bg-cyan-100 px-1.5 py-0.5 text-[10px] font-medium text-cyan-800">
-                              {patient.priority || "Triage"}
-                            </span>
-                          </div>
-                          <p className="text-xs text-gray-500">
-                            Age: {patient.age} • Disease: {patient.disease || "N/A"}
+                          <p className="mt-1 text-xs text-gray-500">
+                            Admitted in <span className="font-medium text-cyan-800">{targetWardName}</span>
+                            <span className="mx-1 text-gray-300">|</span>
+                            {targetBed.type === "ICU" ? "ICU bed" : "Bed"} #{targetBed.bedNumber}
                           </p>
                         </div>
                       </div>
-                      <div className="flex items-center gap-3">
-                        <div className="text-right">
-                          <p className="text-xs font-semibold text-cyan-800">
-                            Admitted in {targetWardName}
-                          </p>
-                          <p className="text-[11px] text-gray-500">
-                            {targetBed.type === "ICU" ? "ICU Bed" : "Bed"} #{targetBed.bedNumber}
-                          </p>
-                        </div>
-                        <button
-                          onClick={() => router.push(`/wards/${targetWardId}/${targetBed.id}`)}
-                          className="rounded-md bg-cyan-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-cyan-700 transition-colors"
-                        >
-                          View Bed
-                        </button>
-                      </div>
+                      <button
+                        onClick={() => router.push(`/wards/${targetWardId}/${targetBed.id}`)}
+                        aria-label={`View ${patient.name}'s bed`}
+                        className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-md bg-cyan-600 px-2.5 py-1.5 text-xs font-medium text-white transition-colors hover:bg-cyan-700"
+                      >
+                        View bed
+                        <ExternalLink className="h-3 w-3" />
+                      </button>
                     </div>
                   ))}
                 </div>

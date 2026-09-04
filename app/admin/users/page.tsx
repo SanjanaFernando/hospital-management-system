@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import { useAuthSession } from "@/app/context/AuthSessionContext";
 import { canManageStaff, ROLE_LABELS } from "@/lib/rbac";
-import { StaffRole } from "@/app/types";
+import { StaffRole, CustomRole } from "@/app/types";
 import {
   createUser,
   getUsers,
@@ -26,6 +26,7 @@ import {
   deleteUser,
   type UserListItem,
 } from "@/app/actions/userActions";
+import { getCustomRoles } from "@/app/actions/rolePermissionActions";
 
 const wardOptions = [
   { id: "ward-3", label: "Ward 3 - Surgical" },
@@ -37,6 +38,7 @@ const wardOptions = [
 export default function AdminUsersPage() {
   const { session } = useAuthSession();
   const [users, setUsers] = useState<UserListItem[]>([]);
+  const [customRoles, setCustomRoles] = useState<CustomRole[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -63,8 +65,12 @@ export default function AdminUsersPage() {
     setError("");
 
     try {
-      const data = await getUsers(session);
+      const [data, roles] = await Promise.all([
+        getUsers(session),
+        getCustomRoles(),
+      ]);
       setUsers(data);
+      setCustomRoles(roles);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load users");
     } finally {
@@ -320,6 +326,15 @@ export default function AdminUsersPage() {
                 <option value="main_attendant">Main Attendant</option>
                 {session.role === "admin" && (
                   <option value="sub_admin">Sub Admin</option>
+                )}
+                {customRoles.length > 0 && (
+                  <optgroup label="Custom Roles">
+                    {customRoles.map((cr) => (
+                      <option key={cr.id} value={cr.id}>
+                        {cr.label}
+                      </option>
+                    ))}
+                  </optgroup>
                 )}
               </select>
             </label>

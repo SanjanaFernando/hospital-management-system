@@ -1,0 +1,342 @@
+{
+  "generated_at": "2026-09-03T04:59:19.789350+00:00",
+  "state_dim": 17,
+  "n_samples": 4,
+  "source": "collect_historical_data",
+  "days_collected": 30,
+  "seed": 42,
+  "max_samples": 500,
+  "samples": [
+    {
+      "queue": [
+        {
+          "id": "6a98120451df83e4e2f2f7a2",
+          "name": "Tharindu Herath",
+          "priority": "Triage 5",
+          "queueWaitTime": 278,
+          "admissionTime": "2026-08-30 19:09:40.073000",
+          "age": 53,
+          "gender": "Male"
+        },
+        {
+          "id": "6a98120451df83e4e2f2f7a3",
+          "name": "Thilini Wijesinghe",
+          "priority": "Triage 2",
+          "queueWaitTime": 363,
+          "admissionTime": "2026-09-01 16:09:40.073000",
+          "age": 19,
+          "gender": "Female"
+        },
+        {
+          "id": "6a98120451df83e4e2f2f7a4",
+          "name": "Farzan Fernando",
+          "priority": "Triage 5",
+          "queueWaitTime": 351,
+          "admissionTime": "2026-08-31 17:09:40.073000",
+          "age": 42,
+          "gender": "Male"
+        },
+        {
+          "id": "6a98120451df83e4e2f2f7a5",
+          "name": "Dilrukshi Fernando",
+          "priority": "Triage 2",
+          "queueWaitTime": 130,
+          "admissionTime": "2026-09-01 01:09:40.073000",
+          "age": 31,
+          "gender": "Female"
+        },
+        {
+          "id": "6a98120451df83e4e2f2f7a6",
+          "name": "Lahiru Senanayake",
+          "priority": "Triage 3",
+          "queueWaitTime": 146,
+          "admissionTime": "2026-09-02 06:09:40.073000",
+          "age": 48,
+          "gender": "Male"
+        },
+        {
+          "id": "6a98120451df83e4e2f2f7a7",
+          "name": "Upeksha Gamage",
+          "priority": "Triage 3",
+          "queueWaitTime": 451,
+          "admissionTime": "2026-08-31 16:09:40.073000",
+          "age": 6,
+          "gender": "Female"
+        },
+        {
+          "id": "6a98120451df83e4e2f2f7a8",
+          "name": "Kasun De Silva",
+          "priority": "Triage 5",
+          "queueWaitTime": 148,
+          "admissionTime": "2026-08-31 15:09:40.073000",
+          "age": 45,
+          "gender": "Male"
+        },
+        {
+          "id": "6a98120451df83e4e2f2f7a9",
+          "name": "Piumika Senanayake",
+          "priority": "Triage 1",
+          "queueWaitTime": 267,
+          "admissionTime": "2026-08-31 12:09:40.073000",
+          "age": 74,
+          "gender": "Female"
+        }
+      ]
+    },
+    {
+      "queue": [
+        {
+          "id": "6a98120551df83e4e2f2f815",
+          "name": "Sewwandi Abeykoon",
+          "priority": "Triage 5",
+          "queueWaitTime": 418,
+          "admissionTime": "2026-08-31 09:09:41.057000",
+          "age": 61,
+          "gender": "Female"
+        },
+        {
+          "id": "6a98120551df83e4e2f2f816",
+          "name": "Wasana Liyanage",
+          "priority": "Triage 5",
+          "queueWaitTime": 378,
+          "admissionTime": "2026-08-31 20:09:41.057000",
+          "age": 76,
+          "gender": "Female"
+        },
+        {
+          "id": "6a98120551df83e4e2f2f817",
+          "name": "Sandya Perera",
+          "priority": "Triage 2",
+          "queueWaitTime": 167,
+          "admissionTime": "2026-08-30 22:09:41.057000",
+          "age": 21,
+          "gender": "Female"
+        },
+        {
+          "id": "6a98120551df83e4e2f2f818",
+          "name": "Erandi De Silva",
+          "priority": "Triage 2",
+          "queueWaitTime": 145,
+          "admissionTime": "2026-08-30 19:09:41.057000",
+          "age": 40,
+          "gender": "Female"
+        },
+        {
+          "id": "6a98120551df83e4e2f2f819",
+          "name": "Dilrukshi Gamage",
+          "priority": "Triage 4",
+          "queueWaitTime": 159,
+          "admissionTime": "2026-09-02 02:09:41.057000",
+          "age": 67,
+          "gender": "Female"
+        },
+        {
+          "id": "6a98120551df83e4e2f2f81a",
+          "name": "Nimasha De Silva",
+          "priority": "Triage 2",
+          "queueWaitTime": 148,
+          "admissionTime": "2026-09-01 10:09:41.057000",
+          "age": 53,
+          "gender": "Female"
+        },
+        {
+          "id": "6a98120551df83e4e2f2f81b",
+          "name": "Malsha Rathnayake",
+          "priority": "Triage 5",
+          "queueWaitTime": 272,
+          "admissionTime": "2026-09-02 07:09:41.057000",
+          "age": 24,
+          "gender": "Female"
+        },
+        {
+          "id": "6a98120551df83e4e2f2f81c",
+          "name": "Chamari Herath",
+          "priority": "Triage 2",
+          "queueWaitTime": 199,
+          "admissionTime": "2026-08-31 23:09:41.057000",
+          "age": 68,
+          "gender": "Female"
+        }
+      ]
+    },
+    {
+      "queue": [
+        {
+          "id": "6a98120551df83e4e2f2f876",
+          "name": "Amara Dissanayake",
+          "priority": "Triage 5",
+          "queueWaitTime": 246,
+          "admissionTime": "2026-08-31 10:09:41.608000",
+          "age": 11,
+          "gender": "Male"
+        },
+        {
+          "id": "6a98120551df83e4e2f2f877",
+          "name": "Dilan Fernando",
+          "priority": "Triage 1",
+          "queueWaitTime": 470,
+          "admissionTime": "2026-08-30 22:09:41.608000",
+          "age": 18,
+          "gender": "Male"
+        },
+        {
+          "id": "6a98120551df83e4e2f2f878",
+          "name": "Buddhika Dissanayake",
+          "priority": "Triage 4",
+          "queueWaitTime": 427,
+          "admissionTime": "2026-09-01 23:09:41.608000",
+          "age": 19,
+          "gender": "Male"
+        },
+        {
+          "id": "6a98120551df83e4e2f2f879",
+          "name": "Ruwan Karunaratne",
+          "priority": "Triage 5",
+          "queueWaitTime": 356,
+          "admissionTime": "2026-08-31 13:09:41.608000",
+          "age": 89,
+          "gender": "Male"
+        },
+        {
+          "id": "6a98120551df83e4e2f2f87a",
+          "name": "Sanjaya Herath",
+          "priority": "Triage 1",
+          "queueWaitTime": 35,
+          "admissionTime": "2026-09-01 16:09:41.608000",
+          "age": 12,
+          "gender": "Male"
+        },
+        {
+          "id": "6a98120551df83e4e2f2f87b",
+          "name": "Tharindu Gamage",
+          "priority": "Triage 1",
+          "queueWaitTime": 207,
+          "admissionTime": "2026-09-01 17:09:41.608000",
+          "age": 74,
+          "gender": "Male"
+        },
+        {
+          "id": "6a98120551df83e4e2f2f87c",
+          "name": "Isuru Senanayake",
+          "priority": "Triage 4",
+          "queueWaitTime": 398,
+          "admissionTime": "2026-09-01 00:09:41.608000",
+          "age": 15,
+          "gender": "Male"
+        },
+        {
+          "id": "6a98120551df83e4e2f2f87d",
+          "name": "Janaka Abeykoon",
+          "priority": "Triage 5",
+          "queueWaitTime": 399,
+          "admissionTime": "2026-08-31 09:09:41.608000",
+          "age": 77,
+          "gender": "Male"
+        },
+        {
+          "id": "6a98120551df83e4e2f2f87e",
+          "name": "Farzan Gunawardena",
+          "priority": "Triage 4",
+          "queueWaitTime": 233,
+          "admissionTime": "2026-08-31 03:09:41.608000",
+          "age": 40,
+          "gender": "Male"
+        },
+        {
+          "id": "6a98120551df83e4e2f2f87f",
+          "name": "Zubair Karunaratne",
+          "priority": "Triage 1",
+          "queueWaitTime": 28,
+          "admissionTime": "2026-09-01 19:09:41.608000",
+          "age": 22,
+          "gender": "Male"
+        }
+      ]
+    },
+    {
+      "queue": [
+        {
+          "id": "6a98120651df83e4e2f2f8da",
+          "name": "Janaka Wickramasinghe",
+          "priority": "Triage 4",
+          "queueWaitTime": 364,
+          "admissionTime": "2026-08-31 22:09:42.184000",
+          "age": 42,
+          "gender": "Male"
+        },
+        {
+          "id": "6a98120651df83e4e2f2f8db",
+          "name": "Sewwandi De Silva",
+          "priority": "Triage 2",
+          "queueWaitTime": 425,
+          "admissionTime": "2026-08-31 21:09:42.184000",
+          "age": 90,
+          "gender": "Female"
+        },
+        {
+          "id": "6a98120651df83e4e2f2f8dc",
+          "name": "Tharindu Rathnayake",
+          "priority": "Triage 5",
+          "queueWaitTime": 269,
+          "admissionTime": "2026-09-01 02:09:42.184000",
+          "age": 79,
+          "gender": "Male"
+        },
+        {
+          "id": "6a98120651df83e4e2f2f8dd",
+          "name": "Sewwandi Fernando",
+          "priority": "Triage 2",
+          "queueWaitTime": 39,
+          "admissionTime": "2026-08-31 14:09:42.184000",
+          "age": 35,
+          "gender": "Female"
+        },
+        {
+          "id": "6a98120651df83e4e2f2f8de",
+          "name": "Tharindu Abeykoon",
+          "priority": "Triage 4",
+          "queueWaitTime": 223,
+          "admissionTime": "2026-09-01 12:09:42.184000",
+          "age": 89,
+          "gender": "Male"
+        },
+        {
+          "id": "6a98120651df83e4e2f2f8df",
+          "name": "Buddhima Wijesinghe",
+          "priority": "Triage 2",
+          "queueWaitTime": 261,
+          "admissionTime": "2026-09-01 15:09:42.184000",
+          "age": 45,
+          "gender": "Female"
+        },
+        {
+          "id": "6a98120651df83e4e2f2f8e0",
+          "name": "Ruwan Wickramasinghe",
+          "priority": "Triage 4",
+          "queueWaitTime": 385,
+          "admissionTime": "2026-08-31 02:09:42.184000",
+          "age": 89,
+          "gender": "Male"
+        },
+        {
+          "id": "6a98120651df83e4e2f2f8e1",
+          "name": "Sandya Gunawardena",
+          "priority": "Triage 4",
+          "queueWaitTime": 293,
+          "admissionTime": "2026-08-30 14:09:42.184000",
+          "age": 71,
+          "gender": "Female"
+        },
+        {
+          "id": "6a98134bf146d84ad8617726",
+          "name": "Janaka Bandara",
+          "priority": "Triage 1",
+          "queueWaitTime": 0,
+          "admissionTime": "2026-09-02 12:15:06.803000",
+          "age": 18,
+          "gender": "Male"
+        }
+      ]
+    }
+  ]
+}

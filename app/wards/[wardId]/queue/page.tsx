@@ -17,6 +17,7 @@ import { useAuthSession } from "@/app/context/AuthSessionContext";
 import { canAccessWard, canAssignOrDischargePatient } from "@/lib/rbac";
 import {
   CLIENT_CACHE_TTL,
+  clearClientCache,
   getClientCache,
   setClientCache,
 } from "@/app/utils/clientCache";
@@ -31,22 +32,27 @@ export default function WardQueuePage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const loadWard = useCallback(async () => {
+  const loadWard = useCallback(async (bypassCache = false) => {
     if (!wardId) return;
     const cacheKey = `ward:${wardId}`;
-    const cachedWard = getClientCache<Ward>(cacheKey, CLIENT_CACHE_TTL.ward);
 
-    if (cachedWard) {
-      setWard(cachedWard);
-      setIsLoading(false);
+    if (!bypassCache) {
+      const cachedWard = getClientCache<Ward>(cacheKey, CLIENT_CACHE_TTL.ward);
+
+      if (cachedWard) {
+        setWard(cachedWard);
+        setIsLoading(false);
+      } else {
+        setIsLoading(true);
+      }
     } else {
-      setIsLoading(true);
+      clearClientCache();
     }
 
     setError("");
 
     try {
-      const wardData = await getWardWithPatients(wardId);
+      const wardData = await getWardWithPatients(wardId, bypassCache);
       if (!wardData) {
         throw new Error("Ward not found");
       }
@@ -55,9 +61,12 @@ export default function WardQueuePage() {
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unknown error";
 
-      if (cachedWard) {
-        setError(`Showing cached ward data - ${message}`);
-        return;
+      if (!bypassCache) {
+        const cachedWard = getClientCache<Ward>(cacheKey, CLIENT_CACHE_TTL.ward);
+        if (cachedWard) {
+          setError(`Showing cached ward data - ${message}`);
+          return;
+        }
       }
 
       setError(message);
@@ -100,10 +109,10 @@ export default function WardQueuePage() {
     void loadWards();
   }, [loadWard, loadWards]);
 
-  const handlePatientAssigned = () => {
-    void loadWard();
-    void loadWards();
-  };
+  const handlePatientAssigned = useCallback(async () => {
+    clearClientCache();
+    await Promise.all([loadWard(true), loadWards()]);
+  }, [loadWard, loadWards]);
 
   if (isLoading) {
     return <MedicalCrossLoader message="Loading Queue..." fullScreen />;

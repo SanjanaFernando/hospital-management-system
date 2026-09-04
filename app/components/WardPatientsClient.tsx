@@ -31,7 +31,7 @@ export default function WardPatientsClient({
 
   const refreshWard = async () => {
     clearClientCache();
-    const wardData = await getWardWithPatients(resolvedWardId);
+    const wardData = await getWardWithPatients(resolvedWardId, true);
     if (wardData) {
       setWard(wardData);
     }

@@ -1,5 +1,6 @@
 import { Ward, Patient } from "@/app/types";
 import { UserSession } from "@/app/types";
+import { clearClientCache } from "@/app/utils/clientCache";
 
 const API_BASE_URL = "/api";
 
@@ -116,6 +117,7 @@ export async function updatePatient(
       body: JSON.stringify(data),
     });
     if (!response.ok) throw new Error("Failed to update patient");
+    clearClientCache();
     return response.json();
   } catch (error) {
     console.error("Error updating patient:", error);
@@ -129,6 +131,7 @@ export async function deletePatient(patientId: string): Promise<unknown> {
       method: "DELETE",
     });
     if (!response.ok) throw new Error("Failed to delete patient");
+    clearClientCache();
     return response.json();
   } catch (error) {
     console.error("Error deleting patient:", error);
