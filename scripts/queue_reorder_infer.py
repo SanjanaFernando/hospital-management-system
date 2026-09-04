@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import json
+import math
 import sys
 from pathlib import Path
 from datetime import datetime, timezone
@@ -259,7 +260,56 @@ def build_training_state(payload: dict[str, Any], state_dim: int = 10) -> np.nda
     return state[:state_dim]
 
 
+def build_mappo_state(payload: dict[str, Any], state_dim: int = 15) -> np.ndarray:
+    queue = payload.get("targetWardQueue") or payload.get("queue") or []
+    total_beds = max(1, int(payload.get("targetWardTotalBeds") or payload.get("totalBeds", 40)))
+    occupied_beds = int(payload.get("targetWardOccupiedBeds") or payload.get("occupiedBeds", 0))
+    total_male_beds = int(payload.get("totalMaleBeds", total_beds))
+    total_female_beds = int(payload.get("totalFemaleBeds", 0))
+    occupied_male = int(payload.get("occupiedMaleBeds", occupied_beds if not total_female_beds else occupied_beds // 2))
+    occupied_female = int(payload.get("occupiedFemaleBeds", 0 if not total_female_beds else occupied_beds // 2))
+
+    now = datetime.now(timezone.utc)
+    triage_dist = np.zeros(5, dtype=np.float32)
+    waits = []
+    male_queue = 0
+    for patient in queue:
+        triage = max(1, min(5, priority_to_triage_level(patient.get("priority"))))
+        triage_dist[triage - 1] += 1
+        waits.append(normalized_wait_hours(patient, now))
+        gender = str(patient.get("gender", "M")).strip().upper()
+        male_queue += int(gender in {"M", "MALE"})
+
+    queue_count = len(queue)
+    if queue_count:
+        triage_dist /= queue_count
+        male_ratio = male_queue / queue_count
+        longest_wait = min(max(waits) / 48.0, 1.0)
+        average_wait = min(float(np.mean(waits)) / 24.0, 1.0)
+    else:
+        male_ratio = longest_wait = average_wait = 0.0
+
+    hour = now.hour + now.minute / 60.0
+    state = np.array([
+        min(max(occupied_beds / total_beds, 0.0), 1.0),
+        min(max(occupied_male / max(total_male_beds, 1), 0.0), 1.0),
+        min(max(occupied_female / max(total_female_beds, 1), 0.0), 1.0),
+        min(queue_count / 40.0, 1.0),
+        male_ratio,
+        1.0 - male_ratio if queue_count else 0.0,
+        *triage_dist,
+        longest_wait,
+        average_wait,
+        math.sin(2 * math.pi * hour / 24),
+        math.cos(2 * math.pi * hour / 24),
+    ], dtype=np.float32)
+    return state[:state_dim]
+
+
 def build_state(payload: dict[str, Any], state_dim: int, action_dim: int) -> np.ndarray:
+    if action_dim == 25:
+        return build_mappo_state(payload, state_dim=state_dim)
+
     if action_dim == 99:
         return build_training_state(payload, state_dim=state_dim)
 
@@ -270,11 +320,18 @@ def build_state(payload: dict[str, Any], state_dim: int, action_dim: int) -> np.
 
 
 # Action decoding tables matching the training code exactly.
-_W_T_LIST = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]  # 11 values
+MIN_TRIAGE_WEIGHT = 0.01
+_MAPPO_W_T_LIST = [MIN_TRIAGE_WEIGHT, 0.25, 0.5, 0.75, 1.0]
+_MAPPO_W_W_LIST = [0.0, 0.15, 0.3, 0.5, 0.7]
+_W_T_LIST = [MIN_TRIAGE_WEIGHT, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]  # 11 values
 _W_W_LIST = [0.0, 0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7]             # 9 values
 
 
 def action_to_weights(action: int, action_dim: int) -> list[float]:
+    if action_dim == 25:
+        w_triage = _MAPPO_W_T_LIST[max(0, min(action // 5, 4))]
+        w_wait = _MAPPO_W_W_LIST[max(0, min(action % 5, 4))]
+        return [w_triage, w_wait]
     if action_dim == 99:
         # Training code: 11 triage weights × 9 wait weights = 99 actions.
         # w_t = w_t_list[action // len(w_w_list)]  →  action // 9
@@ -343,7 +400,7 @@ def patient_score(
     triage_level = priority_to_triage_level(patient.get("priority"))
     wait_hours = normalized_wait_hours(patient, now)
 
-    if action_dim == 99:
+    if action_dim in (25, 99):
         # Match training scoring exactly: raw values, NO normalization.
         # Training: score = w_t * (6 - triage_level) + w_w * wait_hours
         w_t, w_w = weights
@@ -554,7 +611,10 @@ def main() -> int:
 
     sorted_queue = sorted(
         queue,
-        key=lambda p: patient_score(p, now, weights, action_dim),
+        key=lambda p: (
+            patient_score(p, now, weights, action_dim),
+            normalized_wait_hours(p, now),
+        ),
         reverse=True,
     )
 

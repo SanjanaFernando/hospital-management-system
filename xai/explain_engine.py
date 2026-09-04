@@ -50,7 +50,8 @@ from torch.distributions import Categorical
 #    Do NOT change these independently of the training script; the action
 #    grid, agent count and negotiation weights must match the checkpoint.
 # ============================================================
-W_T_LIST = [0.0, 0.25, 0.5, 0.75, 1.0]
+MIN_TRIAGE_WEIGHT = 0.01
+W_T_LIST = [MIN_TRIAGE_WEIGHT, 0.25, 0.5, 0.75, 1.0]
 W_W_LIST = [0.0, 0.15, 0.3, 0.5, 0.7]
 N_ACTIONS = 25
 
@@ -394,7 +395,10 @@ def decompose_queue(queue_with_wait_hours, combined_wt, combined_ww):
         if "__queueIndex" in p and p["__queueIndex"] is not None:
             entry["__queueIndex"] = p["__queueIndex"]
         ranked.append(entry)
-    ranked.sort(key=lambda r: r["priorityScore"], reverse=True)
+    ranked.sort(
+        key=lambda r: (r["priorityScore"], r["waitHours"]),
+        reverse=True,
+    )
     for rank, r in enumerate(ranked, start=1):
         r["rank"] = rank
         r["reason"] = r["reason"].replace("{rank}", str(rank))
@@ -584,7 +588,14 @@ def explain_decision(
             actions.append(int(torch.argmax(probs, dim=-1).item()))
 
     combined_wt, combined_ww, per_agent = negotiate(actions)
-    ranked_queue = decompose_queue(enriched_queue, combined_wt, combined_ww)
+    if is_shared_actor:
+        selected_action = actions[0]
+        policy_wt = W_T_LIST[selected_action // len(W_W_LIST)]
+        policy_ww = W_W_LIST[selected_action % len(W_W_LIST)]
+    else:
+        policy_wt, policy_ww = combined_wt, combined_ww
+
+    ranked_queue = decompose_queue(enriched_queue, policy_wt, policy_ww)
     confidences = agent_confidence(actors, state_t)
 
     result = {
@@ -594,12 +605,13 @@ def explain_decision(
         },
         "predictive_analytics": predictive_meta,
         "combined_weights": {"w_t_urgency": round(combined_wt, 4), "w_w_wait": round(combined_ww, 4)},
+        "policy_weights": {"w_t_urgency": round(policy_wt, 4), "w_w_wait": round(policy_ww, 4)},
         "agent_votes": per_agent,
         "agent_confidence": confidences,
         "ranked_queue": ranked_queue,
         "explanation_text": build_nlg_explanation(
-            combined_wt,
-            combined_ww,
+            policy_wt,
+            policy_ww,
             per_agent,
             ranked_queue,
             confidences,
