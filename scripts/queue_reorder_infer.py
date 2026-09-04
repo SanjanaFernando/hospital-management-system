@@ -270,7 +270,8 @@ def build_state(payload: dict[str, Any], state_dim: int, action_dim: int) -> np.
 
 
 # Action decoding tables matching the training code exactly.
-_W_T_LIST = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]  # 11 values
+MIN_TRIAGE_WEIGHT = 0.01
+_W_T_LIST = [MIN_TRIAGE_WEIGHT, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]  # 11 values
 _W_W_LIST = [0.0, 0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7]             # 9 values
 
 
@@ -554,7 +555,10 @@ def main() -> int:
 
     sorted_queue = sorted(
         queue,
-        key=lambda p: patient_score(p, now, weights, action_dim),
+        key=lambda p: (
+            patient_score(p, now, weights, action_dim),
+            normalized_wait_hours(p, now),
+        ),
         reverse=True,
     )
 
