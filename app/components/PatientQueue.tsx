@@ -234,6 +234,7 @@ export default function PatientQueue({
     return {
       state_vector: queueExplainSnapshot.stateVector,
       combined_weights: queueExplainSnapshot.combinedWeights,
+      policy_weights: queueExplainSnapshot.policyWeights,
       agent_confidence: queueExplainSnapshot.agentConfidence,
       ranked_queue: [
         {

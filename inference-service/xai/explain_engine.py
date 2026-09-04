@@ -582,7 +582,14 @@ def explain_decision(
             actions.append(int(torch.argmax(probs, dim=-1).item()))
 
     combined_wt, combined_ww, per_agent = negotiate(actions)
-    ranked_queue = decompose_queue(enriched_queue, combined_wt, combined_ww)
+    if is_shared_actor:
+        selected_action = actions[0]
+        policy_wt = W_T_LIST[selected_action // len(W_W_LIST)]
+        policy_ww = W_W_LIST[selected_action % len(W_W_LIST)]
+    else:
+        policy_wt, policy_ww = combined_wt, combined_ww
+
+    ranked_queue = decompose_queue(enriched_queue, policy_wt, policy_ww)
     confidences = agent_confidence(actors, state_t)
 
     result = {
@@ -592,12 +599,13 @@ def explain_decision(
         },
         "predictive_analytics": predictive_meta,
         "combined_weights": {"w_t_urgency": round(combined_wt, 4), "w_w_wait": round(combined_ww, 4)},
+        "policy_weights": {"w_t_urgency": round(policy_wt, 4), "w_w_wait": round(policy_ww, 4)},
         "agent_votes": per_agent,
         "agent_confidence": confidences,
         "ranked_queue": ranked_queue,
         "explanation_text": build_nlg_explanation(
-            combined_wt,
-            combined_ww,
+            policy_wt,
+            policy_ww,
             per_agent,
             ranked_queue,
             confidences,

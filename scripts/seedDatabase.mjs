@@ -101,8 +101,8 @@ function generatePatient(patientId, wardId, status, gender) {
   const isPediatric = wardId === "ward-2";
   const age = isPediatric ? randomInt(1, 15) : randomInt(18, 85);
 
-  // Queued patients arrive on 2026/9/4; admitted patients may have arrived earlier.
-  const hour = randomInt(0, 23);
+  // Queued patients arrive before noon on 2026/9/4; admitted patients may have arrived earlier.
+  const hour = status === "queued" ? randomInt(0, 11) : randomInt(0, 23);
   const minute = randomInt(0, 59);
   const second = randomInt(0, 59);
   const admissionDay = status === "queued" ? 4 : randomInt(1, 3);

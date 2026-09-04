@@ -70,6 +70,7 @@ export interface Patient {
 
 export interface QueueExplainSnapshot {
   combinedWeights?: { w_t_urgency: number; w_w_wait: number };
+  policyWeights?: { w_t_urgency: number; w_w_wait: number };
   stateVector?: Record<string, number>;
   agentConfidence?: Array<{
     agent_index: number;
