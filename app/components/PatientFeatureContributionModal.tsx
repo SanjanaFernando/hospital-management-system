@@ -62,6 +62,10 @@ export type ExplainResponse = {
     w_t_urgency?: number;
     w_w_wait?: number;
   };
+  policy_weights?: {
+    w_t_urgency?: number;
+    w_w_wait?: number;
+  };
   agent_votes?: AgentVote[];
   agent_confidence?: AgentConfidence[];
   ranked_queue?: RankedPatient[];
@@ -269,8 +273,12 @@ export default function PatientFeatureContributionModal({
       : 5;
 
   // 3. Active Policy Weights (from backend model or standard MAPPO fallback)
-  const w_t = data?.combined_weights?.w_t_urgency ?? 0.6;
-  const w_w = data?.combined_weights?.w_w_wait ?? 0.4;
+  const w_t =
+    data?.policy_weights?.w_t_urgency ??
+    data?.combined_weights?.w_t_urgency ??
+    0.6;
+  const w_w =
+    data?.policy_weights?.w_w_wait ?? data?.combined_weights?.w_w_wait ?? 0.4;
 
   // 4. Per-patient score terms — use the backend's own decomposition
   // (matchedRankedPatient) whenever it's available so this modal always

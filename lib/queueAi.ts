@@ -83,6 +83,7 @@ function buildRankedEntryMaps(rankedQueue: RankedEntry[]) {
 
 function extractExplainSnapshot(parsed: {
   combined_weights?: { w_t_urgency?: number; w_w_wait?: number };
+  policy_weights?: { w_t_urgency?: number; w_w_wait?: number };
   state_vector?: Record<string, number>;
   agent_confidence?: QueueExplainSnapshot["agentConfidence"];
 }): QueueExplainSnapshot | undefined {
@@ -100,6 +101,14 @@ function extractExplainSnapshot(parsed: {
         ? {
             w_t_urgency: parsed.combined_weights.w_t_urgency,
             w_w_wait: parsed.combined_weights.w_w_wait,
+          }
+        : undefined,
+    policyWeights:
+      typeof parsed.policy_weights?.w_t_urgency === "number" &&
+      typeof parsed.policy_weights?.w_w_wait === "number"
+        ? {
+            w_t_urgency: parsed.policy_weights.w_t_urgency,
+            w_w_wait: parsed.policy_weights.w_w_wait,
           }
         : undefined,
     stateVector: parsed.state_vector,
