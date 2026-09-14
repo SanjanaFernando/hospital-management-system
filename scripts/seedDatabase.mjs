@@ -93,7 +93,8 @@ function ageGroupFromAge(age) {
 let patientCounter = 10001;
 
 // gender must be "Male" or "Female"
-function generatePatient(patientId, wardId, status, gender) {
+// daysAgo: 0 = today, 1..5 = 1 to 5 days ago
+function generatePatient(patientId, wardId, status, gender, daysAgo = null) {
   const firstName = gender === "Male"
     ? randomItem(MALE_FIRST_NAMES)
     : randomItem(FEMALE_FIRST_NAMES);
@@ -101,12 +102,40 @@ function generatePatient(patientId, wardId, status, gender) {
   const isPediatric = wardId === "ward-2";
   const age = isPediatric ? randomInt(1, 15) : randomInt(18, 85);
 
-  // Queued patients arrive before noon on 2026/9/4; admitted patients may have arrived earlier.
-  const hour = status === "queued" ? randomInt(0, 11) : randomInt(0, 23);
-  const minute = randomInt(0, 59);
-  const second = randomInt(0, 59);
-  const admissionDay = status === "queued" ? 4 : randomInt(1, 3);
-  const admissionTime = new Date(2026, 8, admissionDay, hour, minute, second);
+  const now = new Date();
+  let admissionTime;
+  let queueWaitTime;
+
+  if (status === "queued") {
+    // Queued patients arrived today and have been waiting between 10 mins and 8 hours (480 mins)
+    queueWaitTime = randomInt(10, 480);
+    admissionTime = new Date(now.getTime() - queueWaitTime * 60 * 1000);
+  } else {
+    // Admitted patients: distributed from today (0 days ago) to previous 5 days (1..5 days ago)
+    const effectiveDaysAgo = typeof daysAgo === "number" ? daysAgo : randomInt(0, 5);
+    queueWaitTime = randomInt(10, 480);
+
+    if (effectiveDaysAgo === 0) {
+      // Admitted earlier today (between midnight and now, guaranteed before current time)
+      const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0).getTime();
+      const msSinceMidnight = Math.max(1000, now.getTime() - startOfToday);
+      const randomOffsetMs = randomInt(1000, msSinceMidnight);
+      admissionTime = new Date(now.getTime() - randomOffsetMs);
+    } else {
+      // Admitted 1 to 5 days ago
+      const hour = randomInt(0, 23);
+      const minute = randomInt(0, 59);
+      const second = randomInt(0, 59);
+      admissionTime = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        now.getDate() - effectiveDaysAgo,
+        hour,
+        minute,
+        second
+      );
+    }
+  }
 
   const includeRequirements = Math.random() < 0.35;
   const requirements = includeRequirements ? [randomItem(SPECIAL_REQUIREMENTS)] : undefined;
@@ -128,7 +157,7 @@ function generatePatient(patientId, wardId, status, gender) {
     previousDiseases,
     priority: generatePriority(),
     admissionTime,
-    queueWaitTime: randomInt(10, 480),
+    queueWaitTime,
     specialRequirements: requirements,
     createdAt: admissionTime,
     updatedAt: admissionTime,
@@ -226,15 +255,20 @@ async function resetDatabase() {
 
       // ---------------------------------------------------------------
       // Admitted patients — strictly separated by gender
+      // Distributed across today (0 days ago) to previous 5 days (1..5)
       // ---------------------------------------------------------------
       const malePatients = [];
       for (let i = 0; i < maleAdmitted; i++) {
-        malePatients.push(generatePatient(`${wardId}-m-${i + 1}`, wardId, "admitted", "Male"));
+        // Guarantee every day (0..5) has patients, randomize the rest
+        const daysAgo = i < 6 ? i : randomInt(0, 5);
+        malePatients.push(generatePatient(`${wardId}-m-${i + 1}`, wardId, "admitted", "Male", daysAgo));
       }
 
       const femalePatients = [];
       for (let i = 0; i < femaleAdmitted; i++) {
-        femalePatients.push(generatePatient(`${wardId}-f-${i + 1}`, wardId, "admitted", "Female"));
+        // Guarantee every day (0..5) has patients, randomize the rest
+        const daysAgo = i < 6 ? i : randomInt(0, 5);
+        femalePatients.push(generatePatient(`${wardId}-f-${i + 1}`, wardId, "admitted", "Female", daysAgo));
       }
 
       // ---------------------------------------------------------------
@@ -338,8 +372,12 @@ async function resetDatabase() {
       );
     }
 
+    const now = new Date();
+    const fiveDaysAgo = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 5);
+    const dateOptions = { year: "numeric", month: "short", day: "numeric" };
     console.log(
-      `\n🎉 Database reset complete! Total Patients: ${totalPatients}, Total Beds: ${totalBeds}`
+      `\n🎉 Database reset complete! Total Patients: ${totalPatients}, Total Beds: ${totalBeds}\n` +
+      `📅 Patient admission dates generated from ${fiveDaysAgo.toLocaleDateString("en-US", dateOptions)} to today, ${now.toLocaleDateString("en-US", dateOptions)} (previous 5 days + today).`
     );
   } finally {
     await client.close();
