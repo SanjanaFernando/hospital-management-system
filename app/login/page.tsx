@@ -192,8 +192,47 @@ export default function LoginPage() {
             </button>
           </form>
 
+          {/* Demo Credentials */}
+          <div className="mt-6 rounded-2xl border border-teal-400/30 bg-teal-500/10 backdrop-blur-sm p-4 relative overflow-hidden">
+            {/* Glow accent */}
+            <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-teal-400/60 to-transparent" />
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-2 h-2 rounded-full bg-teal-400 shadow-[0_0_6px_rgba(52,211,153,0.8)] animate-pulse" />
+              <p className="text-[11px] font-bold text-teal-300 uppercase tracking-[0.15em]">
+                Demo Credentials
+              </p>
+            </div>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] text-teal-100/60 font-medium">Role</span>
+                <span className="text-xs font-bold text-white bg-teal-500/20 border border-teal-400/30 rounded-lg px-2.5 py-0.5">
+                  Demo Admin
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] text-teal-100/60 font-medium">User&nbsp;ID</span>
+                <span className="text-xs font-mono font-bold text-teal-300 bg-teal-500/20 border border-teal-400/30 rounded-lg px-2.5 py-0.5 tracking-widest">
+                  100000
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] text-teal-100/60 font-medium">Password</span>
+                <span className="text-xs font-mono font-bold text-teal-300 bg-teal-500/20 border border-teal-400/30 rounded-lg px-2.5 py-0.5 tracking-wider">
+                  Admin@123
+                </span>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => { setUserId("100000"); setPassword("Admin@123"); }}
+              className="mt-3 w-full rounded-xl border border-teal-400/30 bg-teal-500/15 py-2 text-[11px] font-bold text-teal-300 uppercase tracking-wider hover:bg-teal-500/25 hover:border-teal-400/50 transition-all"
+            >
+              ⚡ Fill Demo Credentials
+            </button>
+          </div>
+
           {/* Info notice */}
-          <p className="mt-6 text-center text-xs text-white/40 leading-relaxed">
+          <p className="mt-4 text-center text-xs text-white/40 leading-relaxed">
             Authorized hospital personnel only.
             <br />
             For account assistance or access requests, contact IT Administration.
