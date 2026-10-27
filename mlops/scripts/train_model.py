@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Train the shared MAPPO actor for hospital queue optimization.
 
@@ -19,6 +18,7 @@ Usage:
 import json
 import logging
 import argparse
+import sys
 from pathlib import Path
 from datetime import datetime
 
@@ -28,7 +28,8 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import TensorDataset, DataLoader
 
-# Configure logging
+# Configure logging (create the log folder first so a fresh runner does not crash)
+Path('mlops/logs/training').mkdir(parents=True, exist_ok=True)
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
@@ -206,7 +207,8 @@ def main():
     config = load_config(args.config)
     training_config = config['training']
     optimizer_config = config['optimizer']
-    model_config = json.load(open('mlops/config/model_config.json'))
+    with open('mlops/config/model_config.json', 'r', encoding='utf-8') as handle:
+        model_config = json.load(handle)
     arch = model_config['architecture']
 
     # Create output directory
@@ -239,7 +241,7 @@ def main():
     except FileNotFoundError as e:
         logger.error(f"Training data missing: {e}")
         logger.error("Please run: python mlops/scripts/generate_training_data.py --days 7")
-        return
+        sys.exit(1)  # fail loudly so the workflow stops here
 
     # Training loop
     logger.info(f"Starting training for {training_config['epochs']} epochs...")
@@ -288,11 +290,13 @@ def main():
                 logger.info(f"Early stopping at epoch {epoch+1}")
                 break
 
-    # Save final model and training info
-    logger.info("Saving final model and metadata...")
-    final_model_path = output_path / "model.pth"
-    torch.save(model.state_dict(), final_model_path)
+    # The best model was already saved inside the loop (model.pth).
+    # Do NOT save the last-epoch model again, or it would overwrite the best one.
+    if not (output_path / "model.pth").exists():
+        logger.error("Training finished but no model.pth was saved (loss never improved).")
+        sys.exit(1)
 
+    logger.info("Saving training history and metadata...")
     with open(output_path / "training_history.json", 'w') as f:
         json.dump(training_history, f, indent=2)
 
@@ -314,7 +318,7 @@ def main():
     with open(output_path / "metadata.json", 'w') as f:
         json.dump(metadata, f, indent=2)
 
-    logger.info(f"Training completed! Model saved to {output_path}")
+    logger.info(f"Training completed! Best model saved to {output_path / 'model.pth'}")
 
 
 if __name__ == '__main__':
