@@ -96,7 +96,7 @@ jobs:
 
             python mlops/scripts/deploy_model.py \
               --version $VERSION \
-              --copy-to model/best_mappo_shared.pth
+              --copy-to model/best_mappo_hospital.pth
               
             echo "deployed=true" >> $GITHUB_OUTPUT
           else
@@ -112,7 +112,7 @@ jobs:
 
           # Add the deployed model, the active version file, and the new version
           # folder (so next week's run can find and compare the active model).
-          git add model/best_mappo_shared.pth mlops/models/active_version.json $MODEL_DIR
+          git add model/best_mappo_hospital.pth mlops/models/active_version.json $MODEL_DIR
 
           # Only commit if there are changes
           git diff --cached --quiet || git commit -m "MLOps: Deploy improved model $(date +%Y-%m-%d)"
