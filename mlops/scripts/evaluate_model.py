@@ -21,7 +21,7 @@ try:  # pragma: no cover
     from scipy.stats import spearmanr
 except ImportError:  # pragma: no cover
     spearmanr = None
-
+Path('mlops/logs/evaluation').mkdir(parents=True, exist_ok=True)
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
@@ -32,7 +32,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-_MAPPO_W_T_LIST = [0.0, 0.25, 0.5, 0.75, 1.0]
+_MAPPO_W_T_LIST = [0.01, 0.25, 0.5, 0.75, 1.0]
 _MAPPO_W_W_LIST = [0.0, 0.15, 0.3, 0.5, 0.7]
 
 
@@ -139,7 +139,7 @@ def patient_score(patient: dict, now: datetime, weights: tuple[float, float]) ->
     w_triage, w_wait = weights
     triage_score = (6 - triage_level) / 5.0
     wait_score = min(wait_hours / 24.0, 1.0)
-    return (w_triage * triage_score) + (w_wait * wait_score)
+    return w_triage * (6 - triage_level) + w_wait * wait_hours
 
 
 def compute_signed_spearman(x: np.ndarray, y: np.ndarray) -> float:
