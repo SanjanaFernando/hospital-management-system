@@ -8,6 +8,11 @@ This script aligns with the real deployed predictive MAPPO model:
 - forecaster-backed load/critical predictions added to the state vector
 
 It intentionally does not modify the RL training loop or environment code.
+
+Exit codes (used by the weekly workflow):
+  0 + states.npy saved   -> data generated
+  0 + no files saved     -> connected, but no data (workflow skips training)
+  1                      -> real error, e.g. cannot connect (workflow fails)
 """
 
 import argparse
@@ -69,12 +74,16 @@ def get_mongodb_config() -> tuple[str, str]:
 
 
 def collect_historical_data(days: int = 7) -> list[dict[str, Any]]:
-    """Collect ward snapshots from the last N days."""
+    """Collect ward snapshots from the last N days.
+
+    Returns an empty list only when the database works but has no data.
+    A real error (missing library, cannot connect) stops the script with exit code 1.
+    """
     try:
         from pymongo import MongoClient
     except ImportError:
         logger.error('pymongo not installed. Install with: pip install pymongo')
-        return []
+        sys.exit(1)
 
     logger.info(f'Collecting ward data from last {days} days...')
     uri, db_name = get_mongodb_config()
@@ -87,7 +96,7 @@ def collect_historical_data(days: int = 7) -> list[dict[str, Any]]:
     except Exception as exc:  # pragma: no cover - depends on env
         logger.error(f'Failed to connect to MongoDB: {exc}')
         logger.error(f'URI: {uri[:50]}...')
-        return []
+        sys.exit(1)  # real error: fail the workflow
 
     db = client[db_name]
     cutoff_date = datetime.now(timezone.utc) - timedelta(days=days)
@@ -221,8 +230,10 @@ def main() -> None:
 
     snapshots = collect_historical_data(days=args.days)
     if not snapshots:
-        logger.error('No historical data found. Please ensure MongoDB has patient/ward data.')
-        return
+        # Connected fine, but nothing to learn from. Not an error:
+        # save no files, so the workflow knows to skip training.
+        logger.warning('No new data found. Model will not be updated.')
+        sys.exit(0)
 
     model, meta = load_expert_model(args.model, state_dim=17, action_dim=25)
     state_dim = meta['state_dim']
