@@ -11,98 +11,118 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      
+
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.11'
-      
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r mlops/requirements.txt
-      
+
+      # Exit codes of generate_training_data.py:
+      #   1 = real error (cannot connect to database)  -> workflow fails
+      #   0 + no states.npy = connected but no data     -> skip the rest
       - name: Generate training data from MongoDB
+        id: gen
         env:
           MONGODB_URI: ${{ secrets.MONGODB_URI }}
         run: |
-          # Create model version directory with timestamp
-          MODEL_VERSION="v_weekly_$(date +%Y%m%d)"
-          MODEL_DIR="mlops/models/$MODEL_VERSION"
+          MODEL_DIR="mlops/models/v_weekly_$(date +%Y%m%d)"
+          echo "MODEL_DIR=$MODEL_DIR" >> $GITHUB_ENV
           mkdir -p $MODEL_DIR
-          
-          # Generate training data from last 7 days
+
           python mlops/scripts/generate_training_data.py \
             --days 7 \
             --output $MODEL_DIR \
             --augment 50
-      
+
+          if [ -f "$MODEL_DIR/states.npy" ]; then
+            echo "has_data=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_data=false" >> $GITHUB_OUTPUT
+            rmdir "$MODEL_DIR" 2>/dev/null || true
+          fi
+
       - name: Train new model
+        if: steps.gen.outputs.has_data == 'true'
         run: |
-          # Get the latest model directory
-          MODEL_DIR=$(ls -td mlops/models/v_weekly_* | head -1)
-          
-          # Train model using the generated data
           python mlops/scripts/train_model.py \
             --data $MODEL_DIR \
             --output $MODEL_DIR \
             --config mlops/config/training_config.json
-      
+
       - name: Evaluate model
+        if: steps.gen.outputs.has_data == 'true'
         run: |
-          MODEL_DIR=$(ls -td mlops/models/v_weekly_* | head -1)
           python mlops/scripts/evaluate_model.py \
             --model $MODEL_DIR/model.pth \
             --output $MODEL_DIR/performance.json
-      
+
       - name: Check if improvement and deploy
+        id: deploy
+        if: steps.gen.outputs.has_data == 'true'
         run: |
-          # Get latest model performance
-          LATEST_MODEL=$(ls -td mlops/models/v_weekly_* | head -1)
-          LATEST_FAIRNESS=$(jq '.metrics.fairness_score' $LATEST_MODEL/performance.json 2>/dev/null || echo "0")
-          
-          # Get current active model performance
+          VERSION=$(basename $MODEL_DIR)
+          LATEST_FAIRNESS=$(jq '.metrics.fairness_score // 0' $MODEL_DIR/performance.json)
+
+          # Evaluate the active model again with the SAME script and holdout,
+          # so both scores are measured the same way.
+          ACTIVE_FAIRNESS="0"
           if [ -f mlops/models/active_version.json ]; then
-          ACTIVE_VERSION=$(jq -r '.version' mlops/models/active_version.json)
-          ACTIVE_DIR="mlops/models/$ACTIVE_VERSION"
-          ACTIVE_FAIRNESS=$(jq '.metrics.fairness_score' $ACTIVE_DIR/performance.json 2>/dev/null || echo "0")
-          else
-            ACTIVE_FAIRNESS="0"
+            ACTIVE_VERSION=$(jq -r '.version' mlops/models/active_version.json)
+            ACTIVE_DIR="mlops/models/$ACTIVE_VERSION"
+            if [ -f "$ACTIVE_DIR/model.pth" ]; then
+              python mlops/scripts/evaluate_model.py \
+                --model $ACTIVE_DIR/model.pth \
+                --output /tmp/active_performance.json
+              ACTIVE_FAIRNESS=$(jq '.metrics.fairness_score // 0' /tmp/active_performance.json)
+            fi
           fi
-          
-          # Compare and deploy if improved
+
+          echo "latest=$LATEST_FAIRNESS" >> $GITHUB_OUTPUT
+          echo "active=$ACTIVE_FAIRNESS" >> $GITHUB_OUTPUT
+
           if (( $(echo "$LATEST_FAIRNESS > $ACTIVE_FAIRNESS" | bc -l) )); then
-            echo "Model improved! Fairness: $ACTIVE_FAIRNESS → $LATEST_FAIRNESS"
-            
-            # Activate new model version
-            python mlops/scripts/deploy_model.py --activate $(basename $LATEST_MODEL)
-            
-            # Copy to production model location
+            echo "Model improved! Fairness: $ACTIVE_FAIRNESS -> $LATEST_FAIRNESS"
+
+            python mlops/scripts/deploy_model.py --activate $VERSION
+
             python mlops/scripts/deploy_model.py \
-              --version $(basename $LATEST_MODEL) \
+              --version $VERSION \
               --copy-to model/best_mappo_hospital.pth
+
+            echo "deployed=true" >> $GITHUB_OUTPUT
           else
             echo "No improvement. Fairness: $LATEST_FAIRNESS vs Active: $ACTIVE_FAIRNESS"
+            echo "deployed=false" >> $GITHUB_OUTPUT
           fi
-      
+
       - name: Commit and push changes
+        if: steps.deploy.outputs.deployed == 'true'
         run: |
           git config --global user.email "actions@github.com"
           git config --global user.name "GitHub Actions"
-          
-          # Only add the deployed model file and active version info
-          git add model/best_mappo_hospital.pth mlops/models/active_version.json
-          
+
+          # Add the deployed model, the active version file, and the new version
+          # folder (so next week's run can find and compare the active model).
+          git add model/best_mappo_hospital.pth mlops/models/active_version.json $MODEL_DIR
+
           # Only commit if there are changes
           git diff --cached --quiet || git commit -m "MLOps: Deploy improved model $(date +%Y-%m-%d)"
-          
+
           git push
-      
-      - name: Send email notification on failure
+
+      # ---------------------------------------------------------------
+      # Emails: one for each result
+      # ---------------------------------------------------------------
+      - name: Email - pipeline failed
         if: failure()
         uses: dawidd6/action-send-mail@v3
         with:
@@ -110,30 +130,64 @@ jobs:
           server_port: 465
           username: ${{ secrets.GMAIL_USER }}
           password: ${{ secrets.GMAIL_APP_PASSWORD }}
-          subject: "MLOps Weekly Retraining Failed"
+          subject: "MLOps Weekly Retraining FAILED"
           body: |
-            MLOps weekly retraining has failed.
-            
+            MLOps weekly retraining has failed. The live model was NOT changed.
+
             Run URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-            
+
             Please check the logs to investigate the issue.
           to: ${{ secrets.NOTIFICATION_EMAIL }}
           from: ${{ secrets.GMAIL_USER }}
-      
-      - name: Send email notification on success
-        if: success()
+
+      - name: Email - no new data
+        if: success() && steps.gen.outputs.has_data == 'false'
         uses: dawidd6/action-send-mail@v3
         with:
           server_address: smtp.gmail.com
           server_port: 465
           username: ${{ secrets.GMAIL_USER }}
           password: ${{ secrets.GMAIL_APP_PASSWORD }}
-          subject: "MLOps Weekly Retraining Completed"
+          subject: "MLOps Weekly Retraining: model NOT updated (no new data)"
           body: |
-            MLOps weekly retraining has completed successfully.
-            
-            The model has been updated and deployed.
-            
+            The database was reachable, but there was no new data in the last 7 days.
+            Training was skipped. The previous model is still live.
+
+            Run URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          to: ${{ secrets.NOTIFICATION_EMAIL }}
+          from: ${{ secrets.GMAIL_USER }}
+
+      - name: Email - no improvement
+        if: success() && steps.gen.outputs.has_data == 'true' && steps.deploy.outputs.deployed == 'false'
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          username: ${{ secrets.GMAIL_USER }}
+          password: ${{ secrets.GMAIL_APP_PASSWORD }}
+          subject: "MLOps Weekly Retraining: model NOT updated (no improvement)"
+          body: |
+            A new model was trained, but it was not better than the active model.
+            Fairness: new ${{ steps.deploy.outputs.latest }} vs active ${{ steps.deploy.outputs.active }}.
+            The previous model is still live.
+
+            Run URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          to: ${{ secrets.NOTIFICATION_EMAIL }}
+          from: ${{ secrets.GMAIL_USER }}
+
+      - name: Email - model deployed
+        if: success() && steps.deploy.outputs.deployed == 'true'
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          username: ${{ secrets.GMAIL_USER }}
+          password: ${{ secrets.GMAIL_APP_PASSWORD }}
+          subject: "MLOps Weekly Retraining: new model DEPLOYED"
+          body: |
+            A new model was trained, passed the check and was deployed.
+            Fairness: new ${{ steps.deploy.outputs.latest }} vs previous ${{ steps.deploy.outputs.active }}.
+
             Run URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           to: ${{ secrets.NOTIFICATION_EMAIL }}
           from: ${{ secrets.GMAIL_USER }}
