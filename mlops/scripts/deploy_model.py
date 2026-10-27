@@ -12,7 +12,7 @@ Usage:
     # Deploy to backend
     python mlops/scripts/deploy_model.py \
       --version v3 \
-      --copy-to model/best_ddqn_hospital_fair.pth
+      --copy-to model/best_mappo_shared.pth
 """
 
 import json
@@ -22,6 +22,7 @@ import shutil
 from pathlib import Path
 from datetime import datetime
 
+Path('mlops/logs').mkdir(parents=True, exist_ok=True)
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
