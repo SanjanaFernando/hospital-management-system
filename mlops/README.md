@@ -1,8 +1,8 @@
 # MLOps Pipeline - Complete Setup Summary
 
-## What You Now Have
 
-A production-ready MLOps pipeline for your DDQN hospital queue optimization model with:
+
+ MLOps pipeline for  hospital queue optimization model with:
 
 ✅ **Data Collection** - Extract historical data from MongoDB  
 ✅ **Model Training** - Automated DDQN training with PyTorch  
@@ -14,7 +14,7 @@ A production-ready MLOps pipeline for your DDQN hospital queue optimization mode
 
 ---
 
-## Quick Start (5 Minutes)
+
 
 ### 1. Setup
 ```bash
